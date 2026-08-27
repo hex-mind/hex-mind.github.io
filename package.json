@@ -6,11 +6,11 @@
     "opencode",
     "webui"
   ],
-  "homepage": "https://hex-mind.github.io/hex",
+  "homepage": "https://hex-mind.github.io/",
   "license": "MIT",
   "author": "hex-mind",
   "repository": {
-    "url": "https://github.com/hex-mind/hex"
+    "url": "https://github.com/hex-mind/hex-mind.github.io"
   },
   "bin": {
     "hex": "server.js"

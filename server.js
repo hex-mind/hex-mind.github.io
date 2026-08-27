@@ -8,7 +8,7 @@ import { proxy } from 'hono/proxy';
 const app = new Hono();
 
 if (process.argv[2] === 'proxy') {
-  const baseURL = process.argv[3] ?? 'https://hex-mind.github.io/hex';
+  const baseURL = process.argv[3] ?? 'https://hex-mind.github.io';
 
   console.log('Proxy to ' + baseURL);
 
