@@ -331,7 +331,7 @@
       </div>
       <div class="top-right">
         <a
-          href="https://hex-mind.github.io"
+          href="https://github.com/hex-mind/hex-mind.github.io"
           target="_blank"
           rel="noopener noreferrer"
           class="control-button github-button"
