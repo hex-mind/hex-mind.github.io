@@ -1,7 +1,30 @@
 /node_modules/
 /dist
 /logs
+/.vite/
+/coverage/
 /.sisyphus
 /?
 /BUGS*
 /TODO*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs and temporary files
+*.log
+*.tmp
+*.tsbuildinfo
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
