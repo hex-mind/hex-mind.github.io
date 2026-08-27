@@ -9,6 +9,9 @@ export type SseConnectionConnectOptions = {
   failFast?: boolean;
   timeoutMs?: number;
 };
+type LocalNetworkRequestInit = RequestInit & {
+  targetAddressSpace?: 'loopback';
+};
 
 export type SseConnectionCallbacks = {
   onPacket: (packet: SsePacket) => void;
@@ -128,10 +131,19 @@ export function createSseConnection(callbacks: SseConnectionCallbacks): SseConne
 
     void (async () => {
       try {
-        const response = await fetch(`${effectiveBaseUrl}/global/event`, {
+        const requestInit: LocalNetworkRequestInit = {
           signal: abortController!.signal,
           headers,
-        });
+        };
+        try {
+          const hostname = new URL(effectiveBaseUrl).hostname;
+          if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
+            requestInit.targetAddressSpace = 'loopback';
+          }
+        } catch {
+          // Let fetch report malformed URLs with its native error.
+        }
+        const response = await fetch(`${effectiveBaseUrl}/global/event`, requestInit);
 
         if (response.status === 401) {
           abortController = undefined;

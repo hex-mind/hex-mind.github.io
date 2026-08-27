@@ -1,20 +1,20 @@
-import vue from '@vitejs/plugin-vue';
-import { defineConfig } from 'vite';
+import vue from "@vitejs/plugin-vue";
+import { defineConfig } from "vite";
 
-const gitRevision = 'local';
+const gitRevision = "local";
 
 export default defineConfig({
-  base: './',
-  root: 'app',
+  base: "./",
+  root: "app",
   plugins: [vue()],
   worker: {
-    format: 'es',
+    format: "es",
   },
   define: {
     __GIT_REVISION__: JSON.stringify(gitRevision),
   },
   build: {
-    outDir: '../dist',
+    outDir: "../dist",
     emptyOutDir: true,
   },
 });

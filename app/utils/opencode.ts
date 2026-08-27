@@ -5,6 +5,9 @@ type RequestOptions = {
   instanceDirectory?: string;
   signal?: AbortSignal;
 };
+type LocalNetworkRequestInit = RequestInit & {
+  targetAddressSpace?: 'loopback';
+};
 
 let configuredBaseUrl = '';
 let configuredAuthorization: string | undefined;
@@ -39,6 +42,18 @@ function createUrl(path: string, params?: Record<string, QueryValue>) {
   return `${getBaseUrlOrThrow()}${path}${buildQuery(params)}`;
 }
 
+function createRequestInit(init: RequestInit): LocalNetworkRequestInit {
+  try {
+    const hostname = new URL(getBaseUrlOrThrow()).hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
+      return { ...init, targetAddressSpace: 'loopback' };
+    }
+  } catch {
+    // Let fetch report malformed URLs with its native error.
+  }
+  return init;
+}
+
 async function parseJson(response: Response) {
   if (response.status === 204 || response.status === 205) return null;
   if (response.headers.get('content-length') === '0') return null;
@@ -66,10 +81,13 @@ async function getJson(
   params?: Record<string, QueryValue>,
   options?: RequestOptions,
 ) {
-  const response = await fetch(createUrl(path, params), {
-    headers: buildHeaders(options),
-    signal: options?.signal,
-  });
+  const response = await fetch(
+    createUrl(path, params),
+    createRequestInit({
+      headers: buildHeaders(options),
+      signal: options?.signal,
+    }),
+  );
   if (!response.ok) throw new Error(`${path} request failed (${response.status})`);
   return parseJson(response);
 }
@@ -79,11 +97,14 @@ async function sendJson(
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   options: { params?: Record<string, QueryValue>; body?: JsonBody; request?: RequestOptions },
 ) {
-  const response = await fetch(createUrl(path, options.params), {
-    method,
-    headers: buildHeaders(options.request, 'application/json'),
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  const response = await fetch(
+    createUrl(path, options.params),
+    createRequestInit({
+      method,
+      headers: buildHeaders(options.request, 'application/json'),
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    }),
+  );
   if (!response.ok) throw new Error(`${path} request failed (${response.status})`);
   return parseJson(response);
 }
