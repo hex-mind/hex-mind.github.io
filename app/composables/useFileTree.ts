@@ -1042,13 +1042,10 @@ async function rebuildFileCache() {
     if (options.activeDirectory.value.trim() !== directory) return;
     files.value = Array.from(new Set(collected)).sort((a, b) => a.localeCompare(b));
     fileCacheVersion.value += 1;
-  } catch {
+  } catch (error) {
     if (buildId !== fileCacheBuildId) return;
     if (options.activeDirectory.value.trim() !== directory) return;
-    treeNodes.value = [];
-    files.value = [];
-    fileCacheVersion.value += 1;
-    treeError.value = '';
+    treeError.value = `Tree load failed: ${toErrorMessage(error)}`;
   } finally {
     if (buildId === fileCacheBuildId && options.activeDirectory.value.trim() === directory) {
       treeLoading.value = false;

@@ -3,11 +3,7 @@
     <div class="top-row">
       <div class="top-left flex items-center gap-2" :title="gitRevision">
         <img src="/hex-logo.png" alt="HEX" class="brand-logo brand-logo-dark" />
-        <img
-          src="/hex-logo-light.png"
-          alt="HEX"
-          class="brand-logo brand-logo-light"
-        />
+        <img src="/hex-logo-light.png" alt="HEX" class="brand-logo brand-logo-light" />
         <div class="brand-tagline hidden lg:block">for opencode</div>
       </div>
       <div class="top-center">
@@ -24,9 +20,7 @@
           @click="$emit('select-notification')"
         >
           <Icon
-            :icon="
-              notifications.length > 0 ? 'lucide:bell-ring' : 'lucide:bell'
-            "
+            :icon="notifications.length > 0 ? 'lucide:bell-ring' : 'lucide:bell'"
             :width="16"
             :height="16"
           />
@@ -41,11 +35,7 @@
           placeholder="Select session"
           title="Select session (Ctrl-G)"
           auto-close
-          :popup-style="{
-            minWidth: '420px',
-            width: 'min(680px, 90vw)',
-            maxWidth: '90vw',
-          }"
+          :popup-style="{ minWidth: '420px', width: 'min(680px, 90vw)', maxWidth: '90vw' }"
           popup-class="max-lg:left-0! max-lg:w-screen! max-lg:min-w-0! max-lg:max-w-none!"
           @select="onTreeSelect"
         >
@@ -86,7 +76,7 @@
 
               <div class="tree-content">
                 <div v-if="displayedTree.length === 0" class="tree-empty">
-                  {{ searchQuery ? "No matching sessions" : "No worktrees" }}
+                  {{ searchQuery ? 'No matching sessions' : 'No worktrees' }}
                 </div>
 
                 <div
@@ -98,33 +88,20 @@
                   <div class="tree-worktree-header">
                     <div class="tree-header-main">
                       <Icon
-                        :icon="
-                          worktree.projectId === 'global'
-                            ? 'lucide:globe'
-                            : 'lucide:package'
-                        "
+                        :icon="worktree.projectId === 'global' ? 'lucide:globe' : 'lucide:package'"
                         class="tree-header-icon"
                       />
                       <div class="tree-label">
-                        <span
-                          class="tree-label-name"
-                          :title="worktree.directory"
-                          >{{
-                            worktree.name ||
-                            directoryBasename(worktree.directory)
-                          }}</span
-                        >
-                        <small
-                          class="tree-label-type"
-                          :title="worktree.directory"
-                          >{{ shortenPath(worktree.directory) }}</small
-                        >
+                        <span class="tree-label-name" :title="worktree.directory">{{
+                          worktree.name || directoryBasename(worktree.directory)
+                        }}</span>
+                        <small class="tree-label-type" :title="worktree.directory">{{
+                          shortenPath(worktree.directory)
+                        }}</small>
                       </div>
                     </div>
                     <button
-                      v-if="
-                        worktree.projectId && worktree.projectId !== 'global'
-                      "
+                      v-if="worktree.projectId && worktree.projectId !== 'global'"
                       type="button"
                       class="tree-action-button worktree-settings"
                       title="Project settings"
@@ -148,26 +125,17 @@
                       <div class="tree-header-main">
                         <Icon
                           :icon="
-                            worktree.projectId === 'global'
-                              ? 'lucide:folder'
-                              : 'lucide:git-branch'
+                            worktree.projectId === 'global' ? 'lucide:folder' : 'lucide:git-branch'
                           "
                           class="tree-header-icon"
                         />
                         <div class="tree-label">
-                          <span
-                            class="tree-label-name"
-                            :title="sandbox.directory"
-                            >{{
-                              sandbox.branch ||
-                              directoryBasename(sandbox.directory)
-                            }}</span
-                          >
-                          <small
-                            class="tree-label-type"
-                            :title="sandbox.directory"
-                            >{{ shortenPath(sandbox.directory) }}</small
-                          >
+                          <span class="tree-label-name" :title="sandbox.directory">{{
+                            sandbox.branch || directoryBasename(sandbox.directory)
+                          }}</span>
+                          <small class="tree-label-type" :title="sandbox.directory">{{
+                            shortenPath(sandbox.directory)
+                          }}</small>
                         </div>
                       </div>
                       <div class="tree-actions">
@@ -176,52 +144,30 @@
                           class="tree-action-button new-session"
                           title="New session"
                           @click.stop="
-                            handleCreateSessionIn(
-                              worktree.directory,
-                              sandbox.directory,
-                              close,
-                            )
+                            handleCreateSessionIn(worktree.directory, sandbox.directory, close)
                           "
                         >
-                          <Icon
-                            icon="lucide:message-circle-plus"
-                            :width="16"
-                            :height="16"
-                          />
+                          <Icon icon="lucide:message-circle-plus" :width="16" :height="16" />
                         </button>
                         <button
                           v-if="worktree.projectId !== 'global'"
                           type="button"
                           class="tree-action-button fork"
                           title="Create a new sandbox"
-                          @click.stop="
-                            handleCreateWorktree(sandbox.directory, close)
-                          "
+                          @click.stop="handleCreateWorktree(sandbox.directory, close)"
                         >
-                          <Icon
-                            icon="lucide:git-branch-plus"
-                            :width="16"
-                            :height="16"
-                          />
+                          <Icon icon="lucide:git-branch-plus" :width="16" :height="16" />
                         </button>
                         <button
                           v-if="
-                            canDeleteSandbox(
-                              sandbox.directory,
-                              worktree.directory,
-                            ) && worktree.projectId !== 'global'
+                            canDeleteSandbox(sandbox.directory, worktree.directory) &&
+                            worktree.projectId !== 'global'
                           "
                           type="button"
                           class="tree-action-button danger"
-                          @click.stop="
-                            handleSandboxDelete(sandbox.directory, close)
-                          "
+                          @click.stop="handleSandboxDelete(sandbox.directory, close)"
                         >
-                          <Icon
-                            icon="lucide:trash-2"
-                            :width="16"
-                            :height="16"
-                          />
+                          <Icon icon="lucide:trash-2" :width="16" :height="16" />
                         </button>
                       </div>
                     </div>
@@ -242,19 +188,15 @@
                         :active="session.id === selectedSessionId"
                       >
                         <div class="tree-session-main">
-                          <span
-                            class="session-status-icon"
-                            :title="session.status"
-                            >{{ sessionStatusIcon(session.status) }}</span
-                          >
+                          <span class="session-status-icon" :title="session.status">{{
+                            sessionStatusIcon(session.status)
+                          }}</span>
                           <div class="session-info">
                             <div class="session-info-top">
                               <span class="session-title">{{
                                 session.title || session.slug || session.id
                               }}</span>
-                              <span
-                                v-if="session.archivedAt"
-                                class="session-badge-archived"
+                              <span v-if="session.archivedAt" class="session-badge-archived"
                                 >archived</span
                               >
                             </div>
@@ -276,16 +218,10 @@
                               ? 'Delete session permanently'
                               : 'Archive session (with Shift key to delete permanently)'
                           "
-                          @click.stop.prevent="
-                            handleSessionAction(session.id, close)
-                          "
+                          @click.stop.prevent="handleSessionAction(session.id, close)"
                         >
                           <Icon
-                            :icon="
-                              isShiftPressed
-                                ? 'lucide:trash-2'
-                                : 'lucide:archive'
-                            "
+                            :icon="isShiftPressed ? 'lucide:trash-2' : 'lucide:archive'"
                             :width="16"
                             :height="16"
                           />
@@ -331,7 +267,7 @@
       </div>
       <div class="top-right">
         <a
-          href="https://github.com/hex-mind/hex-mind.github.io"
+          href="https://github.com/hex-mind/hex/"
           target="_blank"
           rel="noopener noreferrer"
           class="control-button github-button"
@@ -342,11 +278,7 @@
         <Dropdown
           v-model:open="menuOpen"
           auto-close
-          :popup-style="{
-            width: '160px',
-            left: 'auto',
-            right: 'anchor(right)',
-          }"
+          :popup-style="{ width: '160px', left: 'auto', right: 'anchor(right)' }"
           @select="onMenuSelect"
         >
           <template #trigger>
@@ -377,21 +309,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount, onMounted } from "vue";
-import { Icon } from "@iconify/vue";
-import Dropdown from "./Dropdown.vue";
-import DropdownItem from "./Dropdown/Item.vue";
-import DropdownSearch from "./Dropdown/Search.vue";
+import { computed, ref, watch, onBeforeUnmount, onMounted } from 'vue';
+import { Icon } from '@iconify/vue';
+import Dropdown from './Dropdown.vue';
+import DropdownItem from './Dropdown/Item.vue';
+import DropdownSearch from './Dropdown/Search.vue';
 
 declare const __GIT_REVISION__: string;
-const gitRevision =
-  typeof __GIT_REVISION__ !== "undefined" ? __GIT_REVISION__ : "dev";
+const gitRevision = typeof __GIT_REVISION__ !== 'undefined' ? __GIT_REVISION__ : 'dev';
 
 export type TopPanelSession = {
   id: string;
   title?: string;
   slug?: string;
-  status: "busy" | "idle" | "retry" | "unknown";
+  status: 'busy' | 'idle' | 'retry' | 'unknown';
   timeCreated?: number;
   timeUpdated?: number;
   archivedAt?: number;
@@ -440,26 +371,20 @@ const totalNotificationCount = computed(() =>
 );
 
 const emit = defineEmits<{
-  (event: "select-notification"): void;
-  (event: "select-session", payload: SessionSelectPayload): void;
-  (event: "create-worktree-from", worktree: string): void;
-  (event: "new-session"): void;
-  (
-    event: "new-session-in",
-    payload: { worktree: string; directory: string },
-  ): void;
-  (event: "delete-active-directory", value: string): void;
-  (event: "delete-session", value: string): void;
-  (event: "archive-session", value: string): void;
-  (event: "open-directory"): void;
-  (event: "open-shell"): void;
-  (
-    event: "edit-project",
-    payload: { projectId: string; worktree: string },
-  ): void;
-  (event: "open-settings"): void;
-  (event: "logout"): void;
-  (event: "dropdown-closed"): void;
+  (event: 'select-notification'): void;
+  (event: 'select-session', payload: SessionSelectPayload): void;
+  (event: 'create-worktree-from', worktree: string): void;
+  (event: 'new-session'): void;
+  (event: 'new-session-in', payload: { worktree: string; directory: string }): void;
+  (event: 'delete-active-directory', value: string): void;
+  (event: 'delete-session', value: string): void;
+  (event: 'archive-session', value: string): void;
+  (event: 'open-directory'): void;
+  (event: 'open-shell'): void;
+  (event: 'edit-project', payload: { projectId: string; worktree: string }): void;
+  (event: 'open-settings'): void;
+  (event: 'logout'): void;
+  (event: 'dropdown-closed'): void;
 }>();
 
 const menuOpen = ref(false);
@@ -467,9 +392,9 @@ const treeDropdownOpen = ref(false);
 
 watch(treeDropdownOpen, (open) => {
   if (open) {
-    searchQuery.value = "";
+    searchQuery.value = '';
   }
-  if (!open) emit("dropdown-closed");
+  if (!open) emit('dropdown-closed');
 });
 
 function openSessionDropdown() {
@@ -484,22 +409,18 @@ function toggleSessionDropdown() {
   treeDropdownOpen.value = !treeDropdownOpen.value;
 }
 
-defineExpose({
-  openSessionDropdown,
-  closeSessionDropdown,
-  toggleSessionDropdown,
-});
+defineExpose({ openSessionDropdown, closeSessionDropdown, toggleSessionDropdown });
 
 function onMenuSelect(value: unknown) {
-  if (value === "settings") emit("open-settings");
-  else if (value === "logout") emit("logout");
+  if (value === 'settings') emit('open-settings');
+  else if (value === 'logout') emit('logout');
 }
 
 const MAX_WORKTREES = Infinity;
 const MAX_SANDBOXES = Infinity;
 const MAX_SESSIONS = 5;
 
-const searchQuery = ref("");
+const searchQuery = ref('');
 const isShiftPressed = ref(false);
 
 const selectedDisplay = computed(() => {
@@ -507,20 +428,18 @@ const selectedDisplay = computed(() => {
   if (!sid) return null;
   for (const worktree of props.treeData) {
     for (const sandbox of worktree.sandboxes) {
-      const session = sandbox.sessions.find(
-        (candidate) => candidate.id === sid,
-      );
+      const session = sandbox.sessions.find((candidate) => candidate.id === sid);
       if (!session) continue;
       const branch = sandbox.branch || directoryBasename(sandbox.directory);
       const title = session.title || session.slug || session.id;
       return { branch, title, status: session.status };
     }
   }
-  return { branch: "unknown", title: sid, status: "unknown" as const };
+  return { branch: 'unknown', title: sid, status: 'unknown' as const };
 });
 
 const dropdownLabel = computed(() => {
-  if (!selectedDisplay.value) return "Select session";
+  if (!selectedDisplay.value) return 'Select session';
   return `${selectedDisplay.value.branch} / ${selectedDisplay.value.title}`;
 });
 
@@ -539,11 +458,7 @@ const displayedTree = computed(() => {
         );
         const sandboxes = worktree.sandboxes
           .map((sandbox) => {
-            const sandboxMatches = matchesQuery(
-              query,
-              sandbox.directory,
-              sandbox.branch,
-            );
+            const sandboxMatches = matchesQuery(query, sandbox.directory, sandbox.branch);
             const sessions = sandbox.sessions.filter(
               (session) =>
                 worktreeMatches ||
@@ -553,21 +468,15 @@ const displayedTree = computed(() => {
                   session.title,
                   session.slug,
                   session.id,
-                  session.archivedAt ? "archived" : undefined,
-                  session.timeCreated
-                    ? formatSessionTime(session.timeCreated)
-                    : undefined,
-                  session.timeUpdated
-                    ? formatSessionTime(session.timeUpdated)
-                    : undefined,
+                  session.archivedAt ? 'archived' : undefined,
+                  session.timeCreated ? formatSessionTime(session.timeCreated) : undefined,
+                  session.timeUpdated ? formatSessionTime(session.timeUpdated) : undefined,
                 ),
             );
-            if (!worktreeMatches && !sandboxMatches && sessions.length === 0)
-              return null;
+            if (!worktreeMatches && !sandboxMatches && sessions.length === 0) return null;
             return {
               ...sandbox,
-              sessions:
-                worktreeMatches || sandboxMatches ? sandbox.sessions : sessions,
+              sessions: worktreeMatches || sandboxMatches ? sandbox.sessions : sessions,
             };
           })
           .filter((sandbox): sandbox is TopPanelSandbox => sandbox !== null);
@@ -585,18 +494,13 @@ const displayedTree = computed(() => {
           sessions: sandbox.sessions.filter((session) => !session.archivedAt),
         })),
       }))
-      .filter((worktree) =>
-        worktree.sandboxes.some((sandbox) => sandbox.sessions.length > 0),
-      );
+      .filter((worktree) => worktree.sandboxes.some((sandbox) => sandbox.sessions.length > 0));
   }
 
   return worktrees.slice(0, MAX_WORKTREES).map((worktree) => ({
     ...worktree,
     sandboxes: worktree.sandboxes
-      .filter(
-        (sandbox) =>
-          worktree.projectId !== "global" || sandbox.sessions.length > 0,
-      )
+      .filter((sandbox) => worktree.projectId !== 'global' || sandbox.sessions.length > 0)
       .slice(0, MAX_SANDBOXES)
       .map((sandbox) => ({
         ...sandbox,
@@ -608,68 +512,62 @@ const displayedTree = computed(() => {
 function matchesQuery(query: string, ...fields: (string | undefined)[]) {
   const terms = query.split(/\s+/).filter(Boolean);
   if (terms.length === 0) return false;
-  return terms.every((term) =>
-    fields.some((field) => field?.toLowerCase().includes(term)),
-  );
+  return terms.every((term) => fields.some((field) => field?.toLowerCase().includes(term)));
 }
 
 function sessionShareHref(projectId: string | undefined, sessionId: string) {
   const params = new URLSearchParams();
-  const normalizedProjectId = projectId?.trim() ?? "";
+  const normalizedProjectId = projectId?.trim() ?? '';
   const normalizedSessionId = sessionId.trim();
-  if (normalizedProjectId) params.set("project", normalizedProjectId);
-  if (normalizedSessionId) params.set("session", normalizedSessionId);
+  if (normalizedProjectId) params.set('project', normalizedProjectId);
+  if (normalizedSessionId) params.set('session', normalizedSessionId);
   return `?${params.toString()}`;
 }
 
 function shortenPath(path: string) {
-  const homePath = props.homePath || "";
+  const homePath = props.homePath || '';
   if (homePath && path.startsWith(homePath)) {
-    const replaced = path.replace(homePath, "~");
-    return replaced || "~";
+    const replaced = path.replace(homePath, '~');
+    return replaced || '~';
   }
   return path;
 }
 
 function directoryBasename(path: string) {
-  return path.replace(/\/+$/, "").split("/").pop() ?? "";
+  return path.replace(/\/+$/, '').split('/').pop() ?? '';
 }
 
-function sessionStatusIcon(status: TopPanelSession["status"]) {
-  if (status === "busy") return "🤔";
-  if (status === "retry") return "🔴";
-  if (status === "idle") return "🟢";
-  return "⚪";
+function sessionStatusIcon(status: TopPanelSession['status']) {
+  if (status === 'busy') return '🤔';
+  if (status === 'retry') return '🔴';
+  if (status === 'idle') return '🟢';
+  return '⚪';
 }
 
 function formatSessionTime(timestamp: number) {
   const d = new Date(timestamp);
   const Y = d.getFullYear();
-  const M = String(d.getMonth() + 1).padStart(2, "0");
-  const D = String(d.getDate()).padStart(2, "0");
-  const h = String(d.getHours()).padStart(2, "0");
-  const m = String(d.getMinutes()).padStart(2, "0");
+  const M = String(d.getMonth() + 1).padStart(2, '0');
+  const D = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
   return `${Y}-${M}-${D} ${h}:${m}`;
 }
 
 function formatSessionMetaTime(session: TopPanelSession) {
-  const created = session.timeCreated
-    ? formatSessionTime(session.timeCreated)
-    : undefined;
-  const updated = session.timeUpdated
-    ? formatSessionTime(session.timeUpdated)
-    : undefined;
+  const created = session.timeCreated ? formatSessionTime(session.timeCreated) : undefined;
+  const updated = session.timeUpdated ? formatSessionTime(session.timeUpdated) : undefined;
   if (created && updated) {
     return `Created: ${created} / Updated: ${updated}`;
   }
   if (created) return `Created: ${created}`;
   if (updated) return `Updated: ${updated}`;
-  return "";
+  return '';
 }
 
 function canDeleteSandbox(directory: string, worktreeDirectory: string) {
-  const normalizedDirectory = directory.replace(/\/+$/, "");
-  const normalizedWorktree = worktreeDirectory.replace(/\/+$/, "");
+  const normalizedDirectory = directory.replace(/\/+$/, '');
+  const normalizedWorktree = worktreeDirectory.replace(/\/+$/, '');
   return normalizedDirectory !== normalizedWorktree;
 }
 
@@ -681,10 +579,10 @@ function worktreeAccentStyle(worktree: TopPanelWorktree) {
 }
 
 function onTreeSelect(payload: unknown) {
-  if (!payload || typeof payload !== "object") return;
+  if (!payload || typeof payload !== 'object') return;
   const value = payload as Partial<SessionSelectPayload>;
   if (!value.worktree || !value.directory || !value.sessionId) return;
-  emit("select-session", {
+  emit('select-session', {
     projectId: value.projectId,
     worktree: value.worktree,
     directory: value.directory,
@@ -692,35 +590,31 @@ function onTreeSelect(payload: unknown) {
   });
 }
 
-function handleCreateSessionIn(
-  worktree: string,
-  directory: string,
-  close: () => void,
-) {
-  emit("new-session-in", { worktree, directory });
+function handleCreateSessionIn(worktree: string, directory: string, close: () => void) {
+  emit('new-session-in', { worktree, directory });
   close();
 }
 
 function handleCreateWorktree(worktree: string, close: () => void) {
-  emit("create-worktree-from", worktree);
+  emit('create-worktree-from', worktree);
   close();
 }
 
 function handleSandboxDelete(directory: string, close?: () => void) {
-  if (typeof window !== "undefined") {
+  if (typeof window !== 'undefined') {
     const confirmed = window.confirm(`Delete worktree "${directory}"?`);
     if (!confirmed) return;
   }
-  emit("delete-active-directory", directory);
+  emit('delete-active-directory', directory);
   close?.();
 }
 
 function handleSessionDelete(sessionId: string, close?: () => void) {
-  if (typeof window !== "undefined") {
-    const confirmed = window.confirm("Delete session?");
+  if (typeof window !== 'undefined') {
+    const confirmed = window.confirm('Delete session?');
     if (!confirmed) return;
   }
-  emit("delete-session", sessionId);
+  emit('delete-session', sessionId);
   close?.();
 }
 
@@ -729,7 +623,7 @@ function handleSessionAction(sessionId: string, close?: () => void) {
     handleSessionDelete(sessionId, close);
     return;
   }
-  emit("archive-session", sessionId);
+  emit('archive-session', sessionId);
 }
 
 function handleGlobalKeydown(event: KeyboardEvent) {
@@ -745,19 +639,19 @@ function resetShiftState() {
 }
 
 onMounted(() => {
-  window.addEventListener("keydown", handleGlobalKeydown);
-  window.addEventListener("keyup", handleGlobalKeyup);
-  window.addEventListener("blur", resetShiftState);
+  window.addEventListener('keydown', handleGlobalKeydown);
+  window.addEventListener('keyup', handleGlobalKeyup);
+  window.addEventListener('blur', resetShiftState);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleGlobalKeydown);
-  window.removeEventListener("keyup", handleGlobalKeyup);
-  window.removeEventListener("blur", resetShiftState);
+  window.removeEventListener('keydown', handleGlobalKeydown);
+  window.removeEventListener('keyup', handleGlobalKeyup);
+  window.removeEventListener('blur', resetShiftState);
 });
 
 function handleOpenDirectory(close: () => void) {
-  emit("open-directory");
+  emit('open-directory');
   close();
 }
 </script>
@@ -1003,7 +897,7 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-session-row :deep(.ui-dropdown-item:hover),
-.tree-session-row :deep(.ui-dropdown-item[aria-selected="true"]) {
+.tree-session-row :deep(.ui-dropdown-item[aria-selected='true']) {
   background: rgba(30, 41, 59, 0.8);
 }
 
@@ -1021,7 +915,7 @@ function handleOpenDirectory(close: () => void) {
 
 /* Non-last sandbox: ├── (vertical line continues to next sibling) */
 .tree-sandbox:not(:last-child)::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 15px;
   top: 0;
@@ -1031,7 +925,7 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-sandbox:not(:last-child)::after {
-  content: "";
+  content: '';
   position: absolute;
   left: 15px;
   top: 13px;
@@ -1043,7 +937,7 @@ function handleOpenDirectory(close: () => void) {
 
 /* Last sandbox: └── (L-shape, no line below) */
 .tree-sandbox:last-child::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 15px;
   top: 0;
@@ -1062,7 +956,7 @@ function handleOpenDirectory(close: () => void) {
 
 /* Non-last session: ├── */
 .tree-session-row:not(:last-child)::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 31px;
   top: 0;
@@ -1072,7 +966,7 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-session-row:not(:last-child)::after {
-  content: "";
+  content: '';
   position: absolute;
   left: 31px;
   top: 14px;
@@ -1084,7 +978,7 @@ function handleOpenDirectory(close: () => void) {
 
 /* Last session: └── */
 .tree-session-row:last-child::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 31px;
   top: 0;
