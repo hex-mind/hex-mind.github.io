@@ -1,0 +1,911 @@
+<template>
+  <div class="thread-block" :class="{ 'is-reverted-preview': isRevertedPreview }">
+    <button
+      v-if="isRevertedPreview"
+      type="button"
+      class="ib-action ib-action-undo ib-top-right"
+      @click="confirmUndoRevert()"
+    >
+      UNDO
+    </button>
+
+    <div class="thread-user" :class="{ 'is-editing': isEditing }">
+      <div v-if="root.role === 'user' && isEditing" class="ib-user-editor">
+        <textarea
+          ref="editTextareaRef"
+          v-model="editText"
+          class="ib-user-editor-input"
+          aria-label="Edit prompt"
+          @keydown.meta.enter.prevent="submitEdit(root)"
+          @keydown.ctrl.enter.prevent="submitEdit(root)"
+          @keydown.esc.prevent="cancelEdit"
+        ></textarea>
+        <div class="ib-user-editor-footer">
+          <select v-model="editModel" class="ib-user-editor-model" aria-label="Model for edited prompt">
+            <option v-for="model in modelOptions" :key="model.id" :value="model.id">
+              {{ model.providerLabel || model.providerID || 'Model' }} · {{ model.displayName }}
+            </option>
+          </select>
+          <div class="ib-user-editor-actions">
+            <button type="button" class="ib-user-editor-button cancel" @click="cancelEdit">
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="ib-user-editor-button send"
+              :disabled="!editText.trim()"
+              @click="submitEdit(root)"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+      <template v-else-if="root.role === 'user'">
+        <div
+          class="ib-msg-block ib-msg-user"
+          :class="{ 'ib-msg-user-reverted': isRevertedPreview }"
+        >
+          <div class="ib-msg-row">
+            <MessageViewer
+              class="message-viewer-context-user"
+              :key="`user-${root.id}`"
+              :code="getMessageContent(root)"
+              :lang="'markdown'"
+              :theme="theme"
+              :files="filesWithBasenames"
+              @rendered="emit('message-rendered', getThreadUserRenderKey(root))"
+            />
+            <div v-if="getMessageAttachments(root).length > 0" class="output-entry-attachments">
+              <img
+                v-for="item in getMessageAttachments(root)"
+                :key="item.id"
+                class="output-entry-attachment clickable"
+                :src="item.url"
+                :alt="item.filename"
+                loading="lazy"
+                @click="emit('open-image', { url: item.url, filename: item.filename })"
+              />
+            </div>
+          </div>
+        </div>
+        <div v-if="root.sessionID" class="ib-user-actions">
+          <button
+            type="button"
+            class="ib-user-action"
+            :title="questionCopied ? 'Question copied' : 'Copy question'"
+            :aria-label="questionCopied ? 'Question copied' : 'Copy question'"
+            @click="copyQuestion(root)"
+          >
+            <Icon
+              :icon="questionCopied ? 'lucide:check' : 'lucide:copy'"
+              :width="13"
+              :height="13"
+            />
+          </button>
+          <button
+            type="button"
+            class="ib-user-action"
+            title="Edit prompt"
+            aria-label="Edit prompt"
+            @click="startEdit(root)"
+          >
+            <Icon icon="lucide:pencil" :width="13" :height="13" />
+          </button>
+        </div>
+      </template>
+    </div>
+
+    <ThreadTarget
+      v-if="!isRevertedPreview"
+      :target="threadTarget"
+      :agent-style="threadTargetAgentStyle"
+    />
+
+    <div v-if="!isRevertedPreview && hasAssistantMessages(root)" class="thread-assistant">
+      <Transition name="ib-fade" mode="out-in">
+        <div class="ib-msg-block ib-msg-assistant" :key="deferredTransitionKey">
+          <div class="ib-msg-body">
+            <MessageViewer
+              class="message-viewer-context-assistant"
+              :html="assistantHtml"
+            />
+          </div>
+          <div
+            v-if="getMessageAttachments(getFinalAnswer(root)).length > 0"
+            class="output-entry-attachments"
+          >
+            <img
+              v-for="item in getMessageAttachments(getFinalAnswer(root))"
+              :key="item.id"
+              class="output-entry-attachment clickable"
+              :src="item.url"
+              :alt="item.filename"
+              loading="lazy"
+              @click="emit('open-image', { url: item.url, filename: item.filename })"
+            />
+          </div>
+        </div>
+      </Transition>
+    </div>
+
+    <div v-if="!isRevertedPreview && getThreadError(root)" class="ib-error-bar">
+      <span class="ib-error-icon">⊘</span>
+      <span class="ib-error-text">{{ formatMessageError(getThreadError(root)!) }}</span>
+    </div>
+
+    <ThreadFooter
+      v-if="!isRevertedPreview"
+      :timestamp="formatThreadTimestamp(root)"
+      :elapsed="formatThreadElapsed(root)"
+      :context-percent="getThreadContextPercent(root)"
+      :tokens="getThreadTokens(root)"
+      :has-diffs="hasThreadDiffs(root)"
+      :can-copy-answer="canCopyAnswer(root)"
+      :copied="copied"
+      :history-count="showHistoryButton(root) ? getHistoryEntries(root).length : 0"
+      :can-revert="canRevertThread(root)"
+      @show-diff="showThreadDiff(root)"
+      @copy-answer="copyAnswer(root)"
+      @show-history="showThreadHistory(root)"
+      @revert="confirmRevert(root)"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { Icon } from '@iconify/vue';
+import { computed, nextTick, onBeforeUnmount, ref, Transition } from 'vue';
+import MessageViewer from './MessageViewer.vue';
+import ThreadFooter from './ThreadFooter.vue';
+import ThreadTarget from './ThreadTarget.vue';
+import { useMessages } from '../composables/useMessages';
+import type {
+  HistoryEntry,
+  HistoryWindowEntry,
+  MessageAttachment,
+  MessageDiffEntry,
+  MessageTokens,
+  MessageUsage,
+  ModelMeta,
+  ThreadTarget as ThreadTargetType,
+} from '../types/message';
+import type { MessageInfo, QuestionInfo, ToolPart } from '../types/sse';
+import { formatElapsedTime, formatMessageError, formatMessageTime } from '../utils/formatters';
+
+const HISTORY_TOOL_NAMES = new Set(['bash', 'write', 'edit', 'multiedit', 'apply_patch']);
+
+const props = defineProps<{
+  root: MessageInfo;
+  theme: string;
+  filesWithBasenames: string[];
+  isRevertedPreview: boolean;
+  modelOptions: Array<{
+    id: string;
+    modelID: string;
+    displayName: string;
+    providerID?: string;
+    providerLabel?: string;
+  }>;
+  selectedModel: string;
+  resolveAgentColor?: (agent?: string) => string;
+  resolveModelMeta?: (modelPath?: string) => ModelMeta | undefined;
+  computeContextPercent?: (
+    tokens: MessageTokens,
+    providerId?: string,
+    modelId?: string,
+  ) => number | null;
+  sessionRevert?: {
+    messageID: string;
+    partID?: string;
+    snapshot?: string;
+    diff?: string;
+  } | null;
+  assistantHtml?: string;
+  deferredTransitionKey: string;
+}>();
+
+const emit = defineEmits<{
+  (
+    event: 'edit-message',
+    payload: {
+      sessionId: string;
+      messageId: string;
+      text: string;
+      model: string;
+    },
+  ): void;
+  (event: 'revert-message', payload: { sessionId: string; messageId: string }): void;
+  (event: 'undo-revert'): void;
+  (event: 'show-message-diff', payload: { messageKey: string; diffs: MessageDiffEntry[] }): void;
+  (event: 'open-image', payload: { url: string; filename: string }): void;
+  (event: 'show-thread-history', payload: { entries: HistoryWindowEntry[] }): void;
+  (event: 'message-rendered', renderKey: string): void;
+}>();
+
+const msg = useMessages();
+const copied = ref(false);
+const questionCopied = ref(false);
+const isEditing = ref(false);
+const editText = ref('');
+const editModel = ref('');
+const editTextareaRef = ref<HTMLTextAreaElement | null>(null);
+let copiedResetTimer: number | undefined;
+let questionCopiedResetTimer: number | undefined;
+
+onBeforeUnmount(() => {
+  if (copiedResetTimer !== undefined) window.clearTimeout(copiedResetTimer);
+  if (questionCopiedResetTimer !== undefined) window.clearTimeout(questionCopiedResetTimer);
+});
+
+const threadTarget = computed<ThreadTargetType>(() => buildThreadTarget(props.root));
+const threadTargetAgentStyle = computed(() => {
+  const color = props.resolveAgentColor
+    ? props.resolveAgentColor(threadTarget.value.agent)
+    : '#4ade80';
+  return { color };
+});
+
+function getThread(rootId: string): MessageInfo[] {
+  return msg.getThread(rootId);
+}
+
+function getFinalAnswer(root: MessageInfo): MessageInfo | undefined {
+  return msg.getFinalAnswer(root.id);
+}
+
+function hasTextContent(message?: MessageInfo): boolean {
+  if (!message) return false;
+  return msg.hasTextContent(message.id);
+}
+
+function getMessageContent(message?: MessageInfo): string {
+  if (!message) return '';
+  return msg.getTextContent(message.id);
+}
+
+function getMessageAttachments(message?: MessageInfo): MessageAttachment[] {
+  if (!message) return [];
+  return msg.getImageAttachments(message.id) ?? [];
+}
+
+function getMessageError(message?: MessageInfo): { name: string; message: string } | null {
+  if (!message) return null;
+  return msg.getError(message.id);
+}
+
+function getMessageUsage(message?: MessageInfo): MessageUsage | undefined {
+  if (!message) return undefined;
+  return msg.getUsage(message.id);
+}
+
+function getMessageDiffEntries(message?: MessageInfo): MessageDiffEntry[] {
+  if (!message) return [];
+  return msg.getDiffs(message.id) ?? [];
+}
+
+function getMessageModelPath(message?: MessageInfo): string {
+  if (!message) return '';
+  return msg.getModelPath(message.id) ?? '';
+}
+
+function getMessageTime(message?: MessageInfo): number | undefined {
+  if (!message) return undefined;
+  return msg.getTime(message.id);
+}
+
+function getAssistantMessages(root: MessageInfo): MessageInfo[] {
+  return getThread(root.id).filter((item) => item.role === 'assistant' && hasTextContent(item));
+}
+
+function hasAssistantMessages(root: MessageInfo): boolean {
+  return getAssistantMessages(root).length > 0;
+}
+
+function getToolPartTime(part: ToolPart): number {
+  const state = part.state;
+  if (state.status === 'running' || state.status === 'completed' || state.status === 'error') {
+    return state.time.start;
+  }
+  return 0;
+}
+
+function extractQuestionInfos(part: ToolPart): QuestionInfo[] {
+  const raw = part.state.input?.questions;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (q): q is QuestionInfo =>
+      q &&
+      typeof q === 'object' &&
+      typeof q.question === 'string' &&
+      typeof q.header === 'string' &&
+      Array.isArray(q.options),
+  );
+}
+
+function resolveQuestionStatus(part: ToolPart): 'pending' | 'replied' | 'rejected' {
+  if (part.state.status === 'completed') return 'replied';
+  if (part.state.status === 'error') return 'rejected';
+  return 'pending';
+}
+
+function extractQuestionAnswers(part: ToolPart): string[][] | undefined {
+  if (part.state.status !== 'completed') return undefined;
+  const answers = part.state.metadata?.answers;
+  if (!Array.isArray(answers)) return undefined;
+  return answers as string[][];
+}
+
+function getHistoryEntries(root: MessageInfo): HistoryEntry[] {
+  const entries: HistoryEntry[] = [];
+  const thread = getThread(root.id);
+  for (const msgInfo of thread) {
+    if (msgInfo.role !== 'assistant') continue;
+    if (hasTextContent(msgInfo)) {
+      entries.push({ kind: 'message', message: msgInfo, time: msgInfo.time.created });
+    }
+    const parts = msg.getParts(msgInfo.id);
+    for (const part of parts) {
+      if (part.type === 'reasoning') {
+        if (part.text) {
+          entries.push({ kind: 'reasoning', part, time: part.time.start });
+        }
+        continue;
+      }
+      if (part.type !== 'tool') continue;
+      if (part.state.status === 'pending') continue;
+      if (part.tool === 'question') {
+        entries.push({ kind: 'question', part, time: getToolPartTime(part) });
+        continue;
+      }
+      if (!HISTORY_TOOL_NAMES.has(part.tool)) continue;
+      entries.push({ kind: 'tool', part, time: getToolPartTime(part) });
+    }
+  }
+  return entries.sort((a, b) => a.time - b.time);
+}
+
+function getHistoryEntryKey(entry: HistoryEntry): string {
+  if (entry.kind === 'message') return `msg:${entry.message.id}`;
+  if (entry.kind === 'reasoning') return `reasoning:${entry.part.id}`;
+  if (entry.kind === 'question') return `question:${entry.part.callID}`;
+  return `tool:${entry.part.callID}`;
+}
+
+function showHistoryButton(root: MessageInfo): boolean {
+  return getHistoryEntries(root).length > 0;
+}
+
+function showThreadHistory(root: MessageInfo) {
+  const entries = getHistoryEntries(root).map((entry) => {
+    if (entry.kind === 'message') {
+      return {
+        key: getHistoryEntryKey(entry),
+        kind: 'message',
+        content: getMessageContent(entry.message),
+        time: entry.time,
+        agent:
+          entry.message.role === 'assistant' && 'agent' in entry.message && entry.message.agent
+            ? entry.message.agent
+            : undefined,
+      } satisfies HistoryWindowEntry;
+    }
+    if (entry.kind === 'reasoning') {
+      return {
+        key: getHistoryEntryKey(entry),
+        kind: 'reasoning',
+        part: entry.part,
+        time: entry.time,
+      } satisfies HistoryWindowEntry;
+    }
+    if (entry.kind === 'question') {
+      return {
+        key: getHistoryEntryKey(entry),
+        kind: 'question',
+        questions: extractQuestionInfos(entry.part),
+        status: resolveQuestionStatus(entry.part),
+        answers: extractQuestionAnswers(entry.part),
+        time: entry.time,
+      } satisfies HistoryWindowEntry;
+    }
+    return {
+      key: getHistoryEntryKey(entry),
+      kind: 'tool',
+      part: entry.part,
+      time: entry.time,
+    } satisfies HistoryWindowEntry;
+  });
+  emit('show-thread-history', { entries });
+}
+
+function getThreadError(root: MessageInfo): { name: string; message: string } | null {
+  const final = getFinalAnswer(root);
+  const finalError = getMessageError(final);
+  if (finalError) return finalError;
+  const thread = getThread(root.id);
+  for (let index = thread.length - 1; index >= 0; index--) {
+    const error = getMessageError(thread[index]);
+    if (error) return error;
+  }
+  return null;
+}
+
+function getThreadDiffs(root: MessageInfo): MessageDiffEntry[] {
+  return getMessageDiffEntries(root);
+}
+
+function hasThreadDiffs(root: MessageInfo): boolean {
+  return getThreadDiffs(root).length > 0;
+}
+
+function showThreadDiff(root: MessageInfo) {
+  const diffs = getThreadDiffs(root);
+  if (diffs.length === 0) return;
+  emit('show-message-diff', { messageKey: root.id, diffs });
+}
+
+function canRevertThread(root: MessageInfo): boolean {
+  if (props.sessionRevert) return false;
+  return root.role === 'user' && Boolean(root.sessionID);
+}
+
+function answerTextForThread(root: MessageInfo) {
+  return getMessageContent(getFinalAnswer(root));
+}
+
+function canCopyAnswer(root: MessageInfo) {
+  return answerTextForThread(root).trim().length > 0;
+}
+
+async function copyAnswer(root: MessageInfo) {
+  const text = answerTextForThread(root);
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  copied.value = true;
+  if (copiedResetTimer !== undefined) window.clearTimeout(copiedResetTimer);
+  copiedResetTimer = window.setTimeout(() => {
+    copied.value = false;
+    copiedResetTimer = undefined;
+  }, 1500);
+}
+
+function confirmRevert(root: MessageInfo) {
+  if (root.role !== 'user' || !root.sessionID || !root.id) return;
+  if (!window.confirm('Revert to this message?')) return;
+  emit('revert-message', { sessionId: root.sessionID, messageId: root.id });
+}
+
+function startEdit(root: MessageInfo) {
+  editText.value = getMessageContent(root);
+  editModel.value = props.selectedModel;
+  isEditing.value = true;
+  nextTick(() => {
+    const textarea = editTextareaRef.value;
+    textarea?.focus();
+    textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+  });
+}
+
+function cancelEdit() {
+  isEditing.value = false;
+  editText.value = '';
+  editModel.value = '';
+}
+
+function submitEdit(root: MessageInfo) {
+  if (root.role !== 'user' || !root.sessionID || !root.id) return;
+  const text = editText.value.trim();
+  if (!text) return;
+  emit('edit-message', {
+    sessionId: root.sessionID,
+    messageId: root.id,
+    text,
+    model: editModel.value || props.selectedModel,
+  });
+  isEditing.value = false;
+  editText.value = '';
+  editModel.value = '';
+}
+
+async function copyQuestion(root: MessageInfo) {
+  const text = getMessageContent(root);
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  questionCopied.value = true;
+  if (questionCopiedResetTimer !== undefined) window.clearTimeout(questionCopiedResetTimer);
+  questionCopiedResetTimer = window.setTimeout(() => {
+    questionCopied.value = false;
+    questionCopiedResetTimer = undefined;
+  }, 1500);
+}
+
+function confirmUndoRevert() {
+  if (!props.sessionRevert) return;
+  if (!window.confirm('Undo revert?')) return;
+  emit('undo-revert');
+}
+
+function buildThreadTarget(root: MessageInfo): ThreadTargetType {
+  const final = getFinalAnswer(root);
+  const agent = root.agent ?? final?.agent;
+  const modelPath = getMessageModelPath(root) || getMessageModelPath(final);
+  const modelMeta = props.resolveModelMeta?.(modelPath);
+  const variant = root.variant ?? final?.variant;
+  return {
+    agent,
+    modelDisplayName: modelMeta?.displayName,
+    providerLabel: modelMeta?.providerLabel,
+    variant,
+  };
+}
+
+function formatThreadTimestamp(root: MessageInfo): string {
+  return formatMessageTime(getMessageTime(getFinalAnswer(root)) ?? getMessageTime(root));
+}
+
+function getCompletedTime(message?: MessageInfo): number | undefined {
+  if (!message) return undefined;
+  return msg.getCompletedTime(message.id);
+}
+
+function formatThreadElapsed(root: MessageInfo): string {
+  const final = getFinalAnswer(root);
+  return formatElapsedTime(getMessageTime(root), getCompletedTime(final));
+}
+
+function getThreadTokens(root: MessageInfo): MessageTokens | null {
+  const thread = getThread(root.id);
+  let input = 0;
+  let output = 0;
+  let reasoning = 0;
+  let totalAcc = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  let found = false;
+
+  for (const m of thread) {
+    if (m.role !== 'assistant') continue;
+    const usage = getMessageUsage(m);
+    if (!usage) continue;
+    const t = usage.tokens;
+    if (t.input <= 0 && t.output <= 0) continue;
+    input += t.input;
+    output += t.output;
+    reasoning += t.reasoning;
+    totalAcc += t.total ?? 0;
+    cacheRead += t.cache?.read ?? 0;
+    cacheWrite += t.cache?.write ?? 0;
+    found = true;
+  }
+
+  if (!found) return null;
+  return {
+    input,
+    output,
+    reasoning,
+    total: totalAcc || undefined,
+    cache: { read: cacheRead, write: cacheWrite },
+  };
+}
+
+function getThreadContextPercent(root: MessageInfo): number | null {
+  if (!props.computeContextPercent) return null;
+  const thread = getThread(root.id);
+  let lastUsage: MessageUsage | undefined;
+
+  for (const m of thread) {
+    if (m.role !== 'assistant') continue;
+    const usage = getMessageUsage(m);
+    if (usage && (usage.tokens.input > 0 || usage.tokens.output > 0)) {
+      lastUsage = usage;
+    }
+  }
+
+  if (!lastUsage) return null;
+  const value = props.computeContextPercent(
+    lastUsage.tokens,
+    lastUsage.providerId,
+    lastUsage.modelId,
+  );
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+function getThreadUserRenderKey(root: MessageInfo): string {
+  return `thread-user:${root.id}`;
+}
+</script>
+
+<style scoped>
+.thread-block {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 0;
+  padding: 14px 10px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.thread-block.is-reverted-preview > .thread-user {
+  opacity: 0.45;
+}
+
+.thread-block.is-reverted-preview > .ib-top-right {
+  position: relative;
+  z-index: 1;
+}
+
+.thread-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.thread-user.is-editing {
+  align-items: stretch;
+}
+
+.ib-msg-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ib-msg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ib-msg-user {
+  width: fit-content;
+  max-width: min(85%, 760px);
+  font-size: 13px;
+  padding: 8px 10px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px 12px 3px 12px;
+}
+
+.ib-msg-user-reverted {
+  text-decoration: line-through;
+}
+
+.ib-user-actions {
+  display: flex;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.ib-user-action {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ib-user-action:hover {
+  background: rgba(51, 65, 85, 0.45);
+  color: #e2e8f0;
+}
+
+.ib-user-editor {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #3b82f6;
+  border-radius: 12px;
+  background: #0f172a;
+  box-sizing: border-box;
+}
+
+.ib-user-editor-input {
+  width: 100%;
+  min-height: 72px;
+  padding: 2px;
+  border: 0;
+  outline: 0;
+  resize: vertical;
+  background: transparent;
+  color: #e2e8f0;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.ib-user-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ib-user-editor-model {
+  min-width: 0;
+  max-width: min(300px, 48%);
+  height: 30px;
+  padding: 0 28px 0 9px;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  background: #111827;
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ib-user-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ib-user-editor-button {
+  min-width: 68px;
+  padding: 6px 12px;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: transparent;
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ib-user-editor-button:hover:not(:disabled) {
+  background: #1e293b;
+  color: #ffffff;
+}
+
+.ib-user-editor-button.send {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.ib-user-editor-button.send:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.ib-user-editor-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .ib-user-editor-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ib-user-editor-model {
+    max-width: none;
+    width: 100%;
+  }
+}
+
+.ib-msg-assistant {
+  margin-top: 4px;
+}
+
+.thread-assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 2px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.ib-msg-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  --message-line-height: 1.2;
+  line-height: var(--message-line-height);
+  padding-top: 3px;
+  padding-left: 6px;
+}
+
+.ib-top-right {
+  float: right;
+  margin: -2px -2px 4px 8px;
+}
+
+.ib-action {
+  border: 1px solid rgba(148, 163, 184, 0.65);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #bfdbfe;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ib-action:hover {
+  background: rgba(30, 41, 59, 0.92);
+}
+
+.ib-action-undo {
+  border-color: rgba(96, 165, 250, 0.7);
+  background: rgba(30, 58, 138, 0.35);
+  color: #bfdbfe;
+}
+
+.ib-action-undo:hover {
+  background: rgba(30, 64, 175, 0.55);
+}
+
+.ib-error-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(127, 29, 29, 0.3);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.ib-error-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #f87171;
+}
+
+.ib-error-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ib-fade-enter-active,
+.ib-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.ib-fade-enter-from,
+.ib-fade-leave-to {
+  opacity: 0;
+}
+
+.output-entry-attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.output-entry-attachment {
+  width: 100%;
+  max-height: 180px;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  object-fit: cover;
+  background: #0b1320;
+}
+
+.output-entry-attachment.clickable {
+  cursor: pointer;
+}
+</style>
