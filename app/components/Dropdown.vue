@@ -3,7 +3,6 @@
     ref="root"
     class="ui-dropdown"
     :class="{ 'is-open': isActive, 'is-disabled': props.disabled }"
-    :style="rootStyle"
   >
     <slot name="trigger">
       <button
@@ -41,7 +40,7 @@
       ref="menu"
       class="ui-dropdown-menu"
       :class="[{ 'is-open': isActive }, props.popupClass]"
-      :style="[props.popupStyle, menuStyle]"
+      :style="[menuPositionStyle, props.popupStyle]"
       :inert="!isActive || undefined"
       role="listbox"
       title=""
@@ -95,10 +94,14 @@ const props = withDefaults(
     searchDebounce?: number;
     autoFocus?: boolean;
     autoHighlight?: boolean;
+    placement?: 'top' | 'bottom';
+    align?: 'start' | 'end';
   }>(),
   {
     autoFocus: true,
     autoHighlight: true,
+    placement: 'bottom',
+    align: 'start',
   },
 );
 
@@ -112,7 +115,7 @@ const root = ref<HTMLElement | null>(null);
 const menu = ref<HTMLElement | null>(null);
 const isActive = ref(props.open ?? false);
 const candidateValues = ref<T[]>([]);
-const anchorName = `--ui-dropdown-anchor-${Math.random().toString(36).slice(2, 10)}`;
+const menuPositionStyle = ref<Record<string, string>>({});
 
 const searchResults = ref<unknown[]>([]);
 const searchLoading = ref(false);
@@ -120,13 +123,39 @@ let searchController: AbortController | null = null;
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let lastSearchQuery: string | undefined;
 
-const rootStyle = computed<StyleValue>(() => ({
-  anchorName,
-}));
+const MENU_GAP = 6;
+const VIEWPORT_MARGIN = 8;
 
-const menuStyle = computed<StyleValue>(() => ({
-  positionAnchor: anchorName,
-}));
+async function updateMenuPosition() {
+  const rootEl = root.value;
+  const menuEl = menu.value;
+  if (!isActive.value || !rootEl || !menuEl) return;
+
+  const triggerRect = rootEl.getBoundingClientRect();
+  menuPositionStyle.value = {
+    '--ui-dropdown-trigger-width': `${triggerRect.width}px`,
+  };
+  await nextTick();
+  if (!isActive.value || root.value !== rootEl || menu.value !== menuEl) return;
+
+  const menuRect = menuEl.getBoundingClientRect();
+  const preferredTop =
+    props.placement === 'top'
+      ? triggerRect.top - menuRect.height - MENU_GAP
+      : triggerRect.bottom + MENU_GAP;
+  const maxTop = Math.max(VIEWPORT_MARGIN, window.innerHeight - menuRect.height - VIEWPORT_MARGIN);
+  const top = Math.min(Math.max(preferredTop, VIEWPORT_MARGIN), maxTop);
+  const preferredLeft =
+    props.align === 'end' ? triggerRect.right - menuRect.width : triggerRect.left;
+  const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - menuRect.width - VIEWPORT_MARGIN);
+  const left = Math.min(Math.max(preferredLeft, VIEWPORT_MARGIN), maxLeft);
+
+  menuPositionStyle.value = {
+    '--ui-dropdown-trigger-width': `${triggerRect.width}px`,
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+  };
+}
 
 const displayLabel = computed(() => {
   if (props.label) return props.label;
@@ -165,6 +194,7 @@ watch(isActive, (active) => {
   emit('update:open', active);
   if (active) {
     nextTick(() => {
+      void updateMenuPosition();
       if (props.autoFocus !== false) {
         const autoFocusEl = menu.value?.querySelector('[autofocus]');
         if (autoFocusEl instanceof HTMLElement) autoFocusEl.focus();
@@ -302,9 +332,11 @@ function handlePointerDown(event: PointerEvent) {
 // ensure that a valid highlight exists. If the previously highlighted item is gone,
 // automatically highlight the first available candidate.
 let observer: MutationObserver | null = null;
+let resizeObserver: ResizeObserver | null = null;
 
 function onMenuMutation() {
   if (!isActive.value) return;
+  void updateMenuPosition();
   const items = getCandidateItems();
   if (items.length === 0) {
     clearHighlight();
@@ -342,18 +374,30 @@ watch(isActive, (active) => {
 
 onMounted(() => {
   window.addEventListener('pointerdown', handlePointerDown);
+  window.addEventListener('resize', updateMenuPosition);
+  window.addEventListener('scroll', updateMenuPosition, true);
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => void updateMenuPosition());
+    if (root.value) resizeObserver.observe(root.value);
+    if (menu.value) resizeObserver.observe(menu.value);
+  }
   nextTick(() => {
     updateCandidateValues();
     // When the dropdown is created with open=true, the isActive watchers
     // never fire (no change from initial value). Start the observer here.
     if (isActive.value) {
       startObserver();
+      void updateMenuPosition();
     }
   });
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', handlePointerDown);
+  window.removeEventListener('resize', updateMenuPosition);
+  window.removeEventListener('scroll', updateMenuPosition, true);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
   stopObserver();
   if (searchTimer) clearTimeout(searchTimer);
   if (searchController) searchController.abort();
@@ -467,13 +511,9 @@ defineExpose({ moveHighlight, selectHighlighted, updateSearch, clearHighlight })
 
 .ui-dropdown-menu {
   position: fixed;
-  top: anchor(bottom);
-  left: anchor(left);
-  margin-top: 6px;
-  width: anchor-size(width);
+  width: var(--ui-dropdown-trigger-width);
   max-width: calc(100vw - 16px);
   max-height: 60vh;
-  position-try-fallbacks: flip-block;
   background: rgba(2, 6, 23, 0.98);
   border: 1px solid #334155;
   border-radius: 10px;

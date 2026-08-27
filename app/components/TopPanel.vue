@@ -278,7 +278,8 @@
         <Dropdown
           v-model:open="menuOpen"
           auto-close
-          :popup-style="{ width: '160px', left: 'auto', right: 'anchor(right)' }"
+          align="end"
+          :popup-style="{ width: '160px' }"
           @select="onMenuSelect"
         >
           <template #trigger>

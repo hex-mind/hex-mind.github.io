@@ -25,11 +25,6 @@ const GIT_STATUS_SCRIPT = [
   'git diff --cached --shortstat 2>/dev/null',
 ].join('\n');
 
-const GIT_FILE_LIST_SCRIPT = [
-  GIT_ENV_PREAMBLE,
-  'git ls-files --cached --others --exclude-standard -z 2>/dev/null',
-].join('\n');
-
 export type TreeNode = {
   name: string;
   path: string;
@@ -94,8 +89,6 @@ export type GitStatus = {
   diffStats: GitDiffStats;
 };
 
-type FileTreeStrategy = 'filesystem' | 'git';
-
 type UseFileTreeOptions = {
   activeDirectory: Ref<string>;
 };
@@ -113,7 +106,6 @@ const files = ref<string[]>([]);
 const fileCacheVersion = ref(0);
 const branchEntries = ref<BranchEntry[]>([]);
 const branchListLoading = ref(false);
-const fileTreeStrategy = ref<FileTreeStrategy>('filesystem');
 
 let fileCacheBuildId = 0;
 const DIRECTORY_RELOAD_DEBOUNCE_MS = 120;
@@ -122,7 +114,6 @@ const scheduledDirectoryReloads = new Map<string, ReturnType<typeof setTimeout>>
 let scheduledGitStatusReload: ReturnType<typeof setTimeout> | null = null;
 let gitStatusGeneration = 0;
 let branchListGeneration = 0;
-let gitFileListGeneration = 0;
 
 const BRANCH_LIST_FORMAT =
   '%(refname)\t%(refname:short)\t%(HEAD)\t%(worktreepath)\t%(objectname:short)\t%(subject)\t%(upstream:short)';
@@ -348,11 +339,6 @@ function scheduleGitStatusReload() {
   }, GIT_STATUS_RELOAD_DEBOUNCE_MS);
 }
 
-function toErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
 function normalizeGitStatusCode(value: string): GitStatusCode {
   if (value === ' ') return '';
   if (value === '?') return '?';
@@ -522,198 +508,6 @@ function parseGitStatusOutput(output: string): GitStatus {
   };
 }
 
-function buildFullTreeFromPaths(allPaths: string[]): TreeNode[] {
-  function build(paths: string[], prefix: string): TreeNode[] {
-    const dirs = new Map<string, string[]>();
-    const fileNames: string[] = [];
-
-    for (const p of paths) {
-      const slashIndex = p.indexOf('/');
-      if (slashIndex < 0) {
-        fileNames.push(p);
-      } else {
-        const topName = p.slice(0, slashIndex);
-        const rest = p.slice(slashIndex + 1);
-        let bucket = dirs.get(topName);
-        if (!bucket) {
-          bucket = [];
-          dirs.set(topName, bucket);
-        }
-        bucket.push(rest);
-      }
-    }
-
-    const nodes: TreeNode[] = [];
-
-    for (const [name, childPaths] of dirs) {
-      const fullPath = prefix ? `${prefix}/${name}` : name;
-      nodes.push({
-        name,
-        path: fullPath,
-        type: 'directory',
-        children: build(childPaths, fullPath),
-        loaded: false,
-        ignored: false,
-        synthetic: false,
-      });
-    }
-
-    for (const name of fileNames) {
-      const fullPath = prefix ? `${prefix}/${name}` : name;
-      nodes.push({
-        name,
-        path: fullPath,
-        type: 'file',
-        loaded: false,
-        ignored: false,
-        synthetic: false,
-      });
-    }
-
-    return sortTreeNodes(nodes);
-  }
-
-  return build(allPaths, '');
-}
-
-async function detectFileTreeStrategy(directory: string): Promise<FileTreeStrategy> {
-  try {
-    const raw = await opencodeApi.getVcsInfo(directory);
-    if (!raw || typeof raw !== 'object') return 'filesystem';
-    const branch = (raw as Record<string, unknown>).branch;
-    if (typeof branch !== 'string' || !branch.trim()) return 'filesystem';
-    return 'git';
-  } catch {
-    return 'filesystem';
-  }
-}
-
-function deepMergeGitTree(existing: TreeNode[], incoming: TreeNode[]): TreeNode[] {
-  if (existing.length === 0) return incoming;
-  const existingByPath = new Map(existing.map((node) => [node.path, node]));
-  const incomingByPath = new Map(incoming.map((node) => [node.path, node]));
-
-  const merged = incoming.map((node) => {
-    const prev = existingByPath.get(node.path);
-    if (!prev || node.type !== 'directory' || prev.type !== 'directory') return node;
-
-    if (prev.loaded && Array.isArray(prev.children)) {
-      // Already expanded via /file — keep its children (includes ignored items)
-      return { ...node, children: prev.children, loaded: true };
-    }
-
-    // Not loaded, but recurse to preserve any loaded subdirectories deeper down
-    if (Array.isArray(prev.children) && Array.isArray(node.children)) {
-      return { ...node, children: deepMergeGitTree(prev.children, node.children) };
-    }
-
-    return node;
-  });
-
-  // Preserve existing nodes not in incoming (e.g., ignored root entries from /file)
-  for (const [path, node] of existingByPath) {
-    if (!incomingByPath.has(path)) {
-      merged.push(node);
-    }
-  }
-
-  return sortTreeNodes(merged);
-}
-
-function mergeApiWithGitChildren(apiChildren: TreeNode[], gitChildren: TreeNode[]): TreeNode[] {
-  const gitByPath = new Map(gitChildren.map((node) => [node.path, node]));
-  const apiByPath = new Map(apiChildren.map((node) => [node.path, node]));
-
-  const merged: TreeNode[] = [];
-
-  for (const apiNode of apiChildren) {
-    const gitNode = gitByPath.get(apiNode.path);
-    if (gitNode && gitNode.type === 'directory' && Array.isArray(gitNode.children)) {
-      // Directory exists in both — use API metadata but keep git-derived subtree
-      merged.push({
-        ...apiNode,
-        children: gitNode.children,
-      });
-    } else {
-      merged.push(apiNode);
-    }
-  }
-
-  for (const [path, gitNode] of gitByPath) {
-    if (!apiByPath.has(path)) {
-      merged.push(gitNode);
-    }
-  }
-
-  return sortTreeNodes(merged);
-}
-
-async function loadIgnoredRootNodes(directory: string): Promise<TreeNode[]> {
-  try {
-    const data = await opencodeApi.listFiles({ directory, path: '.' });
-    const list = Array.isArray(data) ? data : [];
-    const nodes = buildTreeNodes(list, directory, '.');
-    return nodes.filter((node) => node.ignored);
-  } catch {
-    return [];
-  }
-}
-
-function parseGitFileList(output: string): string[] {
-  return output
-    .replace(/\r/g, '')
-    .split('\0')
-    .map((token) => token.trim())
-    .filter(Boolean);
-}
-
-async function refreshGitFileSnapshot() {
-  const { activeDirectory } = getOptions();
-  const directory = activeDirectory.value.trim();
-  if (!directory) return;
-
-  const generation = ++gitFileListGeneration;
-  const { runOneShotPtyCommand } = usePtyOneshot();
-  try {
-    const output = await runOneShotPtyCommand('bash', [
-      '--noprofile',
-      '--norc',
-      '-c',
-      GIT_FILE_LIST_SCRIPT,
-    ]);
-    if (generation !== gitFileListGeneration) return;
-    if (activeDirectory.value.trim() !== directory) return;
-
-    const allPaths = parseGitFileList(output);
-    if (allPaths.length === 0) {
-      treeNodes.value = [];
-      files.value = [];
-      fileCacheVersion.value += 1;
-      return;
-    }
-
-    const gitTree = buildFullTreeFromPaths(allPaths);
-    const ignoredRoot = await loadIgnoredRootNodes(directory);
-    if (generation !== gitFileListGeneration) return;
-    if (activeDirectory.value.trim() !== directory) return;
-
-    const mergedRoot = ignoredRoot.length > 0 ? deepMergeGitTree(ignoredRoot, gitTree) : gitTree;
-    treeNodes.value = deepMergeGitTree(treeNodes.value, mergedRoot);
-
-    const sorted = Array.from(new Set(allPaths)).sort((a, b) => a.localeCompare(b));
-    if (
-      sorted.length !== files.value.length ||
-      sorted.some((path, index) => path !== files.value[index])
-    ) {
-      files.value = sorted;
-      fileCacheVersion.value += 1;
-    }
-  } catch {
-    if (generation !== gitFileListGeneration) return;
-    if (activeDirectory.value.trim() !== directory) return;
-  }
-}
-
 function setGitStatus(next: GitStatus | null) {
   gitStatus.value = next;
   if (!next) {
@@ -761,9 +555,6 @@ async function refreshGitStatusOnly() {
 
 async function refreshGitStatus() {
   await refreshGitStatusOnly();
-  if (fileTreeStrategy.value === 'git') {
-    await refreshGitFileSnapshot();
-  }
 }
 
 function parseBranchEntries(output: string): BranchEntry[] {
@@ -893,29 +684,6 @@ function selectTreeFile(path: string) {
 const expandedTreePaths = computed(() => Array.from(expandedTreePathSet.value));
 
 async function loadSingleDirectory(path: string) {
-  if (fileTreeStrategy.value === 'git') {
-    if (path === '.') {
-      await refreshGitFileSnapshot();
-      return;
-    }
-    const options = getOptions();
-    const directory = options.activeDirectory.value.trim();
-    if (!directory) return;
-    try {
-      const data = await opencodeApi.listFiles({ directory, path });
-      if (options.activeDirectory.value.trim() !== directory) return;
-      const list = Array.isArray(data) ? data : [];
-      const apiChildren = buildTreeNodes(list, directory, path);
-      const parent = findTreeNodeByPath(treeNodes.value, path);
-      const gitChildren = parent?.children ?? [];
-      const merged = mergeApiWithGitChildren(apiChildren, gitChildren);
-      treeNodes.value = updateTreeNodeChildren(treeNodes.value, path, merged);
-    } catch {
-      return;
-    }
-    return;
-  }
-
   const options = getOptions();
   const directory = options.activeDirectory.value.trim();
   if (!directory) return;
@@ -950,7 +718,7 @@ function feed(packet: FileWatcherUpdatedPacket) {
   const relativePath = toRelativePath(packet.file, directory);
   if (relativePath === '.') return;
 
-  if (fileTreeStrategy.value !== 'git' && packet.event === 'unlink') {
+  if (packet.event === 'unlink') {
     const next = files.value.filter(
       (path) => path !== relativePath && !path.startsWith(`${relativePath}/`),
     );
@@ -977,28 +745,6 @@ async function rebuildFileCache() {
     files.value = [];
     fileCacheVersion.value += 1;
     treeLoading.value = false;
-    return;
-  }
-
-  const strategy = await detectFileTreeStrategy(directory);
-  if (buildId !== fileCacheBuildId) return;
-  if (options.activeDirectory.value.trim() !== directory) return;
-  fileTreeStrategy.value = strategy;
-
-  if (strategy === 'git') {
-    try {
-      await refreshGitFileSnapshot();
-      if (buildId !== fileCacheBuildId) return;
-      if (options.activeDirectory.value.trim() !== directory) return;
-    } catch (error) {
-      if (buildId !== fileCacheBuildId) return;
-      if (options.activeDirectory.value.trim() !== directory) return;
-      treeError.value = `Tree load failed: ${toErrorMessage(error)}`;
-    } finally {
-      if (buildId === fileCacheBuildId && options.activeDirectory.value.trim() === directory) {
-        treeLoading.value = false;
-      }
-    }
     return;
   }
 
@@ -1076,7 +822,6 @@ function initializeFileTree(options: UseFileTreeOptions) {
       treeError.value = '';
       files.value = [];
       fileCacheVersion.value += 1;
-      fileTreeStrategy.value = 'filesystem';
       setGitStatus(null);
       branchEntries.value = [];
 

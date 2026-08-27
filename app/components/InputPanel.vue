@@ -5,6 +5,7 @@
         ref="historyDropdownRef"
         v-model:open="historyOpen"
         auto-close
+        placement="top"
         popup-class="history-popup"
         @select="handleHistorySelect"
       >
@@ -51,6 +52,7 @@
         ref="favoritesDropdownRef"
         v-model:open="favoritesOpen"
         auto-close
+        placement="top"
         popup-class="history-popup"
         @select="handleFavoriteSelect"
       >
@@ -143,6 +145,7 @@
           :auto-close="false"
           :auto-focus="false"
           :auto-highlight="true"
+          placement="top"
           popup-class="input-dropdown-popup command-popup"
           @select="handleCommandSelect"
         >
@@ -174,6 +177,7 @@
               :disabled="props.disabled || !hasAgentOptions"
               button-class="input-control input-dropdown-button"
               popup-class="input-dropdown-popup"
+              placement="top"
               menu-icon="lucide:chevron-up"
               auto-close
               title="Agent (Tab)"
@@ -212,6 +216,7 @@
               :disabled="props.disabled || !hasModelOptions"
               button-class="input-control input-dropdown-button"
               popup-class="input-dropdown-popup"
+              placement="top"
               menu-icon="lucide:chevron-up"
               auto-close
               title="Model (Ctrl-M)"
@@ -277,6 +282,7 @@
             :disabled="props.disabled || !hasThinkingOptions"
             button-class="input-control input-dropdown-button"
             popup-class="input-dropdown-popup"
+            placement="top"
             menu-icon="lucide:chevron-up"
             auto-close
             title="Variant (Ctrl-, / Ctrl-.)"
@@ -1000,7 +1006,6 @@ function reset() {
 }
 
 defineExpose({ focus, reset });
-
 </script>
 
 <style scoped>
@@ -1106,12 +1111,6 @@ defineExpose({ focus, reset });
 }
 
 :deep(.input-dropdown-popup) {
-  /* Always open upward since input toolbar is at the bottom */
-  top: auto;
-  bottom: anchor(top);
-  margin-top: 0;
-  margin-bottom: 6px;
-  position-try-fallbacks: none;
   max-height: 280px;
   outline: none;
 }
@@ -1362,11 +1361,6 @@ defineExpose({ focus, reset });
 }
 
 :deep(.command-popup) {
-  /* Open upward instead of downward */
-  top: auto;
-  bottom: anchor(top);
-  margin-top: 0;
-  margin-bottom: 8px;
   max-height: 220px;
 }
 
@@ -1408,11 +1402,6 @@ defineExpose({ focus, reset });
 }
 
 :deep(.history-popup) {
-  /* Open upward instead of downward */
-  top: auto;
-  bottom: anchor(top);
-  margin-top: 0;
-  margin-bottom: 6px;
   max-height: 50vh;
   overflow: auto;
   /* Match input panel background */
