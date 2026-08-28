@@ -722,8 +722,8 @@ html[data-theme='light'] .ui-dropdown-item.is-active {
 }
 
 html[data-theme='light'] .selected-branch-badge {
-  background: #eef2f7 !important;
-  border-color: #d1d5db !important;
+  background: transparent !important;
+  border: 0 !important;
   color: #374151 !important;
 }
 
@@ -889,6 +889,17 @@ html[data-theme='light'] .open-shell-button:hover:not(:disabled) {
   border-color: transparent !important;
   color: #6d28d9 !important;
   filter: none;
+}
+
+html[data-theme='light'] .tree-dropdown-root .ui-dropdown-button {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='light'] .tree-dropdown-root .ui-dropdown-button:hover {
+  background: #ececf1 !important;
+  color: #202123 !important;
 }
 
 html[data-theme='light'] .notification-button {

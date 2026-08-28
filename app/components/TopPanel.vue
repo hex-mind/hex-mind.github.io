@@ -246,24 +246,26 @@
           </template>
         </Dropdown>
 
-        <button
-          type="button"
-          class="top-icon-button new-session-button"
-          :disabled="!selectedSessionId"
-          @click="$emit('new-session')"
-          title="New session (Ctrl-;)"
-        >
-          <Icon icon="lucide:message-circle-plus" :width="16" :height="16" />
-        </button>
-        <button
-          type="button"
-          class="top-icon-button open-shell-button"
-          :disabled="!activeDirectory"
-          @click="$emit('open-shell')"
-          title="Open shell"
-        >
-          <Icon icon="lucide:terminal" :width="16" :height="16" />
-        </button>
+        <div class="top-session-actions">
+          <button
+            type="button"
+            class="top-icon-button new-session-button"
+            :disabled="!selectedSessionId"
+            @click="$emit('new-session')"
+            title="New session (Ctrl-;)"
+          >
+            <Icon icon="lucide:message-circle-plus" :width="16" :height="16" />
+          </button>
+          <button
+            type="button"
+            class="top-icon-button open-shell-button"
+            :disabled="!activeDirectory"
+            @click="$emit('open-shell')"
+            title="Open shell"
+          >
+            <Icon icon="lucide:terminal" :width="16" :height="16" />
+          </button>
+        </div>
       </div>
       <div class="top-right">
         <a
@@ -712,6 +714,12 @@ function handleOpenDirectory(close: () => void) {
   gap: 8px;
 }
 
+.top-session-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .top-right {
   flex: 0 0 auto;
   display: flex;
@@ -860,7 +868,7 @@ function handleOpenDirectory(close: () => void) {
 
 .tree-action-button {
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   box-shadow: none;
   color: #cbd5e1;
@@ -1157,10 +1165,14 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-dropdown-root :deep(.ui-dropdown-button) {
-  background: #0b1320;
-  border-color: #334155;
+  background: transparent;
+  border-color: transparent;
   color: #e2e8f0;
   box-shadow: none;
+}
+
+.tree-dropdown-root :deep(.ui-dropdown-button:hover) {
+  background: rgba(51, 65, 85, 0.45);
 }
 
 .tree-dropdown-root :deep(.ui-dropdown-menu) {
@@ -1202,11 +1214,11 @@ function handleOpenDirectory(close: () => void) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid #334155;
+  border: 0;
   border-radius: 999px;
   padding: 2px 6px;
   color: #cbd5e1;
-  background: #111a2c;
+  background: transparent;
   font-size: 11px;
   line-height: 1;
 }
@@ -1224,7 +1236,7 @@ function handleOpenDirectory(close: () => void) {
   justify-content: center;
   text-decoration: none;
   border: none;
-  border-radius: 50%;
+  border-radius: 8px;
   background: transparent;
   color: #94a3b8;
 }
@@ -1235,6 +1247,7 @@ function handleOpenDirectory(close: () => void) {
   justify-content: center;
   padding: 0;
   border: 0;
+  border-radius: 8px;
   background: transparent;
   box-shadow: none;
   cursor: pointer;
