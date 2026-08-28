@@ -108,7 +108,7 @@ async function runOneShotPtyCommand(command: string, args: string[]): Promise<st
       '--noprofile',
       '--norc',
       '-c',
-      `stty -echo 2>/dev/null; read -r -t 1 _ || true; "$@"; code=$?; printf '\n${PTY_ONESHOT_EXIT_PREFIX}%s\n' "$code"; exit "$code"`,
+      `stty -echo 2>/dev/null; read -r -t 1 _ || true; "$@"; code=$?; printf '\n${PTY_ONESHOT_EXIT_PREFIX}%s\n' "$code"; read -r -t 5 _cleanup || true; exit "$code"`,
       '_',
       command,
       ...args,
@@ -133,6 +133,24 @@ async function runOneShotPtyCommand(command: string, args: string[]): Promise<st
       settled = true;
       clearTimeout(timeoutId);
       handler();
+      void opencodeApi.deletePty(pty.id, directory).catch((error) => {
+        console.error('[pty-oneshot] failed to delete PTY:', pty.id, error);
+      });
+    };
+
+    const resolveIfComplete = () => {
+      const parsed = extractOneShotExitCode(captured);
+      if (parsed.exitCode === null) return false;
+      if (parsed.exitCode !== 0) {
+        console.error(
+          `[pty-oneshot] command exited with non-zero code ${parsed.exitCode}:`,
+          command,
+          args,
+        );
+      }
+      settle(() => resolve(parsed.output));
+      socket.close();
+      return true;
     };
 
     const timeoutId = setTimeout(() => {
@@ -151,11 +169,13 @@ async function runOneShotPtyCommand(command: string, args: string[]): Promise<st
         const bytes = new Uint8Array(event.data);
         if (isCursorMetaBytes(bytes)) return;
         captured += decoder.decode(bytes, { stream: true });
+        resolveIfComplete();
         return;
       }
       if (typeof event.data !== 'string') return;
       if (isCursorMetaString(event.data)) return;
       captured += event.data;
+      resolveIfComplete();
     });
     socket.addEventListener('close', () => {
       settle(() => {

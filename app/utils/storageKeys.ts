@@ -2,7 +2,7 @@ const STORAGE_PREFIX = 'opencode.';
 
 export const StorageKeys = {
   settings: {
-    enterToSend: 'settings.enterToSend.v1',
+    enterToSend: 'settings.enterToSend.v2',
     suppressAutoWindows: 'settings.suppressAutoWindows.v1',
     theme: 'settings.theme.v1',
   },

@@ -76,7 +76,7 @@
           ></div>
         </div>
         <div class="app-main-column">
-          <main ref="outputEl" class="app-output">
+          <main class="app-output">
             <div class="output-workspace">
               <div class="tool-window-layer">
                 <div class="output-split">
@@ -116,13 +116,7 @@
               </div>
             </div>
           </main>
-          <footer
-            ref="inputEl"
-            class="app-input"
-            :class="{ 'is-disabled': !hasSession }"
-            :style="inputHeight !== null ? { height: `${inputHeight}px` } : undefined"
-          >
-            <div class="input-resizer" @pointerdown="startInputResize"></div>
+          <footer ref="inputEl" class="app-input" :class="{ 'is-disabled': !hasSession }">
             <InputPanel
               ref="inputPanelRef"
               :disabled="connectionState !== 'ready'"
@@ -616,7 +610,6 @@ watch(suppressAutoWindows, (suppressed) => {
   }
 });
 
-const outputEl = ref<HTMLElement | null>(null);
 const inputEl = ref<HTMLElement | null>(null);
 const toolWindowCanvasEl = ref<HTMLDivElement | null>(null);
 const outputPanelRef = ref<{ panelEl: HTMLDivElement | null } | null>(null);
@@ -670,13 +663,6 @@ const userMessageMetaById = ref<Record<string, UserMessageMeta>>({});
 const userMessageTimeById = ref<Record<string, number>>({});
 const globalEventUnsubscribers: Array<() => void> = [];
 
-const inputResizeState = ref<{
-  startY: number;
-  startHeight: number;
-  minHeight: number;
-  maxHeight: number;
-} | null>(null);
-const inputHeight = ref<number | null>(null);
 const sidePanelResizeState = ref<{
   startX: number;
   startWidth: number;
@@ -2125,28 +2111,6 @@ function pickShikiTheme(names: string[]) {
   return darkMatch ?? names[0];
 }
 
-function startInputResize(event: PointerEvent) {
-  if (event.button !== 0) return;
-  const output = outputEl.value;
-  const input = inputEl.value;
-  if (!output || !input) return;
-  const outputRect = output.getBoundingClientRect();
-  const inputRect = input.getBoundingClientRect();
-  const totalHeight = Math.max(0, outputRect.height + inputRect.height);
-  const minOutputHeight = 180;
-  const maxInputHeight = Math.max(120, totalHeight - minOutputHeight);
-  const minInputHeight = Math.min(200, maxInputHeight);
-  inputResizeState.value = {
-    startY: event.clientY,
-    startHeight: inputRect.height,
-    minHeight: minInputHeight,
-    maxHeight: maxInputHeight,
-  };
-  inputHeight.value = inputRect.height;
-  (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
-  event.preventDefault();
-}
-
 function startSidePanelResize(event: PointerEvent) {
   if (event.button !== 0) return;
   const body = appBodyEl.value;
@@ -2179,19 +2143,9 @@ function handlePointerMove(event: PointerEvent) {
     scheduleShellFitAll();
     return;
   }
-  if (inputResizeState.value) {
-    const { startY, startHeight, minHeight, maxHeight } = inputResizeState.value;
-    const dy = event.clientY - startY;
-    inputHeight.value = clamp(startHeight - dy, minHeight, maxHeight);
-    syncFloatingExtent();
-    scheduleShellFitAll();
-    return;
-  }
 }
 
 function handlePointerUp() {
-  if (inputResizeState.value) scheduleShellFitAll();
-  inputResizeState.value = null;
   if (sidePanelResizeState.value) scheduleShellFitAll();
   sidePanelResizeState.value = null;
 }
@@ -5779,33 +5733,6 @@ onBeforeUnmount(() => {
   align-items: stretch;
   min-height: 0;
   min-height: 200px;
-}
-
-.input-resizer {
-  position: absolute;
-  top: -8px;
-  left: 8px;
-  right: 8px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: ns-resize;
-  z-index: 40;
-  touch-action: none;
-}
-
-.input-resizer::before {
-  content: '';
-  width: 44px;
-  height: 3px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.6);
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.6);
-}
-
-.input-resizer:hover::before {
-  background: rgba(226, 232, 240, 0.7);
 }
 
 .output-workspace {

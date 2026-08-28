@@ -385,7 +385,6 @@ html[data-theme='light']
     .tree-footer-button,
     .tree-statusbar-btn,
     .side-close,
-    .input-button,
     .ib-action,
     .history-action-button,
     .app-loading-retry
@@ -401,7 +400,6 @@ html[data-theme='light']
     .tree-footer-button,
     .tree-statusbar-btn,
     .side-close,
-    .input-button,
     .ib-action,
     .history-action-button,
     .app-loading-retry
@@ -507,14 +505,38 @@ html[data-theme='light'] .ib-footer-actions .ib-action-danger {
   color: #dc2626 !important;
 }
 
+html[data-theme='light'] .input-button {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  color: #6b7280 !important;
+}
+
+html[data-theme='light'] .input-button:hover:not(:disabled) {
+  background: #ececf1 !important;
+  color: #202123 !important;
+}
+
+html[data-theme='light'] .input-toolbar .input-control {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='light'] .input-toolbar .input-control:hover:not(:disabled) {
+  background: #ececf1 !important;
+  color: #202123 !important;
+}
+
 html[data-theme='light'] .input-button.primary {
   color: #2563eb !important;
-  background: #eff6ff !important;
+  background: transparent !important;
 }
 
 html[data-theme='light'] .input-button.stop,
 html[data-theme='light'] .suppress-button.active {
-  background: #fff1f2 !important;
+  background: transparent !important;
   color: #dc2626 !important;
 }
 
@@ -524,7 +546,12 @@ html[data-theme='light'] .input-button.primary:hover:not(:disabled) {
 }
 
 html[data-theme='light'] .input-button.stop:hover:not(:disabled),
-html[data-theme='light'] .suppress-button.active:hover:not(:disabled),
+html[data-theme='light'] .suppress-button.active:hover:not(:disabled) {
+  background: #fee2e2 !important;
+  border-color: transparent !important;
+  color: #dc2626 !important;
+}
+
 html[data-theme='light'] .history-action-button.remove:hover:not(:disabled) {
   background: #fee2e2 !important;
   border-color: #fca5a5 !important;
@@ -537,10 +564,14 @@ html[data-theme='light'] .bookmark-button:hover:not(:disabled) {
   color: #d2a91f !important;
 }
 
-html[data-theme='light'] .bookmark-button.active,
+html[data-theme='light'] .bookmark-button.active {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #c99b0b !important;
+}
+
 html[data-theme='light'] .bookmark-button.active:hover:not(:disabled) {
   background: #fff5c2 !important;
-  border-color: #ecd574 !important;
   color: #c99b0b !important;
 }
 

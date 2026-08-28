@@ -1379,9 +1379,9 @@ defineExpose({ focus, reset });
 .input-button.primary {
   background: rgba(37, 99, 235, 0.2);
   border-color: transparent;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
   color: #60a5fa;
 }
 
@@ -1393,9 +1393,9 @@ defineExpose({ focus, reset });
 .input-button.stop {
   background: rgba(220, 38, 38, 0.2);
   border-color: transparent;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
   color: #f87171;
 }
 
@@ -1423,7 +1423,7 @@ defineExpose({ focus, reset });
 }
 
 .suppress-button.active {
-  background: rgba(239, 68, 68, 0.2);
+  background: transparent;
   color: #f87171;
 }
 
@@ -1442,7 +1442,7 @@ defineExpose({ focus, reset });
 }
 
 .bookmark-button.active {
-  background: rgba(251, 191, 36, 0.22);
+  background: transparent;
   color: #fbbf24;
 }
 
