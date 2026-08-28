@@ -12,7 +12,7 @@ export function useThinkingAnimation(isThinking: Ref<boolean>, busyDescendantCou
     if (!isThinking.value) return '🟢 Idle';
     const descendants = busyDescendantCount.value;
     const total = Math.max(1, 1 + descendants);
-    const heads = '🤔'.repeat(Math.min(total, 8));
+    const heads = '🧐'.repeat(Math.min(total, 8));
     return `${heads} Thinking${thinkingSuffix.value}`;
   });
 

@@ -9,7 +9,7 @@
       <div class="top-center">
         <button
           type="button"
-          class="control-button notification-button"
+          class="top-icon-button notification-button"
           :class="{ 'has-notifications': notifications.length > 0 }"
           :title="
             notifications.length > 0
@@ -248,7 +248,7 @@
 
         <button
           type="button"
-          class="control-button new-session-button"
+          class="top-icon-button new-session-button"
           :disabled="!selectedSessionId"
           @click="$emit('new-session')"
           title="New session (Ctrl-;)"
@@ -257,7 +257,7 @@
         </button>
         <button
           type="button"
-          class="control-button open-shell-button"
+          class="top-icon-button open-shell-button"
           :disabled="!activeDirectory"
           @click="$emit('open-shell')"
           title="Open shell"
@@ -270,7 +270,7 @@
           href="https://github.com/hex-mind/hex-mind.github.io"
           target="_blank"
           rel="noopener noreferrer"
-          class="control-button github-button"
+          class="top-icon-button github-button"
           title="GitHub"
         >
           <Icon icon="lucide:github" :width="16" :height="16" />
@@ -285,7 +285,7 @@
           <template #trigger>
             <button
               type="button"
-              class="control-button menu-button"
+              class="top-icon-button menu-button"
               @click.stop="menuOpen = !menuOpen"
             >
               <Icon icon="lucide:ellipsis-vertical" :width="16" :height="16" />
@@ -539,7 +539,7 @@ function directoryBasename(path: string) {
 }
 
 function sessionStatusIcon(status: TopPanelSession['status']) {
-  if (status === 'busy') return '🤔';
+  if (status === 'busy') return '🧐';
   if (status === 'retry') return '🔴';
   if (status === 'idle') return '🟢';
   return '⚪';
@@ -859,9 +859,10 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-action-button {
-  border: 1px solid #334155;
+  border: 0;
   border-radius: 6px;
-  background: #111a2c;
+  background: transparent;
+  box-shadow: none;
   color: #cbd5e1;
   font-size: 10px;
   line-height: 1;
@@ -1103,7 +1104,7 @@ function handleOpenDirectory(close: () => void) {
 
 .new-session-button:hover,
 .open-shell-button:hover {
-  background: #1d2a45;
+  background: rgba(51, 65, 85, 0.45);
 }
 
 .open-shell-button {
@@ -1127,6 +1128,16 @@ function handleOpenDirectory(close: () => void) {
 
 .notification-button.has-notifications {
   color: #fbbf24;
+}
+
+.notification-button:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.45);
+  color: #e2e8f0;
+}
+
+.top-icon-button:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .notification-badge {
@@ -1218,8 +1229,19 @@ function handleOpenDirectory(close: () => void) {
   color: #94a3b8;
 }
 
-.github-button:hover {
+.top-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
   background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.github-button:hover {
+  background: rgba(51, 65, 85, 0.45);
   color: #e2e8f0;
 }
 
@@ -1235,7 +1257,7 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .menu-button:hover {
-  background: transparent;
+  background: rgba(51, 65, 85, 0.45);
   color: #e2e8f0;
 }
 

@@ -43,6 +43,7 @@
             :collapsed="sidePanelCollapsed"
             :active-tab="sidePanelActiveTab"
             :todo-sessions="todoPanelSessions"
+            :bookmarked-sessions="bookmarkedSessionItems"
             :tree-nodes="treeNodes"
             :expanded-tree-paths="expandedTreePaths"
             :selected-tree-path="selectedTreePath"
@@ -57,6 +58,8 @@
             :run-shell-command="runTreeShellCommand"
             @toggle-collapse="toggleSidePanelCollapsed"
             @select-tab="selectSidePanelTab"
+            @select-bookmark="handleTopPanelSessionSelect"
+            @remove-bookmark="removeBookmark"
             @toggle-dir="toggleTreeDirectory"
             @select-file="selectTreeFile"
             @open-diff="openGitDiff"
@@ -141,11 +144,13 @@
               :selected-mode="selectedMode"
               :selected-model="selectedModel"
               :selected-thinking="selectedThinking"
+              :is-session-saved="isCurrentSessionBookmarked"
               @update:message-input="handleMessageInputUpdate"
               @update:selected-mode="handleSelectedModeUpdate"
               @update:selected-model="handleSelectedModelUpdate"
               @update:selected-thinking="handleSelectedThinkingUpdate"
               @apply-history-entry="handleApplyHistoryEntry"
+              @toggle-save-session="toggleCurrentSessionBookmark"
               @send="sendMessage"
               @abort="abortSession"
               @add-attachments="handleAddAttachments"
@@ -174,11 +179,7 @@
           <div class="flex fixed flex-col items-center w-96 h-40 translate-x-1/2 -translate-y-1/2">
             <div class="mb-4">
               <img src="/hex-logo.png" alt="HEX" class="app-brand-logo brand-logo-dark" />
-              <img
-                src="/hex-logo-light.png"
-                alt="HEX"
-                class="app-brand-logo brand-logo-light"
-              />
+              <img src="/hex-logo-light.png" alt="HEX" class="app-brand-logo brand-logo-light" />
             </div>
             <div class="app-brand-tagline">for opencode</div>
           </div>
@@ -344,6 +345,7 @@ import { opencodeTheme, resolveTheme, resolveAgentColor } from './utils/theme';
 import { splitFileContentDirectoryAndPath } from './utils/path';
 import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
+import { useBookmarkedSessions } from './composables/useBookmarkedSessions';
 import {
   StorageKeys,
   storageGet,
@@ -1246,6 +1248,74 @@ const todoPanelSessions = computed(() => {
 
 const hasSession = computed(() => Boolean(selectedSessionId.value));
 
+const {
+  bookmarks: bookmarkedSessions,
+  isBookmarked,
+  removeBookmark,
+  toggleBookmark,
+} = useBookmarkedSessions();
+
+function findLiveSessionLocation(sessionId: string) {
+  const id = sessionId.trim();
+  if (!id) return null;
+  for (const worktree of topPanelTreeData.value) {
+    for (const sandbox of worktree.sandboxes) {
+      const session = sandbox.sessions.find((item) => item.id === id);
+      if (!session) continue;
+      return { worktree, sandbox, session };
+    }
+  }
+  return null;
+}
+
+const isCurrentSessionBookmarked = computed(() => isBookmarked(selectedSessionId.value));
+
+const bookmarkedSessionItems = computed(() =>
+  bookmarkedSessions.value.map((entry) => {
+    const live = findLiveSessionLocation(entry.sessionId);
+    if (live) {
+      return {
+        sessionId: live.session.id,
+        projectId: live.worktree.projectId || selectedProjectId.value,
+        worktree: live.worktree.directory,
+        directory: live.sandbox.directory,
+        title: live.session.title || live.session.slug || live.session.id,
+        branch: live.sandbox.branch,
+        projectName: live.worktree.name,
+        available: true,
+        isSelected: live.session.id === selectedSessionId.value,
+      };
+    }
+    return {
+      sessionId: entry.sessionId,
+      projectId: entry.projectId,
+      worktree: entry.worktree,
+      directory: entry.directory,
+      title: entry.title || entry.sessionId,
+      branch: entry.branch,
+      projectName: entry.projectName,
+      available: false,
+      isSelected: entry.sessionId === selectedSessionId.value,
+    };
+  }),
+);
+
+function toggleCurrentSessionBookmark() {
+  const sessionId = selectedSessionId.value.trim();
+  if (!sessionId) return;
+  const live = findLiveSessionLocation(sessionId);
+  toggleBookmark({
+    sessionId,
+    projectId: live?.worktree.projectId || selectedProjectId.value,
+    worktree: live?.worktree.directory || projectDirectory.value,
+    directory: live?.sandbox.directory || activeDirectory.value,
+    title: live?.session.title || live?.session.slug || sessionId,
+    branch: live?.sandbox.branch,
+    projectName: live?.worktree.name || currentProjectName.value,
+    savedAt: Date.now(),
+  });
+}
+
 const canSend = computed(() =>
   Boolean(
     uiInitState.value === 'ready' &&
@@ -1408,7 +1478,7 @@ function toErrorMessage(error: unknown) {
   return String(error);
 }
 
-const resolvedTheme = computed(() => resolveTheme(opencodeTheme, 'dark'));
+const resolvedTheme = computed(() => resolveTheme(opencodeTheme, uiTheme.value));
 
 const visibleAgents = computed(() => agents.value.filter((a) => !a.hidden));
 
@@ -1614,7 +1684,7 @@ function persistSidePanelCollapsed(value: boolean) {
 
 function readSidePanelTab(): SidePanelTab {
   const raw = storageGet(StorageKeys.state.sidePanelTab);
-  if (raw === 'git' || raw === 'search' || raw === 'todo') return raw;
+  if (raw === 'git' || raw === 'search' || raw === 'todo' || raw === 'bookmarks') return raw;
   return 'files';
 }
 
@@ -4838,7 +4908,7 @@ function handleOpenHistoryReasoning(payload: { part: ReasoningPart }) {
       entries: [{ id: payload.part.id, text: payload.part.text }],
       theme: shikiTheme.value,
     },
-    title: '🤔 Thought',
+    title: '🧐 Thought',
     scroll: 'manual',
     closable: true,
     resizable: true,

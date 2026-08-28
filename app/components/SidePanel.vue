@@ -27,6 +27,12 @@
         </button>
       </header>
       <TodoList v-if="activeTab === 'todo'" :sessions="todoSessions" />
+      <BookmarksList
+        v-else-if="activeTab === 'bookmarks'"
+        :sessions="bookmarkedSessions"
+        @select-session="(session) => emit('select-bookmark', session)"
+        @remove-bookmark="(sessionId) => emit('remove-bookmark', sessionId)"
+      />
       <div v-else-if="activeTab === 'search'" class="search-panel">
         <label class="search-field">
           <span class="sr-only">Search</span>
@@ -64,6 +70,7 @@
 import { computed, toRefs } from 'vue';
 import { Icon } from '@iconify/vue';
 import TodoList from './TodoList.vue';
+import BookmarksList, { type BookmarkedSessionView } from './BookmarksList.vue';
 import type { BranchEntry } from '../composables/useFileTree';
 import TreeView, {
   type GitBranchInfo,
@@ -91,6 +98,7 @@ const props = defineProps<{
   collapsed: boolean;
   activeTab: SidePanelTab;
   todoSessions: TodoPanelSession[];
+  bookmarkedSessions: BookmarkedSessionView[];
   treeNodes: TreeNode[];
   expandedTreePaths: string[];
   selectedTreePath?: string;
@@ -108,6 +116,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: 'toggle-collapse'): void;
   (event: 'select-tab', value: SidePanelTab): void;
+  (event: 'select-bookmark', session: BookmarkedSessionView): void;
+  (event: 'remove-bookmark', sessionId: string): void;
   (event: 'toggle-dir', path: string): void;
   (event: 'select-file', path: string): void;
   (event: 'open-diff', payload: { path: string; staged: boolean }): void;
@@ -116,13 +126,14 @@ const emit = defineEmits<{
   (event: 'reload'): void;
 }>();
 
-export type SidePanelTab = 'files' | 'git' | 'search' | 'todo';
+export type SidePanelTab = 'files' | 'git' | 'search' | 'todo' | 'bookmarks';
 
 const tabs: { id: SidePanelTab; label: string; icon: string }[] = [
   { id: 'files', label: 'Files', icon: 'lucide:files' },
   { id: 'git', label: 'Git', icon: 'lucide:git-branch' },
   { id: 'search', label: 'Search', icon: 'lucide:search' },
   { id: 'todo', label: 'Todo', icon: 'lucide:list-todo' },
+  { id: 'bookmarks', label: 'Bookmarks', icon: 'lucide:bookmark' },
 ];
 
 const activeTabLabel = computed(
@@ -133,6 +144,7 @@ const {
   collapsed,
   activeTab,
   todoSessions,
+  bookmarkedSessions,
   treeNodes,
   expandedTreePaths,
   selectedTreePath,

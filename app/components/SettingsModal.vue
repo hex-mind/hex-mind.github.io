@@ -48,7 +48,7 @@
           <div class="setting-info">
             <div class="setting-label">Enter to send</div>
             <div class="setting-description">
-              Send messages by pressing Enter. When off, use Ctrl+Enter.
+              Send with Enter. Turn off to send with Control + Enter.
             </div>
           </div>
           <label class="toggle-switch">

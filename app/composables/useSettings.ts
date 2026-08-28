@@ -3,7 +3,7 @@ import { StorageKeys, storageGet, storageKey, storageSet } from '../utils/storag
 
 export type UiTheme = 'dark' | 'light';
 
-const enterToSend = ref(storageGet(StorageKeys.settings.enterToSend) === 'true');
+const enterToSend = ref(storageGet(StorageKeys.settings.enterToSend) !== 'false');
 const suppressAutoWindows = ref(storageGet(StorageKeys.settings.suppressAutoWindows) === 'true');
 const theme = ref<UiTheme>(storageGet(StorageKeys.settings.theme) === 'light' ? 'light' : 'dark');
 
@@ -27,7 +27,7 @@ watch(
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event) => {
     if (event.key === storageKey(StorageKeys.settings.enterToSend)) {
-      enterToSend.value = event.newValue === 'true';
+      enterToSend.value = event.newValue !== 'false';
     }
     if (event.key === storageKey(StorageKeys.settings.suppressAutoWindows)) {
       suppressAutoWindows.value = event.newValue === 'true';

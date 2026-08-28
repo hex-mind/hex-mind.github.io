@@ -301,8 +301,14 @@
             :height="14"
           />
         </button>
-        <span v-else class="tree-toggle tree-toggle-spacer"></span>
-        <span class="tree-icon">{{ row.node.type === 'directory' ? '📁' : '📄' }}</span>
+        <Icon
+          v-else
+          :icon="fileTypeIcon(row.node.name)"
+          :width="14"
+          :height="14"
+          class="tree-file-icon"
+          :class="fileTypeClass(row.node.name)"
+        />
         <span class="tree-name">{{ row.node.name }}</span>
         <button
           v-if="displayStatus(row.node.path) && row.node.type !== 'directory'"
@@ -450,6 +456,55 @@ const branchTitle = computed(() => {
   const tracking = info.upstream ? ` tracking ${info.upstream}` : '';
   return `${info.branch}${head}${tracking}`;
 });
+
+function fileTypeMeta(name: string) {
+  const normalized = name.toLowerCase();
+  const extension = normalized.includes('.') ? (normalized.split('.').pop() ?? '') : '';
+
+  if (
+    normalized === 'package.json' ||
+    normalized.endsWith('lock.yaml') ||
+    normalized.endsWith('lock.json') ||
+    normalized.endsWith('.lock')
+  ) {
+    return { icon: 'lucide:package', tone: 'is-package' };
+  }
+  if (normalized.startsWith('.env') || normalized.startsWith('.config')) {
+    return { icon: 'lucide:settings-2', tone: 'is-config' };
+  }
+  if (
+    ['ts', 'tsx', 'js', 'jsx', 'vue', 'html', 'css', 'scss', 'less', 'py', 'go', 'rs'].includes(
+      extension,
+    )
+  ) {
+    return { icon: 'lucide:file-code-2', tone: 'is-code' };
+  }
+  if (['json', 'jsonc', 'yaml', 'yml', 'toml', 'xml'].includes(extension)) {
+    return { icon: 'lucide:braces', tone: 'is-data' };
+  }
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico'].includes(extension)) {
+    return { icon: 'lucide:file-image', tone: 'is-image' };
+  }
+  if (['md', 'mdx', 'txt', 'log'].includes(extension)) {
+    return { icon: 'lucide:file-text', tone: 'is-document' };
+  }
+  if (['sql', 'db', 'sqlite', 'sqlite3'].includes(extension)) {
+    return { icon: 'lucide:database', tone: 'is-database' };
+  }
+  return { icon: 'lucide:file', tone: 'is-default' };
+}
+
+function fileTypeIcon(name: string) {
+  return fileTypeMeta(name).icon;
+}
+
+function fileTypeClass(name: string) {
+  return fileTypeMeta(name).tone;
+}
+
+function isExpanded(path: string) {
+  return expanded.value.has(path);
+}
 
 const filteredLocalBranches = computed(() => {
   const query = branchSearchQuery.value.trim().toLowerCase();
@@ -636,10 +691,6 @@ const visibleRows = computed(() => {
   pushRows(displayNodes.value, 0);
   return rows;
 });
-
-function isExpanded(path: string) {
-  return expanded.value.has(path);
-}
 
 function displayStatus(path: string): DisplayStatus | null {
   const status = props.gitStatusByPath?.[path];
@@ -1236,24 +1287,49 @@ function onRowDoubleClick(row: { node: TreeNode }) {
 }
 
 .tree-toggle {
+  width: 16px;
+  flex: 0 0 16px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: #94a3b8;
-  width: 16px;
-  padding: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.tree-toggle-spacer {
-  display: inline-block;
+.tree-file-icon {
+  flex: 0 0 16px;
+  color: #94a3b8;
 }
 
-.tree-icon {
-  width: 16px;
-  text-align: center;
+.tree-file-icon.is-code {
+  color: #7dd3fc;
+}
+
+.tree-file-icon.is-data {
+  color: #fbbf24;
+}
+
+.tree-file-icon.is-image {
+  color: #c4b5fd;
+}
+
+.tree-file-icon.is-document {
+  color: #86efac;
+}
+
+.tree-file-icon.is-database {
+  color: #67e8f9;
+}
+
+.tree-file-icon.is-package {
+  color: #fb923c;
+}
+
+.tree-file-icon.is-config {
+  color: #facc15;
 }
 
 .tree-name {

@@ -186,7 +186,7 @@ export function useReasoningWindows(options: UseReasoningWindowsOptions) {
       : isSubagent
         ? '[subagent]'
         : undefined;
-    const title = titleTag ? `🤔 ${titleTag} Thinking...` : '🤔 Thinking...';
+    const title = titleTag ? `🧐 ${titleTag} Thinking...` : '🧐 Thinking...';
 
     if (!suppressAutoWindows?.value) {
       void fw.open(windowKey, {
