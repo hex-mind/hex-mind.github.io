@@ -1,6 +1,6 @@
 <template>
   <div class="output-panel-root">
-    <div class="output-panel-shell" :style="shellStyle">
+    <div class="output-panel-shell">
       <div v-if="projectName" class="project-name-bar">
         {{ projectName }}
       </div>
@@ -120,7 +120,6 @@ const props = defineProps<{
     modelId?: string,
   ) => number | null;
   projectName?: string;
-  projectColor?: string;
   sessionRevert?: {
     messageID: string;
     partID?: string;
@@ -298,11 +297,6 @@ onBeforeUnmount(() => {
   contentResizeObserver?.disconnect();
   contentResizeObserver = undefined;
   fileRefPopupRef.value?.closeFilePopup();
-});
-
-const shellStyle = computed(() => {
-  if (!props.projectColor) return undefined;
-  return { '--project-tint': props.projectColor } as Record<string, string>;
 });
 
 const theme = computed(() => props.theme);

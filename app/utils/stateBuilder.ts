@@ -1,15 +1,6 @@
 import type { ProjectInfo, SessionInfo } from '../types/sse';
 import type { ProjectState, SandboxState, ServerState, SessionState } from '../types/worker-state';
 
-const PROJECT_COLOR_HEX: Record<string, string> = {
-  pink: '#e34ba9',
-  mint: '#95f3d9',
-  orange: '#ff802b',
-  purple: '#9d5bd2',
-  cyan: '#369eff',
-  lime: '#c4f042',
-};
-
 const CHILD_SESSION_PRUNE_TTL_MS = 20 * 60 * 1000;
 const GLOBAL_PROJECT_NAME = 'global';
 
@@ -47,12 +38,6 @@ function normalizeDirectory(value?: string) {
   if (!trimmed) return '';
   const normalized = trimmed.replace(/\/+$/, '');
   return normalized || '/';
-}
-
-export function resolveProjectColorHex(raw?: string): string | undefined {
-  if (!raw) return undefined;
-  const trimmed = raw.trim();
-  return PROJECT_COLOR_HEX[trimmed] ?? trimmed;
 }
 
 function toSortTime(session: SessionState) {

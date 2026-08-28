@@ -142,6 +142,29 @@ export function listFiles(payload: { directory: string; path?: string }, options
   ) as Promise<unknown>;
 }
 
+export function findFiles(
+  payload: {
+    directory?: string;
+    query: string;
+    type?: 'file' | 'directory';
+    dirs?: boolean;
+    limit?: number;
+  },
+  options?: RequestOptions,
+) {
+  return getJson(
+    '/find/file',
+    {
+      directory: payload.directory,
+      query: payload.query,
+      type: payload.type,
+      dirs: payload.dirs === false ? 'false' : payload.dirs === true ? 'true' : undefined,
+      limit: payload.limit,
+    },
+    options,
+  ) as Promise<unknown>;
+}
+
 export function readFileContent(
   payload: { directory: string; path: string },
   options?: RequestOptions,
@@ -217,13 +240,6 @@ export function listWorktrees(directory: string) {
 
 export function getVcsInfo(directory: string) {
   return getJson('/vcs', { directory }) as Promise<unknown>;
-}
-
-export function createWorktree(directory: string) {
-  return sendJson('/experimental/worktree', 'POST', {
-    params: { directory },
-    body: {},
-  }) as Promise<unknown>;
 }
 
 export function deleteWorktree(directory: string, targetDirectory: string) {
@@ -426,23 +442,4 @@ export async function rejectQuestion(requestId: string, directory?: string) {
   await sendJson(`/question/${requestId}/reject`, 'POST', {
     params: { directory },
   });
-}
-
-export function updateProject(
-  projectId: string,
-  payload: {
-    directory?: string;
-    name?: string;
-    icon?: { url?: string; override?: string; color?: string };
-    commands?: { start?: string };
-  },
-) {
-  return sendJson(`/project/${projectId}`, 'PATCH', {
-    params: { directory: payload.directory },
-    body: {
-      name: payload.name,
-      icon: payload.icon,
-      commands: payload.commands,
-    },
-  }) as Promise<unknown>;
 }

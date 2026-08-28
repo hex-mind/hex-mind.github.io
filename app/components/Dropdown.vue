@@ -515,6 +515,7 @@ defineExpose({ moveHighlight, selectHighlighted, updateSearch, clearHighlight })
   max-width: calc(100vw - 16px);
   max-height: 60vh;
   background: rgba(2, 6, 23, 0.98);
+  color: #e2e8f0;
   border: 1px solid #334155;
   border-radius: 10px;
   padding: 6px;

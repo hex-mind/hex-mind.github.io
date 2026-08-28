@@ -10,8 +10,9 @@
           :active-directory="activeDirectory"
           :selected-session-id="selectedSessionId"
           :home-path="homePath"
+          :side-panel-collapsed="sidePanelCollapsed"
+          :input-panel-collapsed="inputPanelCollapsed"
           @select-notification="handleNotificationSessionSelect"
-          @create-worktree-from="createWorktreeFromWorktree"
           @new-session="createNewSession"
           @new-session-in="handleNewSessionInSandbox"
           @open-shell="openShellFromInput('')"
@@ -20,9 +21,8 @@
           @archive-session="archiveSession"
           @select-session="handleTopPanelSessionSelect"
           @open-directory="openProjectPicker"
-          @edit-project="handleEditProject"
-          @open-settings="isSettingsOpen = true"
-          @logout="handleLogout"
+          @toggle-side-panel="toggleSidePanelCollapsed"
+          @toggle-input-panel="toggleInputPanelCollapsed"
           @dropdown-closed="focusInput"
         />
       </header>
@@ -68,6 +68,8 @@
             "
             @open-file="openFileViewer"
             @reload="reloadTree().then(() => refreshGitStatus())"
+            @open-settings="isSettingsOpen = true"
+            @logout="handleLogout"
           />
           <div
             v-if="!sidePanelCollapsed"
@@ -85,7 +87,6 @@
                     :key="selectedSessionId"
                     class="output-panel"
                     :project-name="currentProjectName"
-                    :project-color="currentProjectColor"
                     :is-following="isFollowing"
                     :status-text="statusText"
                     :is-status-error="isStatusError"
@@ -116,7 +117,12 @@
               </div>
             </div>
           </main>
-          <footer ref="inputEl" class="app-input" :class="{ 'is-disabled': !hasSession }">
+          <footer
+            v-if="!inputPanelCollapsed"
+            ref="inputEl"
+            class="app-input"
+            :class="{ 'is-disabled': !hasSession }"
+          >
             <InputPanel
               ref="inputPanelRef"
               :disabled="connectionState !== 'ready'"
@@ -250,21 +256,11 @@
     <ProjectPicker
       :open="isProjectPickerOpen"
       :home-path="homePath"
-      @close="isProjectPickerOpen = false"
+      :initial-path="projectPickerInitialPath"
+      @close="closeProjectPicker"
       @select="handleProjectDirectorySelect"
     />
     <SettingsModal :open="isSettingsOpen" @close="isSettingsOpen = false" />
-    <ProjectSettingsDialog
-      :open="!!editingProject"
-      :project-id="editingProject?.projectId ?? ''"
-      :worktree="editingProject?.worktree ?? ''"
-      :name="editingProjectMeta?.name"
-      :icon-color="editingProjectMeta?.icon?.color"
-      :icon-override="editingProjectMeta?.icon?.override"
-      :commands-start="editingProjectMeta?.commands?.start"
-      @close="editingProject = null"
-      @save="handleSaveProject"
-    />
   </div>
 </template>
 
@@ -298,7 +294,6 @@ import TopPanel, {
   type TopPanelWorktree,
 } from './components/TopPanel.vue';
 import SettingsModal from './components/SettingsModal.vue';
-import ProjectSettingsDialog from './components/ProjectSettingsDialog.vue';
 import ContentViewer from './components/viewers/ContentViewer.vue';
 import DiffViewer from './components/viewers/DiffViewer.vue';
 import ShellContent from './components/ToolWindow/Shell.vue';
@@ -329,7 +324,6 @@ import { useSessionSelection } from './composables/useSessionSelection';
 import { useSubagentWindows } from './composables/useSubagentWindows';
 import { renderWorkerHtml } from './utils/workerRenderer';
 import type { ReasoningPart, ToolPart } from './types/sse';
-import { resolveProjectColorHex } from './utils/stateBuilder';
 import {
   extractFileRead as extractToolFileRead,
   extractPatch as extractToolPatch,
@@ -337,6 +331,7 @@ import {
 import * as opencodeApi from './utils/opencode';
 import { opencodeTheme, resolveTheme, resolveAgentColor } from './utils/theme';
 import { splitFileContentDirectoryAndPath } from './utils/path';
+import { pickLocalDirectory } from './utils/pickLocalDirectory';
 import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
 import { useBookmarkedSessions } from './composables/useBookmarkedSessions';
@@ -689,6 +684,7 @@ const notificationSessionOrder = ref<string[]>([]);
 const notificationPermissionRequested = ref(false);
 
 const sidePanelCollapsed = ref(readSidePanelCollapsed());
+const inputPanelCollapsed = ref(readInputPanelCollapsed());
 const sidePanelActiveTab = ref(readSidePanelTab());
 
 type SessionInfo = {
@@ -711,12 +707,6 @@ type SessionInfo = {
     snapshot?: string;
     diff?: string;
   };
-};
-
-type WorktreeInfo = {
-  name: string;
-  branch: string;
-  directory: string;
 };
 
 type ProviderModel = {
@@ -887,16 +877,9 @@ const sessionParentById = computed(() => {
   return map;
 });
 
-const currentProjectColor = computed(() => {
-  const project = serverState.projects[selectedProjectId.value];
-  return resolveProjectColorHex(project?.icon?.color);
-});
-
 const currentProjectName = computed(() => {
   const project = serverState.projects[selectedProjectId.value];
   if (!project) return undefined;
-  const name = project.name?.trim();
-  if (name) return name;
   return project.worktree?.replace(/\/+$/, '').split('/').pop() || undefined;
 });
 
@@ -932,11 +915,7 @@ const serverWorktreePath = ref('');
 
 const initialQuery = readQuerySelection();
 const isProjectPickerOpen = ref(false);
-const editingProject = ref<{ projectId: string; worktree: string } | null>(null);
-const editingProjectMeta = computed(() => {
-  const pid = editingProject.value?.projectId;
-  return pid ? serverState.projects[pid] : undefined;
-});
+const projectPickerInitialPath = ref('');
 const isSettingsOpen = ref(false);
 const selectedMode = ref('build');
 const selectedModel = ref('');
@@ -1053,14 +1032,12 @@ const topPanelTreeData = computed<TopPanelWorktree[]>(() => {
       const latestSandboxUpdated = sandboxEntries
         .flatMap((sandbox) => sandbox.sessions)
         .reduce((max, session) => Math.max(max, session.timeUpdated ?? 0), 0);
-      const name =
-        project.name?.trim() || worktreeDirectory.replace(/\/+$/, '').split('/').pop() || undefined;
+      const name = worktreeDirectory.replace(/\/+$/, '').split('/').pop() || undefined;
       return {
         directory: worktreeDirectory,
         label: replaceHomePrefix(worktreeDirectory),
         name,
         projectId: project.id,
-        projectColor: resolveProjectColorHex(project.icon?.color),
         sandboxes: sandboxEntries,
         latestUpdated: latestSandboxUpdated,
       };
@@ -1668,6 +1645,14 @@ function persistSidePanelCollapsed(value: boolean) {
   storageSet(StorageKeys.state.sidePanelCollapsed, value ? '1' : '0');
 }
 
+function readInputPanelCollapsed() {
+  return storageGet(StorageKeys.state.inputPanelCollapsed) === '1';
+}
+
+function persistInputPanelCollapsed(value: boolean) {
+  storageSet(StorageKeys.state.inputPanelCollapsed, value ? '1' : '0');
+}
+
 function readSidePanelTab(): SidePanelTab {
   const raw = storageGet(StorageKeys.state.sidePanelTab);
   if (raw === 'git' || raw === 'search' || raw === 'todo' || raw === 'bookmarks') return raw;
@@ -1685,6 +1670,16 @@ function toggleSidePanelCollapsed() {
   nextTick(() => {
     syncFloatingExtent();
     scheduleShellFitAll();
+  });
+}
+
+function toggleInputPanelCollapsed() {
+  inputPanelCollapsed.value = !inputPanelCollapsed.value;
+  persistInputPanelCollapsed(inputPanelCollapsed.value);
+  nextTick(() => {
+    syncFloatingExtent();
+    scheduleShellFitAll();
+    if (!inputPanelCollapsed.value) inputPanelRef.value?.focus();
   });
 }
 
@@ -1969,11 +1964,10 @@ function syncFloatingExtent() {
   const canvas = toolWindowCanvasEl.value;
   const header = document.querySelector('.app-header') as HTMLElement | null;
   const input = inputEl.value;
-  if (!canvas || !header || !input) return;
+  if (!canvas || !header) return;
   const headerRect = header.getBoundingClientRect();
-  const inputRect = input.getBoundingClientRect();
   const headerBottom = headerRect.bottom;
-  const inputTop = inputRect.top;
+  const inputTop = input?.getBoundingClientRect().top ?? window.innerHeight;
   const topOffset = Math.max(0, headerBottom);
   const availableHeight = Math.max(0, inputTop - headerBottom);
   canvas.style.setProperty('--canvas-top', `${topOffset}px`);
@@ -2177,55 +2171,11 @@ async function fetchHomePath() {
   }
 }
 
-function handleEditProject(payload: { projectId: string; worktree: string }) {
-  editingProject.value = payload;
-}
-
-async function handleSaveProject(payload: {
-  projectId: string;
-  worktree: string;
-  name: string;
-  icon: { color: string; override: string };
-  commands: { start: string };
-}) {
-  try {
-    await openCodeApi.updateProject(payload.projectId, {
-      directory: payload.worktree,
-      name: payload.name,
-      icon: payload.icon,
-      commands: payload.commands,
-    });
-    editingProject.value = null;
-  } catch (error) {
-    console.error('Failed to update project:', error);
-  }
-}
-
 async function createSessionInDirectory(directory: string) {
   const session = await openCodeApi.createSession(directory);
   if (!session?.id) return undefined;
   await switchSessionSelection(session.projectID, session.id);
   return session;
-}
-
-async function createWorktreeFromWorktree(worktree: string) {
-  if (!ensureConnectionReady('Creating worktree')) return;
-  worktreeError.value = '';
-  if (!worktree) {
-    worktreeError.value = 'Worktree base directory not set.';
-    return;
-  }
-  try {
-    const data = (await openCodeApi.createWorktree({
-      directory: worktree,
-      projectId: selectedProjectId.value,
-    })) as WorktreeInfo;
-    if (data && typeof data.directory === 'string') {
-      await createSessionInDirectory(data.directory);
-    }
-  } catch (error) {
-    worktreeError.value = `Worktree create failed: ${toErrorMessage(error)}`;
-  }
 }
 
 async function deleteWorktree(directory: string) {
@@ -2265,8 +2215,20 @@ async function deleteWorktree(directory: string) {
   }
 }
 
-function openProjectPicker() {
+async function openProjectPicker() {
+  const result = await pickLocalDirectory({ homePath: homePath.value });
+  if (result.status === 'cancelled') return;
+  if (result.status === 'resolved') {
+    await handleProjectDirectorySelect(result.path);
+    return;
+  }
+  projectPickerInitialPath.value = result.hint;
   isProjectPickerOpen.value = true;
+}
+
+function closeProjectPicker() {
+  isProjectPickerOpen.value = false;
+  projectPickerInitialPath.value = '';
 }
 
 async function createNewSession(): Promise<SessionInfo | undefined> {
@@ -2396,34 +2358,9 @@ async function handleUndoRevert() {
   }
 }
 
-/** Set project name from package.json for newly created projects (fire-and-forget). */
-async function initProjectNameFromPackageJson(projectId: string, directory: string) {
-  try {
-    const result = (await opencodeApi.readFileContent({
-      directory,
-      path: 'package.json',
-    })) as FileContentResponse | string;
-    const content = typeof result === 'string' ? result : result?.content;
-    if (!content) return;
-    const isBase64 = typeof result !== 'string' && result?.encoding === 'base64';
-    const decoded =
-      typeof content === 'string' && isBase64
-        ? decodeApiTextContent(result as FileContentResponse)
-        : content;
-    const parsed = JSON.parse(decoded);
-    const name = parsed?.name;
-    if (typeof name !== 'string' || !name.trim()) return;
-    await openCodeApi.updateProject(projectId, { directory, name: name.trim() });
-  } catch {
-    // Silently ignore - package.json may not exist or be invalid
-  }
-}
-
 async function handleProjectDirectorySelect(directory: string) {
-  isProjectPickerOpen.value = false;
+  closeProjectPicker();
   if (!directory) return;
-
-  const isNewProject = !Object.values(serverState.projects).some((p) => p.worktree === directory);
 
   const { projectId, sessionId } = await openCodeApi.openProject(directory);
   ge.sendToWorker({
@@ -2431,10 +2368,6 @@ async function handleProjectDirectorySelect(directory: string) {
     directory,
   });
   await switchSessionSelection(projectId, sessionId);
-
-  if (isNewProject && projectId !== 'global') {
-    void initProjectNameFromPackageJson(projectId, directory);
-  }
 }
 async function bootstrapSelections() {
   if (isBootstrapping.value) return;
@@ -5564,6 +5497,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: 6px;
   box-sizing: border-box;
+  color: #e2e8f0;
 }
 
 .app-loading-view {

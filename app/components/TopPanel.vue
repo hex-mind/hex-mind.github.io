@@ -83,7 +83,6 @@
                   v-for="worktree in displayedTree"
                   :key="worktree.directory"
                   class="tree-worktree"
-                  :style="worktreeAccentStyle(worktree)"
                 >
                   <div class="tree-worktree-header">
                     <div class="tree-header-main">
@@ -100,20 +99,6 @@
                         }}</small>
                       </div>
                     </div>
-                    <button
-                      v-if="worktree.projectId && worktree.projectId !== 'global'"
-                      type="button"
-                      class="tree-action-button worktree-settings"
-                      title="Project settings"
-                      @click.stop="
-                        $emit('edit-project', {
-                          projectId: worktree.projectId,
-                          worktree: worktree.directory,
-                        })
-                      "
-                    >
-                      <Icon icon="lucide:settings" :width="14" :height="14" />
-                    </button>
                   </div>
 
                   <div
@@ -148,15 +133,6 @@
                           "
                         >
                           <Icon icon="lucide:message-circle-plus" :width="16" :height="16" />
-                        </button>
-                        <button
-                          v-if="worktree.projectId !== 'global'"
-                          type="button"
-                          class="tree-action-button fork"
-                          title="Create a new sandbox"
-                          @click.stop="handleCreateWorktree(sandbox.directory, close)"
-                        >
-                          <Icon icon="lucide:git-branch-plus" :width="16" :height="16" />
                         </button>
                         <button
                           v-if="
@@ -268,44 +244,24 @@
         </div>
       </div>
       <div class="top-right">
-        <a
-          href="https://github.com/hex-mind/hex-mind.github.io"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="top-icon-button github-button"
-          title="GitHub"
+        <button
+          type="button"
+          class="top-icon-button layout-button"
+          :class="{ 'is-active': !sidePanelCollapsed }"
+          :title="sidePanelCollapsed ? 'Show primary side bar' : 'Hide primary side bar'"
+          @click="$emit('toggle-side-panel')"
         >
-          <Icon icon="lucide:github" :width="16" :height="16" />
-        </a>
-        <Dropdown
-          v-model:open="menuOpen"
-          auto-close
-          align="end"
-          :popup-style="{ width: '160px' }"
-          @select="onMenuSelect"
+          <span class="layout-glyph layout-glyph-left" aria-hidden="true"></span>
+        </button>
+        <button
+          type="button"
+          class="top-icon-button layout-button"
+          :class="{ 'is-active': !inputPanelCollapsed }"
+          :title="inputPanelCollapsed ? 'Show input panel' : 'Hide input panel'"
+          @click="$emit('toggle-input-panel')"
         >
-          <template #trigger>
-            <button
-              type="button"
-              class="top-icon-button menu-button"
-              @click.stop="menuOpen = !menuOpen"
-            >
-              <Icon icon="lucide:ellipsis-vertical" :width="16" :height="16" />
-            </button>
-          </template>
-          <DropdownItem value="settings">
-            <span class="menu-item-content">
-              <Icon icon="lucide:settings" :width="14" :height="14" />
-              Settings
-            </span>
-          </DropdownItem>
-          <DropdownItem value="logout">
-            <span class="menu-item-content">
-              <Icon icon="lucide:log-out" :width="14" :height="14" />
-              Logout
-            </span>
-          </DropdownItem>
-        </Dropdown>
+          <span class="layout-glyph layout-glyph-bottom" aria-hidden="true"></span>
+        </button>
       </div>
     </div>
   </div>
@@ -342,7 +298,6 @@ export type TopPanelWorktree = {
   label: string;
   name?: string;
   projectId?: string;
-  projectColor?: string;
   sandboxes: TopPanelSandbox[];
 };
 
@@ -366,6 +321,8 @@ const props = defineProps<{
   activeDirectory: string;
   selectedSessionId: string;
   homePath?: string;
+  sidePanelCollapsed: boolean;
+  inputPanelCollapsed: boolean;
 }>();
 
 const notifications = computed(() => props.notificationSessions ?? []);
@@ -376,7 +333,6 @@ const totalNotificationCount = computed(() =>
 const emit = defineEmits<{
   (event: 'select-notification'): void;
   (event: 'select-session', payload: SessionSelectPayload): void;
-  (event: 'create-worktree-from', worktree: string): void;
   (event: 'new-session'): void;
   (event: 'new-session-in', payload: { worktree: string; directory: string }): void;
   (event: 'delete-active-directory', value: string): void;
@@ -384,13 +340,11 @@ const emit = defineEmits<{
   (event: 'archive-session', value: string): void;
   (event: 'open-directory'): void;
   (event: 'open-shell'): void;
-  (event: 'edit-project', payload: { projectId: string; worktree: string }): void;
-  (event: 'open-settings'): void;
-  (event: 'logout'): void;
+  (event: 'toggle-side-panel'): void;
+  (event: 'toggle-input-panel'): void;
   (event: 'dropdown-closed'): void;
 }>();
 
-const menuOpen = ref(false);
 const treeDropdownOpen = ref(false);
 
 watch(treeDropdownOpen, (open) => {
@@ -413,11 +367,6 @@ function toggleSessionDropdown() {
 }
 
 defineExpose({ openSessionDropdown, closeSessionDropdown, toggleSessionDropdown });
-
-function onMenuSelect(value: unknown) {
-  if (value === 'settings') emit('open-settings');
-  else if (value === 'logout') emit('logout');
-}
 
 const MAX_WORKTREES = Infinity;
 const MAX_SANDBOXES = Infinity;
@@ -574,13 +523,6 @@ function canDeleteSandbox(directory: string, worktreeDirectory: string) {
   return normalizedDirectory !== normalizedWorktree;
 }
 
-function worktreeAccentStyle(worktree: TopPanelWorktree) {
-  if (!worktree.projectColor) return undefined;
-  return {
-    borderLeft: `3px solid ${worktree.projectColor}`,
-  };
-}
-
 function onTreeSelect(payload: unknown) {
   if (!payload || typeof payload !== 'object') return;
   const value = payload as Partial<SessionSelectPayload>;
@@ -595,11 +537,6 @@ function onTreeSelect(payload: unknown) {
 
 function handleCreateSessionIn(worktree: string, directory: string, close: () => void) {
   emit('new-session-in', { worktree, directory });
-  close();
-}
-
-function handleCreateWorktree(worktree: string, close: () => void) {
-  emit('create-worktree-from', worktree);
   close();
 }
 
@@ -724,6 +661,7 @@ function handleOpenDirectory(close: () => void) {
   flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
+  gap: 2px;
 }
 
 .tree-dropdown-root {
@@ -854,16 +792,12 @@ function handleOpenDirectory(close: () => void) {
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  /* Reserve space for new-session + fork + delete buttons so layout doesn't shift when delete is hidden */
-  min-width: calc(24px + 6px + 24px + 6px + 24px);
+  /* Reserve space for new-session + delete buttons so layout doesn't shift when delete is hidden */
+  min-width: calc(24px + 6px + 24px);
 }
 
 .tree-action-button.new-session {
   color: #86efac;
-}
-
-.tree-action-button.fork {
-  color: #93c5fd;
 }
 
 .tree-action-button {
@@ -885,10 +819,6 @@ function handleOpenDirectory(close: () => void) {
 
 .tree-action-button:hover {
   background: #1d2a45;
-}
-
-.tree-action-button.worktree-settings {
-  color: #94a3b8;
 }
 
 .tree-action-button.danger {
@@ -1228,19 +1158,6 @@ function handleOpenDirectory(close: () => void) {
   cursor: not-allowed;
 }
 
-.github-button {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  padding: 0;
-  justify-content: center;
-  text-decoration: none;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: #94a3b8;
-}
-
 .top-icon-button {
   display: inline-flex;
   align-items: center;
@@ -1253,32 +1170,55 @@ function handleOpenDirectory(close: () => void) {
   cursor: pointer;
 }
 
-.github-button:hover {
-  background: rgba(51, 65, 85, 0.45);
-  color: #e2e8f0;
-}
-
-.menu-button {
+.layout-button {
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  padding: 0;
-  justify-content: center;
-  border: none;
-  background: transparent;
   color: #94a3b8;
 }
 
-.menu-button:hover {
+.layout-button.is-active {
+  color: #cbd5e1;
+}
+
+.layout-button:hover {
   background: rgba(51, 65, 85, 0.45);
   color: #e2e8f0;
 }
 
-.menu-item-content {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #e2e8f0;
+.layout-glyph {
+  position: relative;
+  width: 17px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+
+.layout-glyph::after {
+  content: '';
+  position: absolute;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0;
+}
+
+.layout-glyph-left::after {
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: 4px;
+}
+
+.layout-glyph-bottom::after {
+  right: 2px;
+  bottom: 2px;
+  left: 2px;
+  height: 4px;
+}
+
+.layout-button.is-active .layout-glyph::after {
+  opacity: 0.65;
 }
 
 @media (max-width: 768px) {
@@ -1300,10 +1240,6 @@ function handleOpenDirectory(close: () => void) {
     flex: 1 1 auto;
     width: auto;
     min-width: 0;
-  }
-
-  .github-button {
-    display: none;
   }
 }
 
