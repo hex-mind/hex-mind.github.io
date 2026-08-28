@@ -25,7 +25,7 @@
           @click="handleReasoningClick(entry.part)"
         >
           <div class="history-meta">
-            <span class="history-index">🤔</span>
+            <span class="history-index">🧐</span>
             <span class="history-reasoning-badge">THOUGHT</span>
             <span class="history-time">{{ formatMessageTime(entry.time) }}</span>
           </div>

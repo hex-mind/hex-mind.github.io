@@ -13,6 +13,48 @@
       >
         <Icon :icon="tab.icon" :width="21" :height="21" />
       </button>
+      <div class="activity-spacer"></div>
+      <a
+        href="https://github.com/hex-mind/hex-mind.github.io"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="activity-button activity-utility-button"
+        aria-label="GitHub"
+        title="GitHub"
+      >
+        <Icon icon="lucide:github" :width="21" :height="21" />
+      </a>
+      <Dropdown
+        v-model:open="settingsMenuOpen"
+        placement="top"
+        :popup-style="{ width: '160px', marginLeft: '44px' }"
+        auto-close
+        @select="onSettingsMenuSelect"
+      >
+        <template #trigger>
+          <button
+            type="button"
+            class="activity-button activity-utility-button"
+            aria-label="Settings"
+            title="Settings"
+            @click.stop="settingsMenuOpen = !settingsMenuOpen"
+          >
+            <Icon icon="lucide:settings" :width="21" :height="21" />
+          </button>
+        </template>
+        <DropdownItem value="settings">
+          <span class="activity-menu-item">
+            <Icon icon="lucide:settings" :width="14" :height="14" />
+            Settings
+          </span>
+        </DropdownItem>
+        <DropdownItem value="logout">
+          <span class="activity-menu-item">
+            <Icon icon="lucide:log-out" :width="14" :height="14" />
+            Logout
+          </span>
+        </DropdownItem>
+      </Dropdown>
     </nav>
     <div v-if="!collapsed" class="side-body">
       <header class="side-header">
@@ -27,6 +69,12 @@
         </button>
       </header>
       <TodoList v-if="activeTab === 'todo'" :sessions="todoSessions" />
+      <BookmarksList
+        v-else-if="activeTab === 'bookmarks'"
+        :sessions="bookmarkedSessions"
+        @select-session="(session) => emit('select-bookmark', session)"
+        @remove-bookmark="(sessionId) => emit('remove-bookmark', sessionId)"
+      />
       <div v-else-if="activeTab === 'search'" class="search-panel">
         <label class="search-field">
           <span class="sr-only">Search</span>
@@ -61,9 +109,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, toRefs } from 'vue';
+import { computed, ref, toRefs } from 'vue';
 import { Icon } from '@iconify/vue';
+import Dropdown from './Dropdown.vue';
+import DropdownItem from './Dropdown/Item.vue';
 import TodoList from './TodoList.vue';
+import BookmarksList, { type BookmarkedSessionView } from './BookmarksList.vue';
 import type { BranchEntry } from '../composables/useFileTree';
 import TreeView, {
   type GitBranchInfo,
@@ -91,6 +142,7 @@ const props = defineProps<{
   collapsed: boolean;
   activeTab: SidePanelTab;
   todoSessions: TodoPanelSession[];
+  bookmarkedSessions: BookmarkedSessionView[];
   treeNodes: TreeNode[];
   expandedTreePaths: string[];
   selectedTreePath?: string;
@@ -108,31 +160,43 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: 'toggle-collapse'): void;
   (event: 'select-tab', value: SidePanelTab): void;
+  (event: 'select-bookmark', session: BookmarkedSessionView): void;
+  (event: 'remove-bookmark', sessionId: string): void;
   (event: 'toggle-dir', path: string): void;
   (event: 'select-file', path: string): void;
   (event: 'open-diff', payload: { path: string; staged: boolean }): void;
   (event: 'open-diff-all', payload: { mode: 'staged' | 'changes' | 'all' }): void;
   (event: 'open-file', path: string): void;
   (event: 'reload'): void;
+  (event: 'open-settings'): void;
+  (event: 'logout'): void;
 }>();
 
-export type SidePanelTab = 'files' | 'git' | 'search' | 'todo';
+export type SidePanelTab = 'files' | 'git' | 'search' | 'todo' | 'bookmarks';
 
 const tabs: { id: SidePanelTab; label: string; icon: string }[] = [
   { id: 'files', label: 'Files', icon: 'lucide:files' },
   { id: 'git', label: 'Git', icon: 'lucide:git-branch' },
   { id: 'search', label: 'Search', icon: 'lucide:search' },
   { id: 'todo', label: 'Todo', icon: 'lucide:list-todo' },
+  { id: 'bookmarks', label: 'Bookmarks', icon: 'lucide:bookmark' },
 ];
 
 const activeTabLabel = computed(
   () => tabs.find((tab) => tab.id === props.activeTab)?.label.toUpperCase() ?? '',
 );
+const settingsMenuOpen = ref(false);
+
+function onSettingsMenuSelect(value: unknown) {
+  if (value === 'settings') emit('open-settings');
+  if (value === 'logout') emit('logout');
+}
 
 const {
   collapsed,
   activeTab,
   todoSessions,
+  bookmarkedSessions,
   treeNodes,
   expandedTreePaths,
   selectedTreePath,
@@ -189,6 +253,27 @@ const {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  text-decoration: none;
+}
+
+.activity-spacer {
+  flex: 1 1 auto;
+  min-height: 8px;
+}
+
+.activity-utility-button {
+  color: #94a3b8;
+}
+
+.activity-bar :deep(.ui-dropdown) {
+  flex: 0 0 auto;
+}
+
+.activity-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #e2e8f0;
 }
 
 .activity-button:hover {

@@ -109,9 +109,7 @@ const branchListLoading = ref(false);
 
 let fileCacheBuildId = 0;
 const DIRECTORY_RELOAD_DEBOUNCE_MS = 120;
-const GIT_STATUS_RELOAD_DEBOUNCE_MS = 120;
 const scheduledDirectoryReloads = new Map<string, ReturnType<typeof setTimeout>>();
-let scheduledGitStatusReload: ReturnType<typeof setTimeout> | null = null;
 let gitStatusGeneration = 0;
 let branchListGeneration = 0;
 
@@ -256,12 +254,6 @@ function clearScheduledDirectoryReloads() {
   scheduledDirectoryReloads.clear();
 }
 
-function clearScheduledGitStatusReload() {
-  if (!scheduledGitStatusReload) return;
-  clearTimeout(scheduledGitStatusReload);
-  scheduledGitStatusReload = null;
-}
-
 function isPathInsideDirectory(path: string, directory: string) {
   const normalizedDirectory = normalizeDirectory(directory);
   const normalizedPath = normalizeDirectory(path);
@@ -329,14 +321,6 @@ function scheduleDirectoryReload(path: string) {
       void loadSingleDirectory(path);
     }, DIRECTORY_RELOAD_DEBOUNCE_MS),
   );
-}
-
-function scheduleGitStatusReload() {
-  clearScheduledGitStatusReload();
-  scheduledGitStatusReload = setTimeout(() => {
-    scheduledGitStatusReload = null;
-    void refreshGitStatus();
-  }, GIT_STATUS_RELOAD_DEBOUNCE_MS);
 }
 
 function normalizeGitStatusCode(value: string): GitStatusCode {
@@ -731,7 +715,6 @@ function feed(packet: FileWatcherUpdatedPacket) {
   if (packet.event !== 'change') {
     scheduleDirectoryReload(parentDirectoryPath(relativePath));
   }
-  scheduleGitStatusReload();
 }
 
 async function rebuildFileCache() {
@@ -814,7 +797,6 @@ function initializeFileTree(options: UseFileTreeOptions) {
     () => options.activeDirectory.value,
     (directory) => {
       clearScheduledDirectoryReloads();
-      clearScheduledGitStatusReload();
 
       treeNodes.value = [];
       expandedTreePathSet.value = new Set();

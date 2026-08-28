@@ -15,10 +15,7 @@
       </header>
       <div class="modal-body">
         <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label">Theme</div>
-            <div class="setting-description">Choose the appearance of the interface.</div>
-          </div>
+          <div class="setting-label">Theme</div>
           <div class="theme-options" role="radiogroup" aria-label="Theme">
             <button
               type="button"
@@ -45,14 +42,9 @@
           </div>
         </div>
         <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label">Enter to send</div>
-            <div class="setting-description">
-              Send messages by pressing Enter. When off, use Ctrl+Enter.
-            </div>
-          </div>
+          <div class="setting-label">Ctrl + Enter to send</div>
           <label class="toggle-switch">
-            <input v-model="enterToSend" type="checkbox" class="toggle-input" />
+            <input v-model="ctrlEnterToSend" type="checkbox" class="toggle-input" />
             <span class="toggle-track" />
           </label>
         </div>
@@ -62,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
 import { useSettings } from '../composables/useSettings';
 
@@ -76,6 +68,12 @@ defineEmits<{
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const { enterToSend, theme } = useSettings();
+const ctrlEnterToSend = computed({
+  get: () => !enterToSend.value,
+  set: (value: boolean) => {
+    enterToSend.value = !value;
+  },
+});
 
 watch(
   () => props.open,
@@ -178,22 +176,10 @@ watch(
   background: rgba(2, 6, 23, 0.45);
 }
 
-.setting-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .setting-label {
   font-size: 13px;
   font-weight: 500;
   color: #e2e8f0;
-}
-
-.setting-description {
-  font-size: 11px;
-  color: #64748b;
 }
 
 .theme-options {

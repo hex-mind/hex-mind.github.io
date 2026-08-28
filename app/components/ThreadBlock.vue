@@ -21,7 +21,11 @@
           @keydown.esc.prevent="cancelEdit"
         ></textarea>
         <div class="ib-user-editor-footer">
-          <select v-model="editModel" class="ib-user-editor-model" aria-label="Model for edited prompt">
+          <select
+            v-model="editModel"
+            class="ib-user-editor-model"
+            aria-label="Model for edited prompt"
+          >
             <option v-for="model in modelOptions" :key="model.id" :value="model.id">
               {{ model.providerLabel || model.providerID || 'Model' }} · {{ model.displayName }}
             </option>
@@ -106,10 +110,7 @@
       <Transition name="ib-fade" mode="out-in">
         <div class="ib-msg-block ib-msg-assistant" :key="deferredTransitionKey">
           <div class="ib-msg-body">
-            <MessageViewer
-              class="message-viewer-context-assistant"
-              :html="assistantHtml"
-            />
+            <MessageViewer class="message-viewer-context-assistant" :html="assistantHtml" />
           </div>
           <div
             v-if="getMessageAttachments(getFinalAnswer(root)).length > 0"

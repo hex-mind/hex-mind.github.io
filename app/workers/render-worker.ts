@@ -865,7 +865,6 @@ function taskListEmojiPlugin(md: MarkdownIt) {
   });
 }
 
-
 function getMarkdownIt(highlighter: Highlighter, theme: string) {
   if (
     !cachedMd ||

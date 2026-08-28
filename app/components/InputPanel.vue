@@ -35,61 +35,6 @@
                   }}</span>
                 </div>
               </div>
-              <button
-                type="button"
-                class="history-action-button"
-                :class="{ 'is-favorited': isFavorite(entry) }"
-                title="Bookmark"
-                @click.stop="addFavorite(entry)"
-              >
-                <Icon icon="lucide:bookmark" :width="14" :height="14" />
-              </button>
-            </DropdownItem>
-          </div>
-        </template>
-      </Dropdown>
-      <Dropdown
-        ref="favoritesDropdownRef"
-        v-model:open="favoritesOpen"
-        auto-close
-        placement="top"
-        popup-class="history-popup"
-        @select="handleFavoriteSelect"
-      >
-        <template #trigger><span /></template>
-        <template #default>
-          <div class="dropdown-list">
-            <DropdownItem v-for="(entry, i) in favorites" :key="i" :value="entry">
-              <div class="history-item" :style="historyEntryStyle(entry)" :title="entry.text">
-                <div class="history-item-text">{{ entry.text }}</div>
-                <div v-if="hasHistoryEntryTarget(entry)" class="history-item-target">
-                  <span
-                    v-if="entry.agent"
-                    class="history-target-agent"
-                    :style="historyEntryAgentStyle(entry)"
-                  >
-                    {{ entry.agent }}
-                  </span>
-                  <span v-if="historyEntryModelDisplayName(entry)" class="history-target-model">
-                    {{ historyEntryModelDisplayName(entry) }}
-                  </span>
-                  <span v-if="historyEntryProviderLabel(entry)" class="history-target-provider">
-                    {{ historyEntryProviderLabel(entry) }}
-                  </span>
-                  <span v-if="entry.variant" class="history-target-separator">&middot;</span>
-                  <span v-if="entry.variant" class="history-target-variant">{{
-                    entry.variant
-                  }}</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="history-action-button remove"
-                title="Remove from favorites"
-                @click.stop="confirmRemoveFavorite(i)"
-              >
-                <Icon icon="lucide:trash-2" :width="14" :height="14" />
-              </button>
             </DropdownItem>
           </div>
         </template>
@@ -184,24 +129,24 @@
               @update:open="handleModelDropdownOpenChange"
             >
               <template #value="{ value: id }">
-                <span :style="agentValueStyle(id)">{{ findAgent(id)?.label }}</span>
+                <span class="agent-value-name" :style="agentValueStyle(id)">{{
+                  findAgent(id)?.label
+                }}</span>
               </template>
               <template #default>
                 <div class="dropdown-list">
                   <div v-if="!hasAgentOptions" class="dropdown-empty">Loading agents...</div>
                   <DropdownItem v-for="agent in agentOptions" :key="agent.id" :value="agent.id">
-                    <div class="agent-dropdown-item">
-                      <span class="agent-dropdown-name" :style="agentOptionNameStyle(agent)">
-                        {{ agent.label }}
-                      </span>
-                      <span
-                        v-if="agent.description"
-                        class="agent-dropdown-description"
-                        :title="agent.description"
-                      >
-                        {{ agent.description }}
-                      </span>
-                    </div>
+                    <span
+                      class="agent-dropdown-name"
+                      :class="{
+                        'is-build': agent.id.toLowerCase() === 'build',
+                        'is-plan': agent.id.toLowerCase() === 'plan',
+                      }"
+                      :style="agentOptionNameStyle(agent)"
+                    >
+                      {{ agent.label }}
+                    </span>
                   </DropdownItem>
                 </div>
               </template>
@@ -310,7 +255,7 @@
             type="button"
             class="input-button suppress-button"
             :class="{ active: suppressAutoWindows }"
-            :title="suppressAutoWindows ? 'Auto windows suppressed' : 'Suppress auto windows'"
+            :title="suppressAutoWindows ? 'Unhide reasoning' : 'Hide reasoning'"
             @click="suppressAutoWindows = !suppressAutoWindows"
           >
             <Icon
@@ -322,17 +267,12 @@
           <button
             type="button"
             class="input-button bookmark-button"
-            :title="messageValue.trim() ? 'Bookmark current input' : 'Open bookmarks (\u2193)'"
-            @click="messageValue.trim() ? bookmarkCurrentInput() : (favoritesOpen = true)"
+            :class="{ active: props.isSessionSaved }"
+            title="Save session"
+            :disabled="props.disabled"
+            @click="$emit('toggle-save-session')"
           >
-            <Icon
-              :icon="messageValue.trim() ? 'lucide:bookmark-plus' : 'lucide:bookmark'"
-              :width="16"
-              :height="16"
-            />
-            <Transition name="bookmark-toast">
-              <span v-if="bookmarkToastVisible" class="bookmark-toast">Bookmarked!</span>
-            </Transition>
+            <Icon icon="lucide:bookmark" :width="16" :height="16" />
           </button>
           <button
             type="button"
@@ -377,7 +317,6 @@ import DropdownItem from './Dropdown/Item.vue';
 import DropdownLabel from './Dropdown/Label.vue';
 import DropdownSearch from './Dropdown/Search.vue';
 import { useMessages } from '../composables/useMessages';
-import { useFavoriteMessages } from '../composables/useFavoriteMessages';
 import { useSettings } from '../composables/useSettings';
 type ModelOption = {
   id: string;
@@ -411,6 +350,7 @@ const props = defineProps<{
   agentColor?: string;
   resolveAgentColor?: (agent?: string) => string;
   disabled?: boolean;
+  isSessionSaved?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -428,6 +368,7 @@ const emit = defineEmits<{
     },
   ): void;
   (event: 'send'): void;
+  (event: 'toggle-save-session'): void;
   (event: 'abort'): void;
   (event: 'add-attachments', files: File[]): void;
   (event: 'remove-attachment', id: string): void;
@@ -445,12 +386,11 @@ const modelDropdownRef = ref<HTMLElement | null>(null);
 const modelSearchQuery = ref('');
 const acceptMime = 'image/png,image/jpeg,image/gif,image/webp';
 
-const { enterToSend, suppressAutoWindows } = useSettings();
+const { enterToSend, suppressAutoWindows, theme } = useSettings();
 
 // --- Input history navigation ---
 const { roots: messageRoots, getTextContent } = useMessages();
 const historyOpen = ref(false);
-const favoritesOpen = ref(false);
 
 type DropdownRef = {
   moveHighlight: (direction: 'up' | 'down') => void;
@@ -459,7 +399,6 @@ type DropdownRef = {
 };
 
 const historyDropdownRef = ref<DropdownRef | null>(null);
-const favoritesDropdownRef = ref<DropdownRef | null>(null);
 const commandDropdownRef = ref<DropdownRef | null>(null);
 
 type HistoryEntry = {
@@ -512,8 +451,6 @@ function hasHistoryEntryTarget(entry: HistoryEntry) {
   );
 }
 
-const { favorites, addFavorite, removeFavorite, isFavorite } = useFavoriteMessages();
-
 const userHistory = computed(() => {
   const result: HistoryEntry[] = [];
   for (const msg of messageRoots.value) {
@@ -546,32 +483,6 @@ function applyHistoryEntry(entry: HistoryEntry) {
   nextTick(() => textareaRef.value?.focus());
 }
 
-const bookmarkToastVisible = ref(false);
-let bookmarkToastTimer: ReturnType<typeof setTimeout> | null = null;
-
-function bookmarkCurrentInput() {
-  const text = messageValue.value.trim();
-  if (!text) return;
-  const agent = props.selectedMode || undefined;
-  const agentOption = agent ? props.agentOptions.find((a) => a.id === agent) : undefined;
-  const resolvedAgentColor = props.resolveAgentColor?.(agent);
-  addFavorite({
-    text,
-    agent,
-    agentColor: agentOption?.color || resolvedAgentColor,
-    model: props.selectedModel || undefined,
-    variant: props.selectedThinking,
-  });
-  messageValue.value = '';
-  // Show toast
-  if (bookmarkToastTimer) clearTimeout(bookmarkToastTimer);
-  bookmarkToastVisible.value = true;
-  bookmarkToastTimer = setTimeout(() => {
-    bookmarkToastVisible.value = false;
-  }, 1500);
-  nextTick(() => textareaRef.value?.focus());
-}
-
 function toHistoryEntry(value: unknown): HistoryEntry | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Record<string, unknown>;
@@ -590,39 +501,15 @@ function handleHistorySelect(entry: unknown) {
   applyHistoryEntry(value);
 }
 
-function handleFavoriteSelect(entry: unknown) {
-  const value = toHistoryEntry(entry);
-  if (!value) return;
-  applyHistoryEntry(value);
-}
-
-function confirmRemoveFavorite(index: number) {
-  if (!window.confirm('Remove this message from favorites?')) return;
-  removeFavorite(index);
-}
-
 watch(historyOpen, (open) => {
   if (open) {
-    favoritesOpen.value = false;
-    // Highlight the last (most recent) item and scroll to it
     nextTick(() => historyDropdownRef.value?.moveHighlight('up'));
   } else {
     nextTick(() => textareaRef.value?.focus());
   }
 });
 
-watch(favoritesOpen, (open) => {
-  if (open) {
-    historyOpen.value = false;
-    nextTick(() => favoritesDropdownRef.value?.moveHighlight('down'));
-  } else {
-    nextTick(() => textareaRef.value?.focus());
-  }
-});
-
-const sendTooltip = computed(() =>
-  enterToSend.value ? 'Ctrl-Enter / Enter to send' : 'Ctrl-Enter to send',
-);
+const sendTooltip = computed(() => (enterToSend.value ? 'Enter to send' : 'Ctrl+Enter to send'));
 
 const slashQuery = computed(() => {
   const value = messageValue.value;
@@ -790,19 +677,6 @@ function handleKeydown(event: KeyboardEvent) {
     historyOpen.value = true;
     return;
   }
-  if (
-    event.key === 'ArrowDown' &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.altKey &&
-    !event.shiftKey &&
-    messageValue.value === '' &&
-    favorites.value.length > 0
-  ) {
-    event.preventDefault();
-    favoritesOpen.value = true;
-    return;
-  }
   if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
     const direction: 'next' | 'prev' = event.shiftKey ? 'prev' : 'next';
     if (!cycleAgent(direction)) return;
@@ -903,6 +777,13 @@ function findAgent(id: unknown): AgentOption | undefined {
 }
 
 function resolveAgentStyle(name?: string, explicitColor?: string) {
+  const normalizedName = name?.toLowerCase();
+  if (normalizedName === 'build') {
+    return { color: theme.value === 'light' ? '#2563eb' : '#60a5fa' };
+  }
+  if (normalizedName === 'plan') {
+    return { color: theme.value === 'light' ? '#b45309' : '#f59e0b' };
+  }
   const color = explicitColor || props.resolveAgentColor?.(name);
   return color ? { color } : undefined;
 }
@@ -925,7 +806,7 @@ const thinkingChoices = computed<ThinkingChoice[]>(() =>
   (props.thinkingOptions ?? []).map((option) => ({
     key: option ?? '__default',
     value: option,
-    label: option === undefined ? '<default>' : option,
+    label: option === undefined ? 'default' : option,
   })),
 );
 
@@ -1001,7 +882,6 @@ function focus() {
 
 function reset() {
   historyOpen.value = false;
-  favoritesOpen.value = false;
   modelSearchQuery.value = '';
 }
 
@@ -1115,10 +995,6 @@ defineExpose({ focus, reset });
   outline: none;
 }
 
-:deep(.input-dropdown-popup:has(.agent-dropdown-item)) {
-  min-width: 320px;
-}
-
 :deep(.input-dropdown-popup:has(.model-picker)) {
   overflow: hidden;
 }
@@ -1143,27 +1019,10 @@ defineExpose({ focus, reset });
   white-space: nowrap;
 }
 
-.agent-dropdown-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  min-width: 0;
-}
-
 .agent-dropdown-name {
   font-size: 12px;
   color: #e2e8f0;
   line-height: 1.2;
-}
-
-.agent-dropdown-description {
-  font-size: 10px;
-  color: #94a3b8;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .model-button-label {
@@ -1488,37 +1347,6 @@ defineExpose({ focus, reset });
   color: #f59e0b;
 }
 
-.history-action-button {
-  flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.history-action-button:hover {
-  color: #4ade80;
-  background: rgba(34, 197, 94, 0.14);
-  border-color: rgba(34, 197, 94, 0.3);
-}
-
-.history-action-button.is-favorited {
-  color: #4ade80;
-}
-
-.history-action-button.remove:hover {
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.14);
-  border-color: rgba(248, 113, 113, 0.3);
-}
-
 .input-button {
   background: transparent;
   color: #94a3b8;
@@ -1551,9 +1379,9 @@ defineExpose({ focus, reset });
 .input-button.primary {
   background: rgba(37, 99, 235, 0.2);
   border-color: transparent;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
   color: #60a5fa;
 }
 
@@ -1565,15 +1393,22 @@ defineExpose({ focus, reset });
 .input-button.stop {
   background: rgba(220, 38, 38, 0.2);
   border-color: transparent;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
   color: #f87171;
 }
 
 .input-button.stop:hover:not(:disabled) {
   background: rgba(220, 38, 38, 0.35);
   color: #fca5a5;
+}
+
+.input-button.send-button {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 .input-actions {
@@ -1588,7 +1423,7 @@ defineExpose({ focus, reset });
 }
 
 .suppress-button.active {
-  background: rgba(239, 68, 68, 0.2);
+  background: transparent;
   color: #f87171;
 }
 
@@ -1602,47 +1437,23 @@ defineExpose({ focus, reset });
 }
 
 .bookmark-button:hover:not(:disabled) {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
 }
 
-.bookmark-toast {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.95);
-  color: #4ade80;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.5);
-  pointer-events: none;
+.bookmark-button.active {
+  background: transparent;
+  color: #fbbf24;
 }
 
-.bookmark-toast-enter-active {
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
+.bookmark-button.active:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.32);
+  color: #fcd34d;
 }
 
-.bookmark-toast-leave-active {
-  transition:
-    opacity 0.3s ease,
-    transform 0.3s ease;
-}
-
-.bookmark-toast-enter-from {
-  opacity: 0;
-  transform: translateX(-50%) translateY(4px);
-}
-
-.bookmark-toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-4px);
+.bookmark-button.active :deep(svg),
+.bookmark-button.active :deep(path) {
+  fill: currentColor;
 }
 
 @media (max-width: 640px) {

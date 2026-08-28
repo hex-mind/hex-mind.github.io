@@ -202,5 +202,4 @@ defineEmits<{
   font-size: 9px;
   line-height: 1;
 }
-
 </style>

@@ -22,15 +22,15 @@
         <template #trigger>
           <header class="modal-header">
             <span class="modal-title">Open project</span>
-            <button
-              type="button"
-              class="modal-close-button"
-              @click="handleClose"
-            >
+            <button type="button" class="modal-close-button" @click="handleClose">
               <Icon icon="lucide:x" :width="14" :height="14" />
             </button>
           </header>
           <div class="path-row">
+            <button type="button" class="browse-button" title="Choose folder" @click="handleBrowse">
+              <Icon icon="lucide:folder-open" :width="14" :height="14" />
+              Browse
+            </button>
             <input
               ref="inputRef"
               :value="rawInput"
@@ -40,12 +40,7 @@
               @input="handleInput"
               @keydown="handleInputKeydown"
             />
-            <button
-              type="button"
-              class="open-button"
-              :disabled="!canOpen"
-              @click="handleOpen"
-            >
+            <button type="button" class="open-button" :disabled="!canOpen" @click="handleOpen">
               Open
             </button>
           </div>
@@ -62,11 +57,8 @@
         >
           {{ item.name }}/
         </DropdownItem>
-        <div
-          v-if="!isLoading && suggestions.length === 0 && currentDir"
-          class="picker-empty"
-        >
-          {{ parsed.filter ? "No matches" : "No subdirectories" }}
+        <div v-if="!isLoading && suggestions.length === 0 && currentDir" class="picker-empty">
+          {{ parsed.filter ? 'No matches' : 'No subdirectories' }}
         </div>
       </Dropdown>
     </div>
@@ -74,22 +66,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
-import { Icon } from "@iconify/vue";
-import Dropdown from "./Dropdown.vue";
-import DropdownItem from "./Dropdown/Item.vue";
-import * as opencodeApi from "../utils/opencode";
+import { computed, nextTick, ref, watch } from 'vue';
+import { Icon } from '@iconify/vue';
+import Dropdown from './Dropdown.vue';
+import DropdownItem from './Dropdown/Item.vue';
+import * as opencodeApi from '../utils/opencode';
+import { pickLocalDirectory } from '../utils/pickLocalDirectory';
 
 type FileNode = {
   name: string;
   path: string;
   absolute: string;
-  type: "file" | "directory";
+  type: 'file' | 'directory';
   ignored: boolean;
 };
 
 type DropdownHandle = {
-  moveHighlight: (direction: "up" | "down") => void;
+  moveHighlight: (direction: 'up' | 'down') => void;
   selectHighlighted: () => boolean;
   clearHighlight: () => void;
 };
@@ -97,31 +90,32 @@ type DropdownHandle = {
 const props = defineProps<{
   open: boolean;
   homePath?: string;
+  initialPath?: string;
 }>();
 
 const emit = defineEmits<{
-  (event: "select", directory: string): void;
-  (event: "close"): void;
+  (event: 'select', directory: string): void;
+  (event: 'close'): void;
 }>();
 
 const dropdownRef = ref<DropdownHandle | null>(null);
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const inputRef = ref<HTMLInputElement | null>(null);
-const rawInput = ref("");
+const rawInput = ref('');
 const isLoading = ref(false);
-const error = ref("");
+const error = ref('');
 const allEntries = ref<FileNode[]>([]);
 const dropdownOpen = ref(false);
 const hasGitDirectory = ref(false);
 let fetchController: AbortController | null = null;
 let fetchRequestId = 0;
 
-const popupStyle = { maxHeight: "40vh" };
+const popupStyle = { maxHeight: '40vh' };
 
 /** Home path with trailing slash, for tilde expansion/collapse. */
 const homePrefix = computed(() => {
   const h = props.homePath?.trim();
-  return h ? ensureTrailingSlash(h) : "";
+  return h ? ensureTrailingSlash(h) : '';
 });
 
 // ---------------------------------------------------------------------------
@@ -131,8 +125,8 @@ const homePrefix = computed(() => {
 /** Split the raw input into an absolute directory and a trailing filter string. */
 const parsed = computed(() => {
   const expanded = expandTilde(rawInput.value);
-  const lastSlash = expanded.lastIndexOf("/");
-  if (lastSlash < 0) return { dir: "", filter: expanded };
+  const lastSlash = expanded.lastIndexOf('/');
+  if (lastSlash < 0) return { dir: '', filter: expanded };
   return {
     dir: expanded.slice(0, lastSlash + 1),
     filter: expanded.slice(lastSlash + 1),
@@ -145,9 +139,7 @@ const currentDir = computed(() => parsed.value.dir);
 /** Directory entries filtered by the trailing text after the last `/`. */
 const suggestions = computed(() => {
   const { filter } = parsed.value;
-  const dirs = allEntries.value.filter(
-    (n) => n.type === "directory" && !n.ignored,
-  );
+  const dirs = allEntries.value.filter((n) => n.type === 'directory' && !n.ignored);
   if (!filter) return dirs;
   const lower = filter.toLowerCase();
   return dirs.filter((n) => n.name.toLowerCase().startsWith(lower));
@@ -155,14 +147,14 @@ const suggestions = computed(() => {
 
 const isAtRoot = computed(() => {
   const dir = currentDir.value;
-  return !dir || dir === "/";
+  return !dir || dir === '/';
 });
 
 /** Show `./` when filter is empty or starts with `.`. */
 const showCurrentEntry = computed(() => {
   const { filter } = parsed.value;
   if (!filter) return true;
-  return ".".startsWith(filter.toLowerCase());
+  return '.'.startsWith(filter.toLowerCase());
 });
 
 /** Show `../` when filter is empty or starts with `.`, except at root. */
@@ -170,11 +162,11 @@ const showParentEntry = computed(() => {
   if (isAtRoot.value) return false;
   const { filter } = parsed.value;
   if (!filter) return true;
-  return "..".startsWith(filter.toLowerCase());
+  return '..'.startsWith(filter.toLowerCase());
 });
 
 const hasDirectoryEntries = computed(() =>
-  allEntries.value.some((n) => n.type === "directory" && !n.ignored),
+  allEntries.value.some((n) => n.type === 'directory' && !n.ignored),
 );
 
 const canOpen = computed(() => Boolean(resolveOpenDirectory()));
@@ -214,16 +206,33 @@ watch(
 // ---------------------------------------------------------------------------
 
 function initPicker() {
-  error.value = "";
+  error.value = '';
   allEntries.value = [];
   hasGitDirectory.value = false;
-  rawInput.value = "";
+  rawInput.value = '';
 
-  const initial = homePrefix.value || "/";
-  rawInput.value = collapseTilde(initial);
+  const seed = props.initialPath?.trim() || homePrefix.value || '/';
+  rawInput.value = collapseTilde(ensureTrailingSlash(expandTilde(seed)));
   const dir = currentDir.value;
   if (dir) void fetchDirectory(dir);
 
+  nextTick(() => {
+    inputRef.value?.focus();
+    const len = rawInput.value.length;
+    inputRef.value?.setSelectionRange(len, len);
+  });
+}
+
+async function handleBrowse() {
+  const result = await pickLocalDirectory({ homePath: props.homePath });
+  if (result.status === 'cancelled') return;
+  if (result.status === 'resolved') {
+    emit('select', result.path);
+    handleClose();
+    return;
+  }
+  error.value = '';
+  rawInput.value = collapseTilde(ensureTrailingSlash(expandTilde(result.hint)));
   nextTick(() => {
     inputRef.value?.focus();
     const len = rawInput.value.length;
@@ -245,22 +254,22 @@ async function fetchDirectory(dir: string) {
   const controller = new AbortController();
   fetchController = controller;
   isLoading.value = true;
-  error.value = "";
+  error.value = '';
 
   try {
-    const cleanDir = dir.replace(/\/+$/, "") || "/";
+    const cleanDir = dir.replace(/\/+$/, '') || '/';
     const data = await listDirectory(cleanDir, controller.signal);
     let gitEntries: FileNode[] = [];
     try {
       gitEntries = await listDirectory(`${cleanDir}/.git`, controller.signal);
     } catch (err) {
-      if ((err as Error).name === "AbortError") throw err;
+      if ((err as Error).name === 'AbortError') throw err;
     }
     if (requestId !== fetchRequestId) return;
     allEntries.value = data;
     hasGitDirectory.value = gitEntries.length > 0;
   } catch (err) {
-    if ((err as Error).name === "AbortError") return;
+    if ((err as Error).name === 'AbortError') return;
     if (requestId !== fetchRequestId) return;
     error.value = err instanceof Error ? err.message : String(err);
     allEntries.value = [];
@@ -271,11 +280,11 @@ async function fetchDirectory(dir: string) {
 }
 
 async function listDirectory(dir: string, signal: AbortSignal) {
-  const directory = dir.replace(/\/+$/, "") || "/";
+  const directory = dir.replace(/\/+$/, '') || '/';
   const data = (await opencodeApi.listFiles(
     {
       directory,
-      path: ".",
+      path: '.',
     },
     { signal },
   )) as FileNode[];
@@ -291,7 +300,7 @@ function handleInput(e: Event) {
   let didNormalize = false;
 
   // Resolve ../ and ./ immediately so the path stays clean.
-  if (value.includes("../") || value.includes("/./")) {
+  if (value.includes('../') || value.includes('/./')) {
     const expanded = expandTilde(value);
     value = collapseTilde(normalizePath(expanded));
     didNormalize = true;
@@ -308,28 +317,28 @@ function handleInput(e: Event) {
 }
 
 function handleInputKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
+  if (e.key === 'Escape') {
     e.preventDefault();
     handleClose();
     return;
   }
-  if (e.key === "ArrowDown") {
+  if (e.key === 'ArrowDown') {
     e.preventDefault();
-    dropdownRef.value?.moveHighlight("down");
+    dropdownRef.value?.moveHighlight('down');
     return;
   }
-  if (e.key === "ArrowUp") {
+  if (e.key === 'ArrowUp') {
     e.preventDefault();
-    dropdownRef.value?.moveHighlight("up");
+    dropdownRef.value?.moveHighlight('up');
     return;
   }
-  if (e.key === "Enter") {
+  if (e.key === 'Enter') {
     e.preventDefault();
     const selected = dropdownRef.value?.selectHighlighted() ?? false;
     if (!selected) handleOpen();
     return;
   }
-  if (e.key === "Tab") {
+  if (e.key === 'Tab') {
     e.preventDefault();
     handleTab(e.shiftKey);
     return;
@@ -343,7 +352,7 @@ function handleInputKeydown(e: KeyboardEvent) {
 function handleTab(reverse = false) {
   // Collect Tab completion candidates (`./` is intentionally excluded).
   const names: string[] = [];
-  if (showParentEntry.value && hasDirectoryEntries.value) names.push("..");
+  if (showParentEntry.value && hasDirectoryEntries.value) names.push('..');
   if (!isDrillDownLocked.value) {
     for (const s of suggestions.value) names.push(s.name);
   }
@@ -371,12 +380,12 @@ function handleTab(reverse = false) {
     });
   } else {
     // LCP already matches filter — cycle through highlighted items
-    dropdownRef.value?.moveHighlight(reverse ? "up" : "down");
+    dropdownRef.value?.moveHighlight(reverse ? 'up' : 'down');
   }
 }
 
 function longestCommonPrefix(strings: string[]): string {
-  if (strings.length === 0) return "";
+  if (strings.length === 0) return '';
   const first = strings[0];
   let len = first.length;
   for (let i = 1; i < strings.length; i++) {
@@ -396,8 +405,8 @@ function longestCommonPrefix(strings: string[]): string {
 // ---------------------------------------------------------------------------
 
 function handleItemSelect(value: unknown) {
-  if (typeof value !== "string") return;
-  if (value === ".") {
+  if (typeof value !== 'string') return;
+  if (value === '.') {
     nextTick(() => {
       inputRef.value?.focus();
       const len = rawInput.value.length;
@@ -405,7 +414,7 @@ function handleItemSelect(value: unknown) {
     });
     return;
   }
-  if (value === "..") {
+  if (value === '..') {
     goUp();
   } else {
     if (isDrillDownLocked.value) return;
@@ -420,21 +429,21 @@ function handleItemSelect(value: unknown) {
 
 function appendToPath(name: string) {
   const { dir } = parsed.value;
-  rawInput.value = collapseTilde(dir + name + "/");
+  rawInput.value = collapseTilde(dir + name + '/');
 }
 
 function goUp() {
   const dir = currentDir.value;
-  if (!dir || dir === "/") return;
+  if (!dir || dir === '/') return;
   // Strip the last path component: /home/user/projects/ → /home/user/
-  const parent = dir.replace(/[^/]+\/$/, "") || "/";
+  const parent = dir.replace(/[^/]+\/$/, '') || '/';
   rawInput.value = collapseTilde(parent);
 }
 
 function handleOpen() {
   const target = resolveOpenDirectory();
   if (!target) return;
-  emit("select", target);
+  emit('select', target);
   handleClose();
 }
 
@@ -457,35 +466,35 @@ function handleDropdownOpenChange(value: boolean) {
 function expandTilde(p: string): string {
   const home = homePrefix.value;
   if (!home) return p;
-  if (p === "~") return home;
-  if (p.startsWith("~/")) return home + p.slice(2);
+  if (p === '~') return home;
+  if (p.startsWith('~/')) return home + p.slice(2);
   return p;
 }
 
 function collapseTilde(p: string): string {
   const home = homePrefix.value;
   if (!home) return p;
-  if (p === home || p === home.replace(/\/$/, "")) return "~/";
-  if (p.startsWith(home)) return "~/" + p.slice(home.length);
+  if (p === home || p === home.replace(/\/$/, '')) return '~/';
+  if (p.startsWith(home)) return '~/' + p.slice(home.length);
   return p;
 }
 
 function normalizePath(p: string): string {
   if (!p) return p;
-  const parts = p.split("/");
+  const parts = p.split('/');
   const result: string[] = [];
   for (const part of parts) {
-    if (part === "..") {
-      if (result.length > 0 && result[result.length - 1] !== "") result.pop();
-    } else if (part !== ".") {
+    if (part === '..') {
+      if (result.length > 0 && result[result.length - 1] !== '') result.pop();
+    } else if (part !== '.') {
       result.push(part);
     }
   }
-  return result.join("/");
+  return result.join('/');
 }
 
 function ensureTrailingSlash(p: string): string {
-  return p.endsWith("/") ? p : p + "/";
+  return p.endsWith('/') ? p : p + '/';
 }
 
 function resolveOpenDirectory(): string | null {
@@ -497,13 +506,13 @@ function resolveOpenDirectory(): string | null {
     return cleanDirectoryPath(dir);
   }
 
-  if (filter === ".") {
+  if (filter === '.') {
     return null;
   }
 
-  if (filter === "..") {
-    if (dir === "/") return null;
-    const parent = dir.replace(/[^/]+\/$/, "") || "/";
+  if (filter === '..') {
+    if (dir === '/') return null;
+    const parent = dir.replace(/[^/]+\/$/, '') || '/';
     return cleanDirectoryPath(parent);
   }
 
@@ -512,10 +521,7 @@ function resolveOpenDirectory(): string | null {
   }
 
   const matched = allEntries.value.find(
-    (n) =>
-      n.type === "directory" &&
-      !n.ignored &&
-      n.name.toLowerCase() === filter.toLowerCase(),
+    (n) => n.type === 'directory' && !n.ignored && n.name.toLowerCase() === filter.toLowerCase(),
   );
   if (!matched) return null;
 
@@ -524,8 +530,8 @@ function resolveOpenDirectory(): string | null {
 
 function cleanDirectoryPath(p: string): string {
   const normalized = normalizePath(expandTilde(p));
-  const clean = normalized.replace(/\/+$/, "");
-  return clean || "/";
+  const clean = normalized.replace(/\/+$/, '');
+  return clean || '/';
 }
 </script>
 
@@ -566,8 +572,7 @@ function cleanDirectoryPath(p: string): string {
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(2, 6, 23, 0.45);
   color: #e2e8f0;
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 .picker-dropdown {
@@ -593,6 +598,25 @@ function cleanDirectoryPath(p: string): string {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.browse-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0b1320;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.browse-button:hover {
+  background: #1e293b;
 }
 
 .path-input {

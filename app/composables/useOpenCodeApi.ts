@@ -20,31 +20,12 @@ type SessionInfo = {
   };
 };
 
-type ProjectUpdatePayload = {
-  directory?: string;
-  name?: string;
-  icon?: {
-    url?: string;
-    override?: string;
-    color?: string;
-  };
-  commands?: {
-    start?: string;
-  };
-};
-
 type ListSessionsOptions = {
   directory?: string;
   instanceDirectory?: string;
   roots?: boolean;
   search?: string;
   limit?: number;
-};
-
-type CreateWorktreeInfo = {
-  name: string;
-  branch: string;
-  directory: string;
 };
 
 function normalizeId(value: string | undefined): string {
@@ -163,13 +144,6 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     });
   }
 
-  async function updateProject(projectId: string, patch: ProjectUpdatePayload): Promise<unknown> {
-    return withPending(async () => {
-      const normalizedProjectId = requireProjectId(projectId);
-      return await opencodeApi.updateProject(normalizedProjectId, patch);
-    });
-  }
-
   async function revertSession(payload: {
     sessionId: string;
     messageId: string;
@@ -206,22 +180,6 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
         return Boolean(current && (current.timeUpdated ?? 0) > beforeUpdated);
       });
       return session;
-    });
-  }
-
-  async function createWorktree(payload: {
-    directory: string;
-    projectId: string;
-  }): Promise<CreateWorktreeInfo> {
-    return withPending(async () => {
-      const projectId = requireProjectId(payload.projectId);
-      const data = (await opencodeApi.createWorktree(payload.directory)) as CreateWorktreeInfo;
-      const createdDir = data?.directory?.trim();
-      if (!createdDir) {
-        throw new Error('Worktree create failed: invalid response.');
-      }
-      await waitWithRetry((state) => hasSandbox(state[projectId], createdDir));
-      return data;
     });
   }
 
@@ -277,10 +235,8 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     createSession,
     archiveSession,
     deleteSession,
-    updateProject,
     revertSession,
     unrevertSession,
-    createWorktree,
     deleteWorktree,
     listSessions,
     openProject,

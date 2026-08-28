@@ -2,12 +2,13 @@ const STORAGE_PREFIX = 'opencode.';
 
 export const StorageKeys = {
   settings: {
-    enterToSend: 'settings.enterToSend.v1',
+    enterToSend: 'settings.enterToSend.v2',
     suppressAutoWindows: 'settings.suppressAutoWindows.v1',
     theme: 'settings.theme.v1',
   },
   state: {
     sidePanelCollapsed: 'state.sidePanelCollapsed.v1',
+    inputPanelCollapsed: 'state.inputPanelCollapsed.v1',
     sidePanelTab: 'state.sidePanelTab.v1',
     lastAuthError: 'state.lastAuthError.v1',
   },
@@ -15,8 +16,8 @@ export const StorageKeys = {
     composer: 'drafts.composer.v1',
     question: 'drafts.question.v1',
   },
-  favorites: {
-    messages: 'favorites.messages.v1',
+  bookmarks: {
+    sessions: 'bookmarks.sessions.v1',
   },
   auth: {
     credentials: 'auth.credentials.v1',
