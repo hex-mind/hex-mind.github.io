@@ -949,6 +949,10 @@ html[data-theme='light'] .layout-button:focus-visible {
   box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.18) !important;
 }
 
+html[data-theme='light'] .panel-sash.is-dragging {
+  background: #3b82f6;
+}
+
 html[data-theme='light'] .agent-dropdown-name.is-build {
   color: #2563eb !important;
 }

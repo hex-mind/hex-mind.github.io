@@ -602,11 +602,11 @@ function handleOpenDirectory(close: () => void) {
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 8px 12px;
+  padding: 4px 4px 4px 10px;
   box-sizing: border-box;
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid #334155;
-  border-radius: 10px;
+  border-radius: 0;
 }
 
 .top-row {
@@ -1171,8 +1171,8 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .layout-button {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   color: #94a3b8;
 }
@@ -1188,42 +1188,60 @@ function handleOpenDirectory(close: () => void) {
 
 .layout-glyph {
   position: relative;
-  width: 17px;
-  height: 14px;
+  width: 16px;
+  height: 12px;
   box-sizing: border-box;
   border: 1.5px solid currentColor;
-  border-radius: 3px;
+  border-radius: 2px;
+  overflow: hidden;
 }
 
+.layout-glyph::before,
 .layout-glyph::after {
   content: '';
   position: absolute;
-  border-radius: 1px;
   background: currentColor;
+}
+
+.layout-glyph::before {
   opacity: 0;
 }
 
-.layout-glyph-left::after {
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  width: 4px;
+.layout-button.is-active .layout-glyph::before {
+  opacity: 0.5;
 }
 
-.layout-glyph-bottom::after {
-  right: 2px;
-  bottom: 2px;
-  left: 2px;
+.layout-glyph-left::before {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+}
+
+.layout-glyph-left::after {
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 1px;
+}
+
+.layout-glyph-bottom::before {
+  left: 0;
+  right: 0;
+  bottom: 0;
   height: 4px;
 }
 
-.layout-button.is-active .layout-glyph::after {
-  opacity: 0.65;
+.layout-glyph-bottom::after {
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  height: 1px;
 }
 
 @media (max-width: 768px) {
   .top-panel {
-    padding: 6px 8px;
+    padding: 4px 4px 4px 8px;
   }
 
   .top-row,

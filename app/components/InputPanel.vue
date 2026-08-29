@@ -912,7 +912,7 @@ defineExpose({ focus, reset });
   overflow: visible;
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid #334155;
-  border-radius: 10px;
+  border-radius: var(--card-radius, 6px) 0 0 var(--card-radius, 6px);
   box-sizing: border-box;
   box-shadow: none;
 }

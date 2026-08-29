@@ -1,5 +1,12 @@
 <template>
-  <div ref="appEl" class="app">
+  <div
+    ref="appEl"
+    class="app"
+    :class="{
+      'is-side-resizing': !!sidePanelResizeState,
+      'is-input-resizing': !!inputPanelResizeState,
+    }"
+  >
     <template v-if="uiInitState === 'ready'">
       <header class="app-header">
         <TopPanel
@@ -30,11 +37,7 @@
         ref="appBodyEl"
         class="app-body"
         :class="{ 'todo-collapsed': sidePanelCollapsed }"
-        :style="
-          sidePanelWidth !== null
-            ? ({ '--todo-panel-width': `${sidePanelWidth}px` } as any)
-            : undefined
-        "
+        :style="bodyPanelStyle"
       >
         <div ref="sidePanelAreaEl" class="side-panel-area">
           <SidePanel
@@ -71,13 +74,14 @@
             @open-settings="isSettingsOpen = true"
             @logout="handleLogout"
           />
-          <div
-            v-if="!sidePanelCollapsed"
-            class="side-resizer"
-            @pointerdown="startSidePanelResize"
-          ></div>
         </div>
-        <div class="app-main-column">
+        <div
+          v-if="!sidePanelCollapsed"
+          class="panel-sash panel-sash-vertical"
+          :class="{ 'is-dragging': !!sidePanelResizeState }"
+          @pointerdown="startSidePanelResize"
+        ></div>
+        <div ref="appMainColumnEl" class="app-main-column">
           <main class="app-output">
             <div class="output-workspace">
               <div class="tool-window-layer">
@@ -117,6 +121,12 @@
               </div>
             </div>
           </main>
+          <div
+            v-if="!inputPanelCollapsed"
+            class="panel-sash panel-sash-horizontal"
+            :class="{ 'is-dragging': !!inputPanelResizeState }"
+            @pointerdown="startInputPanelResize"
+          ></div>
           <footer
             v-if="!inputPanelCollapsed"
             ref="inputEl"
@@ -664,7 +674,24 @@ const sidePanelResizeState = ref<{
   minWidth: number;
   maxWidth: number;
 } | null>(null);
+const inputPanelResizeState = ref<{
+  startY: number;
+  startHeight: number;
+  minHeight: number;
+  maxHeight: number;
+} | null>(null);
 const sidePanelWidth = ref<number | null>(null);
+const inputPanelHeight = ref<number | null>(null);
+const appMainColumnEl = ref<HTMLDivElement | null>(null);
+const PANEL_SASH_SIZE_PX = 4;
+
+const bodyPanelStyle = computed(() => {
+  const style: Record<string, string> = {};
+  if (sidePanelWidth.value !== null) style['--todo-panel-width'] = `${sidePanelWidth.value}px`;
+  if (inputPanelHeight.value !== null)
+    style['--input-panel-height'] = `${inputPanelHeight.value}px`;
+  return Object.keys(style).length > 0 ? style : undefined;
+});
 const appBodyEl = ref<HTMLDivElement | null>(null);
 const sidePanelAreaEl = ref<HTMLDivElement | null>(null);
 let primaryHistoryRequestId = 0;
@@ -1955,6 +1982,7 @@ function syncCanvasTermMetrics() {
 }
 
 function handleWindowResize() {
+  clampInputPanelHeightToBounds();
   syncCanvasTermMetrics();
   syncFloatingExtent();
   scheduleShellFitAll();
@@ -2112,11 +2140,9 @@ function startSidePanelResize(event: PointerEvent) {
   if (!body || !panel) return;
   const bodyRect = body.getBoundingClientRect();
   const panelRect = panel.getBoundingClientRect();
-  const style = getComputedStyle(body);
-  const gap = parseFloat(style.getPropertyValue('--todo-panel-gap')) || 10;
   const currentWidth = panelRect.width;
   const minW = 160;
-  const maxW = Math.max(minW, bodyRect.width * 0.5 - gap);
+  const maxW = Math.max(minW, bodyRect.width * 0.5 - PANEL_SASH_SIZE_PX);
   sidePanelResizeState.value = {
     startX: event.clientX,
     startWidth: currentWidth,
@@ -2128,6 +2154,36 @@ function startSidePanelResize(event: PointerEvent) {
   event.preventDefault();
 }
 
+function startInputPanelResize(event: PointerEvent) {
+  if (event.button !== 0) return;
+  const column = appMainColumnEl.value;
+  const input = inputEl.value;
+  if (!column || !input) return;
+  const columnRect = column.getBoundingClientRect();
+  const inputRect = input.getBoundingClientRect();
+  const minH = 200;
+  const outputMin = 120;
+  const maxH = Math.max(minH, columnRect.height - outputMin - PANEL_SASH_SIZE_PX);
+  inputPanelResizeState.value = {
+    startY: event.clientY,
+    startHeight: inputRect.height,
+    minHeight: minH,
+    maxHeight: maxH,
+  };
+  inputPanelHeight.value = inputRect.height;
+  (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+}
+
+function clampInputPanelHeightToBounds() {
+  if (inputPanelHeight.value === null) return;
+  const column = appMainColumnEl.value;
+  if (!column) return;
+  const outputMin = 120;
+  const maxH = Math.max(200, column.getBoundingClientRect().height - outputMin - PANEL_SASH_SIZE_PX);
+  inputPanelHeight.value = clamp(inputPanelHeight.value, 200, maxH);
+}
+
 function handlePointerMove(event: PointerEvent) {
   if (sidePanelResizeState.value) {
     const { startX, startWidth, minWidth, maxWidth } = sidePanelResizeState.value;
@@ -2137,11 +2193,19 @@ function handlePointerMove(event: PointerEvent) {
     scheduleShellFitAll();
     return;
   }
+  if (inputPanelResizeState.value) {
+    const { startY, startHeight, minHeight, maxHeight } = inputPanelResizeState.value;
+    const dy = startY - event.clientY;
+    inputPanelHeight.value = clamp(startHeight + dy, minHeight, maxHeight);
+    syncFloatingExtent();
+    scheduleShellFitAll();
+  }
 }
 
 function handlePointerUp() {
-  if (sidePanelResizeState.value) scheduleShellFitAll();
+  if (sidePanelResizeState.value || inputPanelResizeState.value) scheduleShellFitAll();
   sidePanelResizeState.value = null;
+  inputPanelResizeState.value = null;
 }
 
 function resolveProjectIdForDirectory(directory?: string) {
@@ -5297,6 +5361,7 @@ onMounted(() => {
   if (chosenTheme) shikiTheme.value = chosenTheme;
   window.addEventListener('pointermove', handlePointerMove);
   window.addEventListener('pointerup', handlePointerUp);
+  window.addEventListener('pointercancel', handlePointerUp);
   window.addEventListener('resize', handleWindowResize);
   window.addEventListener('storage', handleComposerDraftStorage);
   document.addEventListener('visibilitychange', handleWindowAttentionChange);
@@ -5462,6 +5527,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalKeydown);
   window.removeEventListener('pointermove', handlePointerMove);
   window.removeEventListener('pointerup', handlePointerUp);
+  window.removeEventListener('pointercancel', handlePointerUp);
   window.removeEventListener('resize', handleWindowResize);
   window.removeEventListener('storage', handleComposerDraftStorage);
   document.removeEventListener('visibilitychange', handleWindowAttentionChange);
@@ -5494,10 +5560,24 @@ onBeforeUnmount(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px;
+  gap: var(--panel-sash-size);
+  padding: 0;
   box-sizing: border-box;
   color: #e2e8f0;
+  --panel-sash-size: 4px;
+  --card-radius: 6px;
+}
+
+.app.is-side-resizing,
+.app.is-side-resizing * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+.app.is-input-resizing,
+.app.is-input-resizing * {
+  cursor: ns-resize !important;
+  user-select: none !important;
 }
 
 .app-loading-view {
@@ -5659,14 +5739,15 @@ onBeforeUnmount(() => {
 }
 
 .app-input {
-  flex: 0 0 auto;
+  flex: 0 0 var(--input-panel-height, auto);
   position: relative;
   z-index: 30;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  min-height: 0;
+  height: var(--input-panel-height, auto);
   min-height: 200px;
+  max-height: calc(100% - 120px);
 }
 
 .output-workspace {
@@ -5702,8 +5783,8 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   align-items: stretch;
-  gap: var(--todo-panel-gap);
-  --todo-panel-gap: 6px;
+  gap: 0;
+  --todo-panel-gap: var(--panel-sash-size);
   --todo-panel-open-width: clamp(250px, 23vw, 340px);
   --todo-panel-collapsed-width: 46px;
   --todo-panel-width: var(--todo-panel-open-width);
@@ -5711,6 +5792,7 @@ onBeforeUnmount(() => {
 
 .app-body.todo-collapsed {
   --todo-panel-width: var(--todo-panel-collapsed-width);
+  gap: var(--panel-sash-size);
 }
 
 .app-main-column {
@@ -5719,7 +5801,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
 }
 
 .side-panel-area {
@@ -5735,28 +5817,46 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.side-resizer {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: -2px;
-  width: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: ew-resize;
+.panel-sash {
+  position: relative;
+  z-index: 20;
+  flex: 0 0 var(--panel-sash-size);
+  background: transparent;
   touch-action: none;
 }
 
-.side-resizer::before {
+.panel-sash::after {
   content: '';
-  width: 1px;
-  height: 100%;
-  background: transparent;
+  position: absolute;
 }
 
-.side-resizer:hover::before {
-  width: 2px;
+.panel-sash-vertical {
+  width: var(--panel-sash-size);
+  align-self: stretch;
+  cursor: ew-resize;
+}
+
+.panel-sash-vertical::after {
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  right: -3px;
+}
+
+.panel-sash-horizontal {
+  height: var(--panel-sash-size);
+  align-self: stretch;
+  cursor: ns-resize;
+}
+
+.panel-sash-horizontal::after {
+  left: 0;
+  right: 0;
+  top: -3px;
+  bottom: -3px;
+}
+
+.panel-sash.is-dragging {
   background: #60a5fa;
 }
 
@@ -5773,7 +5873,7 @@ onBeforeUnmount(() => {
     z-index: 45;
   }
 
-  .side-resizer {
+  .panel-sash-vertical {
     display: none;
   }
 }

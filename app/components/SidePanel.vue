@@ -221,7 +221,7 @@ const {
   display: flex;
   flex-direction: row;
   border: 1px solid #334155;
-  border-radius: 10px;
+  border-radius: 0 var(--card-radius, 6px) var(--card-radius, 6px) 0;
   background-clip: padding-box;
   background: rgba(15, 23, 42, 0.92);
   overflow: hidden;

@@ -334,7 +334,7 @@ defineExpose({ panelEl });
   );
   color: #e2e8f0;
   border: 1px solid #334155;
-  border-radius: 10px;
+  border-radius: var(--card-radius, 6px) 0 0 var(--card-radius, 6px);
   background-clip: padding-box;
   box-shadow: 0 8px 24px rgba(2, 6, 23, 0.24);
   display: flex;
