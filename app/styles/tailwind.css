@@ -706,6 +706,34 @@ html[data-theme='light'] .bookmark-item-icon.is-filled {
   color: #d5ab23 !important;
 }
 
+html[data-theme='light'] .bookmark-item-action {
+  color: #6b7280 !important;
+}
+
+html[data-theme='light'] .bookmark-item-action:hover,
+html[data-theme='light'] .bookmark-item-menu .ui-dropdown.is-open .bookmark-item-action {
+  background: #ececf1 !important;
+  color: #2f2f2f !important;
+}
+
+html[data-theme='light'] .bookmark-item-rename {
+  background: #ffffff !important;
+  border-color: #d1d5db !important;
+  color: #2f2f2f !important;
+}
+
+html[data-theme='light'] .session-menu-item {
+  color: #2f2f2f !important;
+}
+
+html[data-theme='light'] .session-menu-item.is-danger {
+  color: #dc2626 !important;
+}
+
+html[data-theme='light'] .session-menu-divider {
+  background: #e5e5e5 !important;
+}
+
 html[data-theme='light'] .tree-toggle {
   color: #8e8ea0 !important;
 }

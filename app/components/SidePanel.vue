@@ -107,7 +107,12 @@
         icon="lucide:history"
         empty-text="No recent sessions."
         hide-remove
+        show-session-menu
         @select-session="(session) => emit('select-bookmark', session)"
+        @rename-session="(payload) => emit('rename-session', payload)"
+        @toggle-pin="(session) => emit('toggle-pin', session)"
+        @archive-session="(session) => emit('archive-session', session)"
+        @delete-session="(session) => emit('delete-session', session)"
       />
       <div v-else-if="activeTab === 'search'" class="search-panel">
         <label class="search-field">
@@ -197,6 +202,10 @@ const emit = defineEmits<{
   (event: 'select-tab', value: SidePanelTab): void;
   (event: 'select-bookmark', session: BookmarkedSessionView): void;
   (event: 'remove-bookmark', sessionId: string): void;
+  (event: 'rename-session', payload: { session: BookmarkedSessionView; title: string }): void;
+  (event: 'toggle-pin', session: BookmarkedSessionView): void;
+  (event: 'archive-session', session: BookmarkedSessionView): void;
+  (event: 'delete-session', session: BookmarkedSessionView): void;
   (event: 'toggle-dir', path: string): void;
   (event: 'select-file', path: string): void;
   (event: 'open-diff', payload: { path: string; staged: boolean }): void;

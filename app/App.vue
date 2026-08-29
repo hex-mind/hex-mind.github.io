@@ -65,6 +65,10 @@
             @select-tab="selectSidePanelTab"
             @select-bookmark="handleTopPanelSessionSelect"
             @remove-bookmark="removeBookmark"
+            @rename-session="handleRecentRename"
+            @toggle-pin="handleRecentPin"
+            @archive-session="handleRecentArchive"
+            @delete-session="handleRecentDelete"
             @toggle-dir="toggleTreeDirectory"
             @select-file="selectTreeFile"
             @open-diff="openGitDiff"
@@ -351,6 +355,7 @@ import { rememberInstanceDirectories } from './utils/instanceDirectories';
 import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
 import { useBookmarkedSessions } from './composables/useBookmarkedSessions';
+import { usePinnedSessions } from './composables/usePinnedSessions';
 import {
   StorageKeys,
   storageGet,
@@ -1250,6 +1255,7 @@ const {
   removeBookmark,
   toggleBookmark,
 } = useBookmarkedSessions();
+const { pinnedSessionIds, isPinned, togglePinned } = usePinnedSessions();
 
 function findLiveSessionLocation(sessionId: string) {
   const id = sessionId.trim();
@@ -1308,6 +1314,7 @@ const recentSessionItems = computed(() => {
     available: boolean;
     isSelected: boolean;
     timeUpdated: number;
+    pinned?: boolean;
   }> = [];
   for (const worktree of topPanelTreeData.value) {
     for (const sandbox of worktree.sandboxes) {
@@ -1323,12 +1330,20 @@ const recentSessionItems = computed(() => {
           projectName: worktree.name,
           available: true,
           isSelected: session.id === selectedSessionId.value,
+          pinned: isPinned(session.id),
           timeUpdated: session.timeUpdated ?? session.timeCreated ?? 0,
         });
       }
     }
   }
-  items.sort((a, b) => b.timeUpdated - a.timeUpdated);
+  items.sort((a, b) => {
+    const pinnedA = pinnedSessionIds.value.indexOf(a.sessionId);
+    const pinnedB = pinnedSessionIds.value.indexOf(b.sessionId);
+    if (pinnedA >= 0 && pinnedB >= 0) return pinnedA - pinnedB;
+    if (pinnedA >= 0) return -1;
+    if (pinnedB >= 0) return 1;
+    return b.timeUpdated - a.timeUpdated;
+  });
   return items.slice(0, 40).map(({ timeUpdated: _timeUpdated, ...session }) => session);
 });
 
@@ -2482,6 +2497,59 @@ async function unarchiveSession(payload: {
   } catch (error) {
     sessionError.value = `Session unarchive failed: ${toErrorMessage(error)}`;
   }
+}
+
+function handleRecentPin(session: { sessionId: string }) {
+  togglePinned(session.sessionId);
+}
+
+async function handleRecentRename(payload: {
+  session: {
+    sessionId: string;
+    directory: string;
+    projectId: string;
+  };
+  title: string;
+}) {
+  if (!ensureConnectionReady('Renaming session')) return;
+  sessionError.value = '';
+  const sessionId = payload.session.sessionId.trim();
+  const title = payload.title.trim();
+  if (!sessionId || !title) return;
+  try {
+    await openCodeApi.renameSession({
+      sessionId,
+      projectId: payload.session.projectId || selectedProjectId.value,
+      directory: payload.session.directory || activeDirectory.value || undefined,
+      title,
+    });
+  } catch (error) {
+    sessionError.value = `Session rename failed: ${toErrorMessage(error)}`;
+  }
+}
+
+async function handleRecentArchive(session: {
+  sessionId: string;
+  directory: string;
+  projectId: string;
+}) {
+  await archiveSession({
+    sessionId: session.sessionId,
+    directory: session.directory,
+    projectId: session.projectId,
+  });
+}
+
+async function handleRecentDelete(session: {
+  sessionId: string;
+  directory: string;
+  projectId: string;
+}) {
+  await deleteSession({
+    sessionId: session.sessionId,
+    directory: session.directory,
+    projectId: session.projectId,
+  });
 }
 
 async function handleRevertMessage(payload: { sessionId: string; messageId: string }) {
