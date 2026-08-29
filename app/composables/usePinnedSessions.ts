@@ -54,8 +54,6 @@ export function usePinnedSessions() {
   return {
     pinnedSessionIds,
     isPinned,
-    pinSession,
-    unpinSession,
     togglePinned,
   };
 }

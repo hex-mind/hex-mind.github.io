@@ -1,5 +1,6 @@
 import type { ProjectInfo, SessionInfo } from '../types/sse';
 import type { ProjectState, SandboxState, ServerState, SessionState } from '../types/worker-state';
+import { normalizeDirectory } from './path';
 
 const CHILD_SESSION_PRUNE_TTL_MS = 20 * 60 * 1000;
 const GLOBAL_PROJECT_NAME = 'global';
@@ -31,14 +32,6 @@ type SessionEntry = {
   directory: string;
   session: SessionState;
 };
-
-function normalizeDirectory(value?: string) {
-  if (!value) return '';
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  const normalized = trimmed.replace(/\/+$/, '');
-  return normalized || '/';
-}
 
 function toSortTime(session: SessionState) {
   return session.timeUpdated ?? session.timeCreated ?? 0;

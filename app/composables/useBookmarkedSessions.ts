@@ -62,7 +62,6 @@ export function useBookmarkedSessions() {
   return {
     bookmarks,
     isBookmarked,
-    addBookmark,
     removeBookmark,
     toggleBookmark,
   };

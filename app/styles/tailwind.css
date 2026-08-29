@@ -6,14 +6,6 @@
   --font-sans:
     'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, Menlo, Monaco, Consolas,
     'Liberation Mono', 'Courier New', monospace;
-  --color-surface-900: #0f172a;
-  --color-surface-800: #1e293b;
-  --color-surface-700: #334155;
-  --color-text-100: #e2e8f0;
-  --color-text-300: #94a3b8;
-  --color-accent-400: #60a5fa;
-  --color-success-400: #22c55e;
-  --color-warning-300: #fef08a;
 }
 
 .brand-logo-light {
@@ -52,11 +44,7 @@ html:not([data-theme='light'])
 }
 
 html:not([data-theme='light'])
-  :is(
-    .activity-button:hover,
-    .layout-button:hover,
-    .top-icon-button:hover:not(:disabled)
-  ) {
+  :is(.activity-button:hover, .layout-button:hover, .top-icon-button:hover:not(:disabled)) {
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -469,8 +457,7 @@ html[data-theme='light']
   box-shadow: none !important;
 }
 
-html[data-theme='light']
-  :is(.tree-statusbar-btn, .side-close, .tree-branch-action-btn) {
+html[data-theme='light'] :is(.tree-statusbar-btn, .side-close, .tree-branch-action-btn) {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;

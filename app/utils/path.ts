@@ -1,4 +1,25 @@
 /**
+ * Strip trailing slashes without collapsing an all-slash path to empty.
+ * Used for display prefixes and file-tree comparisons.
+ */
+export function stripTrailingSlashes(value: string) {
+  const trimmed = value.replace(/\/+$/, '');
+  return trimmed || value;
+}
+
+/**
+ * Normalize a worktree / sandbox directory for persistence and SSE lookups.
+ * Empty input stays empty; a root of only slashes becomes `/`.
+ */
+export function normalizeDirectory(value?: string) {
+  if (!value) return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const normalized = trimmed.replace(/\/+$/, '');
+  return normalized || '/';
+}
+
+/**
  * Normalize a relative path by stripping `.`, `..`, and empty segments.
  * Parent traversals (`..`) are silently dropped.
  */

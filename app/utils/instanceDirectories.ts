@@ -1,13 +1,7 @@
+import { normalizeDirectory } from './path';
 import { StorageKeys, storageGetJSON, storageSetJSON } from './storageKeys';
 
 const MAX_DIRECTORIES = 80;
-
-function normalizeDirectory(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  const normalized = trimmed.replace(/\/+$/, '');
-  return normalized || '/';
-}
 
 function isPersistableDirectory(value: string) {
   return Boolean(value) && value !== '/';

@@ -31,9 +31,7 @@
           </button>
         </template>
         <div class="activity-tips" @click.stop>
-          <p>
-            Hold <kbd>Shift</kbd> to show delete for a worktree, branch, or session.
-          </p>
+          <p>Hold <kbd>Shift</kbd> to show delete for a worktree, branch, or session.</p>
           <p>
             Feedback? Discord:
             <span class="activity-tips-handle">dreamingasfish</span>
@@ -168,7 +166,7 @@ type TodoItem = {
   priority: string;
 };
 
-type TodoPanelSession = {
+type TodoSession = {
   sessionId: string;
   title: string;
   isSubagent: boolean;
@@ -180,7 +178,7 @@ type TodoPanelSession = {
 const props = defineProps<{
   collapsed: boolean;
   activeTab: SidePanelTab;
-  todoSessions: TodoPanelSession[];
+  todoSessions: TodoSession[];
   bookmarkedSessions: BookmarkedSessionView[];
   recentSessions: BookmarkedSessionView[];
   treeNodes: TreeNode[];

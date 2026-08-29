@@ -12,15 +12,6 @@ export function formatGlobToolTitle(
   return title || undefined;
 }
 
-export function formatReadLikeToolTitle(
-  input: Record<string, unknown> | undefined,
-): string | undefined {
-  const filePath = typeof input?.filePath === 'string' ? input.filePath.trim() : '';
-  if (filePath) return filePath;
-  const path = typeof input?.path === 'string' ? input.path.trim() : '';
-  return path || undefined;
-}
-
 export function resolveReadWritePath(
   input: Record<string, unknown> | undefined,
   metadata: Record<string, unknown> | undefined,

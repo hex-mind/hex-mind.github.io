@@ -208,86 +208,86 @@
                         :key="session.id"
                         class="tree-session-row"
                       >
-                      <DropdownItem
-                        :href="sessionShareHref(worktree.projectId, session.id)"
-                        :value="{
-                          projectId: worktree.projectId,
-                          worktree: worktree.directory,
-                          directory: sandbox.directory,
-                          sessionId: session.id,
-                        }"
-                        :active="session.id === selectedSessionId"
-                      >
-                        <div class="tree-session-main">
-                          <span class="session-status-icon" :title="session.status">{{
-                            sessionStatusIcon(session.status)
-                          }}</span>
-                          <div class="session-info">
-                            <div class="session-info-top">
-                              <span class="session-title">{{
-                                formatSessionTitle(session.title, session.slug, session.id)
-                              }}</span>
+                        <DropdownItem
+                          :href="sessionShareHref(worktree.projectId, session.id)"
+                          :value="{
+                            projectId: worktree.projectId,
+                            worktree: worktree.directory,
+                            directory: sandbox.directory,
+                            sessionId: session.id,
+                          }"
+                          :active="session.id === selectedSessionId"
+                        >
+                          <div class="tree-session-main">
+                            <span class="session-status-icon" :title="session.status">{{
+                              sessionStatusIcon(session.status)
+                            }}</span>
+                            <div class="session-info">
+                              <div class="session-info-top">
+                                <span class="session-title">{{
+                                  formatSessionTitle(session.title, session.slug, session.id)
+                                }}</span>
+                              </div>
+                              <span
+                                v-if="session.timeCreated || session.timeUpdated"
+                                class="session-time"
+                              >
+                                {{ formatSessionMetaTime(session) }}
+                              </span>
                             </div>
-                            <span
-                              v-if="session.timeCreated || session.timeUpdated"
-                              class="session-time"
-                            >
-                              {{ formatSessionMetaTime(session) }}
-                            </span>
                           </div>
-                        </div>
-                        <button
-                          v-if="isShiftPressed"
-                          type="button"
-                          class="tree-action-button session-del danger"
-                          title="Delete session permanently"
-                          @mousedown.prevent.stop
-                          @click.prevent.stop="
-                            handleSessionDelete(
-                              session.id,
-                              sandbox.directory,
-                              worktree.projectId,
-                              close,
-                            )
-                          "
-                        >
-                          <Icon icon="lucide:trash-2" :width="16" :height="16" />
-                        </button>
-                        <button
-                          v-else-if="session.archivedAt"
-                          type="button"
-                          class="tree-action-button session-del archive is-filled"
-                          title="Unarchive"
-                          @mousedown.prevent.stop
-                          @click.prevent.stop="
-                            handleSessionUnarchive(
-                              session.id,
-                              sandbox.directory,
-                              worktree.projectId,
-                            )
-                          "
-                        >
-                          <Icon icon="lucide:archive" :width="16" :height="16" />
-                        </button>
-                        <button
-                          v-else
-                          type="button"
-                          class="tree-action-button session-del archive"
-                          title="Archive"
-                          @mousedown.prevent.stop
-                          @click.prevent.stop="
-                            handleSessionArchive(
-                              session.id,
-                              sandbox.directory,
-                              worktree.projectId,
-                              close,
-                            )
-                          "
-                        >
-                          <Icon icon="lucide:archive" :width="16" :height="16" />
-                        </button>
-                      </DropdownItem>
-                    </div>
+                          <button
+                            v-if="isShiftPressed"
+                            type="button"
+                            class="tree-action-button session-del danger"
+                            title="Delete session permanently"
+                            @mousedown.prevent.stop
+                            @click.prevent.stop="
+                              handleSessionDelete(
+                                session.id,
+                                sandbox.directory,
+                                worktree.projectId,
+                                close,
+                              )
+                            "
+                          >
+                            <Icon icon="lucide:trash-2" :width="16" :height="16" />
+                          </button>
+                          <button
+                            v-else-if="session.archivedAt"
+                            type="button"
+                            class="tree-action-button session-del archive is-filled"
+                            title="Unarchive"
+                            @mousedown.prevent.stop
+                            @click.prevent.stop="
+                              handleSessionUnarchive(
+                                session.id,
+                                sandbox.directory,
+                                worktree.projectId,
+                              )
+                            "
+                          >
+                            <Icon icon="lucide:archive" :width="16" :height="16" />
+                          </button>
+                          <button
+                            v-else
+                            type="button"
+                            class="tree-action-button session-del archive"
+                            title="Archive"
+                            @mousedown.prevent.stop
+                            @click.prevent.stop="
+                              handleSessionArchive(
+                                session.id,
+                                sandbox.directory,
+                                worktree.projectId,
+                                close,
+                              )
+                            "
+                          >
+                            <Icon icon="lucide:archive" :width="16" :height="16" />
+                          </button>
+                        </DropdownItem>
+                      </div>
                     </template>
                   </div>
                 </div>
@@ -359,6 +359,8 @@ import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
 import DropdownSearch from './Dropdown/Search.vue';
 import { formatSessionTitle } from '../utils/formatters';
+import { MAX_VISIBLE_SESSIONS } from '../utils/sessionTree';
+import type { SessionTarget } from '../types/session';
 
 declare const __GIT_REVISION__: string;
 const gitRevision = typeof __GIT_REVISION__ !== 'undefined' ? __GIT_REVISION__ : 'dev';
@@ -403,7 +405,6 @@ type SessionSelectPayload = {
 const props = defineProps<{
   treeData: TopPanelWorktree[];
   notificationSessions: TopPanelNotificationSession[];
-  projectDirectory: string;
   activeDirectory: string;
   selectedSessionId: string;
   homePath?: string;
@@ -422,9 +423,9 @@ const emit = defineEmits<{
   (event: 'new-session'): void;
   (event: 'new-session-in', payload: { worktree: string; directory: string }): void;
   (event: 'delete-active-directory', value: string): void;
-  (event: 'delete-session', payload: { sessionId: string; directory: string; projectId?: string }): void;
-  (event: 'archive-session', payload: { sessionId: string; directory: string; projectId?: string }): void;
-  (event: 'unarchive-session', payload: { sessionId: string; directory: string; projectId?: string }): void;
+  (event: 'delete-session', payload: SessionTarget): void;
+  (event: 'archive-session', payload: SessionTarget): void;
+  (event: 'unarchive-session', payload: SessionTarget): void;
   (event: 'open-directory'): void;
   (event: 'open-shell'): void;
   (event: 'toggle-side-panel'): void;
@@ -454,10 +455,6 @@ function toggleSessionDropdown() {
 }
 
 defineExpose({ openSessionDropdown, closeSessionDropdown, toggleSessionDropdown });
-
-const MAX_WORKTREES = Infinity;
-const MAX_SANDBOXES = Infinity;
-const MAX_SESSIONS = 5;
 
 const searchQuery = ref('');
 const isShiftPressed = ref(false);
@@ -532,11 +529,10 @@ const displayedTree = computed(() => {
     );
   }
 
-  return worktrees.slice(0, MAX_WORKTREES).map((worktree) => ({
+  return worktrees.map((worktree) => ({
     ...worktree,
     sandboxes: worktree.sandboxes
       .filter((sandbox) => worktree.projectId !== 'global' || sandbox.sessions.length > 0)
-      .slice(0, MAX_SANDBOXES)
       .map((sandbox) => {
         const active = sandbox.sessions.filter((session) => !session.archivedAt);
         const archived = sandbox.sessions.filter((session) => session.archivedAt);
@@ -545,8 +541,8 @@ const displayedTree = computed(() => {
         return {
           ...sandbox,
           sessions: showArchived
-            ? [...active.slice(0, MAX_SESSIONS), ...archived.slice(0, MAX_SESSIONS)]
-            : active.slice(0, MAX_SESSIONS),
+            ? [...active.slice(0, MAX_VISIBLE_SESSIONS), ...archived.slice(0, MAX_VISIBLE_SESSIONS)]
+            : active.slice(0, MAX_VISIBLE_SESSIONS),
         };
       }),
   }));

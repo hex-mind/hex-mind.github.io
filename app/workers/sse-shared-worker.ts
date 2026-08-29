@@ -21,6 +21,7 @@ import {
 } from '../utils/opencode';
 import { createSseConnection, type SseConnection } from '../utils/sseConnection';
 import { createStateBuilder } from '../utils/stateBuilder';
+import { normalizeDirectory } from '../utils/path';
 
 type SharedWorkerSelf = {
   onconnect: ((event: MessageEvent) => void) | null;
@@ -63,13 +64,6 @@ function broadcast(state: ConnectionState, message: WorkerToTabMessage) {
   for (const port of state.ports) {
     send(port, message);
   }
-}
-
-function normalizeDirectory(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  const normalized = trimmed.replace(/\/+$/, '');
-  return normalized || '/';
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -790,9 +784,7 @@ function handleStatePacket(state: ConnectionState, packet: SsePacket) {
   }
 }
 
-function collectSessionDirectories(
-  builder: ReturnType<typeof createStateBuilder>,
-): Set<string> {
+function collectSessionDirectories(builder: ReturnType<typeof createStateBuilder>): Set<string> {
   const directories = new Set<string>();
   for (const project of Object.values(builder.getState().projects)) {
     const worktree = normalizeDirectory(project.worktree);
@@ -849,6 +841,26 @@ function mergeKnownDirectories(state: ConnectionState, directories?: string[]) {
   return added;
 }
 
+async function syncDirectorySessions(
+  builder: ReturnType<typeof createStateBuilder>,
+  directory: string,
+): Promise<SessionInfo[]> {
+  const [rawSessions, rawStatuses] = await Promise.all([
+    listSessions({ directory, roots: true }).catch((error) => {
+      console.error(`[sse-worker] listSessions failed (${directory})`, error);
+      return [];
+    }),
+    getSessionStatusMap(directory).catch((error) => {
+      console.error(`[sse-worker] getSessionStatusMap failed (${directory})`, error);
+      return {};
+    }),
+  ]);
+  const sessions = asObjectArray<SessionInfo>(rawSessions);
+  builder.applySessions(sessions);
+  builder.applyStatuses(asStatusMap(rawStatuses));
+  return sessions;
+}
+
 async function loadKnownDirectories(state: ConnectionState, directories: string[]) {
   const unique = Array.from(
     new Set(directories.map((directory) => normalizeDirectory(directory)).filter(Boolean)),
@@ -858,21 +870,16 @@ async function loadKnownDirectories(state: ConnectionState, directories: string[
   await queueOpencodeTask(state, async () => {
     const projectIds = new Set<string>();
     for (const directory of unique) {
-      const [rawSessions, rawStatuses] = await Promise.all([
-        listSessions({ directory, roots: true }).catch(() => []),
-        getSessionStatusMap(directory).catch(() => ({})),
-      ]);
-      const sessions = asObjectArray(rawSessions) as Parameters<
-        typeof state.stateBuilder.applySessions
-      >[0];
-      state.stateBuilder.applySessions(sessions);
-      state.stateBuilder.applyStatuses(asStatusMap(rawStatuses));
+      const sessions = await syncDirectorySessions(state.stateBuilder, directory);
       for (const session of sessions) {
         const pid = session.projectID?.trim();
         if (pid) projectIds.add(pid);
       }
 
-      const raw = await getVcsInfo(directory).catch(() => null);
+      const raw = await getVcsInfo(directory).catch((error) => {
+        console.error(`[sse-worker] getVcsInfo failed (${directory})`, error);
+        return null;
+      });
       const vcsInfo = asRecord(raw);
       const branch = asString(vcsInfo?.branch);
       if (branch) {
@@ -899,12 +906,7 @@ async function bootstrapState(state: ConnectionState): Promise<void> {
     const synced = new Set<string>();
 
     const syncDirectoryState = async (directory: string) => {
-      const [sessions, statuses] = await Promise.all([
-        listSessions({ directory, roots: true }).catch(() => []),
-        getSessionStatusMap(directory).catch(() => ({})),
-      ]);
-      builder.applySessions(asObjectArray(sessions) as Parameters<typeof builder.applySessions>[0]);
-      builder.applyStatuses(asStatusMap(statuses));
+      await syncDirectorySessions(builder, directory);
     };
 
     const syncPending = async (pending: Iterable<string>) => {
@@ -1090,7 +1092,9 @@ function attachPort(
           if (extra.length > 0) {
             await loadKnownDirectories(state, extra);
           }
-        })().catch(() => {});
+        })().catch((error) => {
+          console.error('[sse-worker] loadKnownDirectories failed', error);
+        });
       }
     }
   }
@@ -1130,7 +1134,9 @@ function handleMessage(port: MessagePort, event: MessageEvent<TabToWorkerMessage
     if (!directory) return;
     mergeKnownDirectories(state, [directory]);
 
-    void loadKnownDirectories(state, [directory]).catch(() => {});
+    void loadKnownDirectories(state, [directory]).catch((error) => {
+      console.error(`[sse-worker] loadKnownDirectories failed (${directory})`, error);
+    });
     return;
   }
 

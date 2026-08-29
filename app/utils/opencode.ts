@@ -179,12 +179,6 @@ export function readFileContent(
   ) as Promise<unknown>;
 }
 
-export function getSessionDiff(payload: { sessionID: string; directory?: string }) {
-  return getJson(`/session/${payload.sessionID}/diff`, {
-    directory: payload.directory,
-  }) as Promise<unknown>;
-}
-
 export function listProjects(directory?: string) {
   return getJson('/project', { directory }) as Promise<unknown>;
 }
@@ -218,24 +212,6 @@ export function listSessions(
 
 export function getSession(sessionId: string, directory?: string, request?: RequestOptions) {
   return getJson(`/session/${sessionId}`, { directory }, request) as Promise<unknown>;
-}
-
-export function getSessionChildren(
-  sessionId: string,
-  directory?: string,
-  request?: RequestOptions,
-) {
-  return getJson(
-    `/session/${sessionId}/children`,
-    {
-      directory,
-    },
-    request,
-  ) as Promise<unknown>;
-}
-
-export function listWorktrees(directory: string) {
-  return getJson('/experimental/worktree', { directory }) as Promise<unknown>;
 }
 
 export function getVcsInfo(directory: string) {
@@ -323,12 +299,6 @@ export function listSessionMessages(
   return getJson(`/session/${sessionId}/message`, {
     directory: options.directory,
     limit: options.limit,
-  }) as Promise<unknown>;
-}
-
-export function getSessionMessage(sessionId: string, messageId: string, directory?: string) {
-  return getJson(`/session/${sessionId}/message/${messageId}`, {
-    directory,
   }) as Promise<unknown>;
 }
 

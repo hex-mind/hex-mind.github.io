@@ -105,31 +105,40 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     });
   }
 
-  async function archiveSession(payload: {
-    sessionId: string;
-    projectId: string;
-    directory?: string;
-    archivedAt?: number;
-  }): Promise<SessionInfo> {
+  async function patchSessionArchive(
+    payload: { sessionId: string; projectId: string; directory?: string },
+    archivedAt: number,
+    failedLabel: string,
+    isDone: (session: SessionState | undefined) => boolean,
+  ): Promise<SessionInfo> {
     return withPending(async () => {
       const projectId = requireProjectId(payload.projectId);
-      const archivedAt = payload.archivedAt ?? Date.now();
       const session = (await opencodeApi.updateSession(
         payload.sessionId,
         { time: { archived: archivedAt } },
         payload.directory,
       )) as SessionInfo;
       if (!session?.id) {
-        throw new Error('Session archive failed: invalid response.');
+        throw new Error(`${failedLabel}: invalid response.`);
       }
-      await waitWithRetry((state) => {
-        const current = findSession(state[projectId], payload.sessionId);
-        return Boolean(
-          current && typeof current.timeArchived === 'number' && current.timeArchived > 0,
-        );
-      });
+      await waitWithRetry((state) => isDone(findSession(state[projectId], payload.sessionId)));
       return session;
     });
+  }
+
+  async function archiveSession(payload: {
+    sessionId: string;
+    projectId: string;
+    directory?: string;
+    archivedAt?: number;
+  }): Promise<SessionInfo> {
+    return patchSessionArchive(
+      payload,
+      payload.archivedAt ?? Date.now(),
+      'Session archive failed',
+      (current) =>
+        Boolean(current && typeof current.timeArchived === 'number' && current.timeArchived > 0),
+    );
   }
 
   async function unarchiveSession(payload: {
@@ -137,22 +146,9 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     projectId: string;
     directory?: string;
   }): Promise<SessionInfo> {
-    return withPending(async () => {
-      const projectId = requireProjectId(payload.projectId);
-      const session = (await opencodeApi.updateSession(
-        payload.sessionId,
-        { time: { archived: 0 } },
-        payload.directory,
-      )) as SessionInfo;
-      if (!session?.id) {
-        throw new Error('Session unarchive failed: invalid response.');
-      }
-      await waitWithRetry((state) => {
-        const current = findSession(state[projectId], payload.sessionId);
-        return Boolean(current && !(typeof current.timeArchived === 'number' && current.timeArchived > 0));
-      });
-      return session;
-    });
+    return patchSessionArchive(payload, 0, 'Session unarchive failed', (current) =>
+      Boolean(current && !(typeof current.timeArchived === 'number' && current.timeArchived > 0)),
+    );
   }
 
   async function renameSession(payload: {
@@ -291,9 +287,6 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     revertSession,
     unrevertSession,
     deleteWorktree,
-    listSessions,
     openProject,
   };
 }
-
-export type UseOpenCodeApi = ReturnType<typeof useOpenCodeApi>;

@@ -2,6 +2,7 @@ import { computed, ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import type { FileWatcherUpdatedPacket } from '../types/sse';
 import * as opencodeApi from '../utils/opencode';
+import { stripTrailingSlashes as normalizeDirectory } from '../utils/path';
 import { usePtyOneshot } from './usePtyOneshot';
 
 const GIT_ENV_PREAMBLE = [
@@ -121,11 +122,6 @@ function getOptions(): UseFileTreeOptions {
     throw new Error('useFileTree must be initialized with options before use');
   }
   return boundOptions;
-}
-
-function normalizeDirectory(value: string) {
-  const trimmed = value.replace(/\/+$/, '');
-  return trimmed || value;
 }
 
 function normalizeRelativePath(path: string) {

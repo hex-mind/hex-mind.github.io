@@ -1,6 +1,5 @@
 <template>
   <div
-    ref="appEl"
     class="app"
     :class="{
       'is-side-resizing': !!sidePanelResizeState,
@@ -13,7 +12,6 @@
           ref="topPanelRef"
           :tree-data="topPanelTreeData"
           :notification-sessions="notificationSessions"
-          :project-directory="projectDirectory"
           :active-directory="activeDirectory"
           :selected-session-id="selectedSessionId"
           :home-path="homePath"
@@ -66,9 +64,9 @@
             @select-bookmark="handleTopPanelSessionSelect"
             @remove-bookmark="removeBookmark"
             @rename-session="handleRecentRename"
-            @toggle-pin="handleRecentPin"
-            @archive-session="handleRecentArchive"
-            @delete-session="handleRecentDelete"
+            @toggle-pin="(session) => togglePinned(session.sessionId)"
+            @archive-session="archiveSession"
+            @delete-session="deleteSession"
             @toggle-dir="toggleTreeDirectory"
             @select-file="selectTreeFile"
             @open-diff="openGitDiff"
@@ -241,8 +239,6 @@
           <button type="button" class="app-loading-retry bg-indigo-500!" @click="handleLogin">
             Connect
           </button>
-
-          <Welcome :theme="shikiTheme" class="mt-8" />
         </div>
         <div v-else>
           <div class="app-loading-spinner" aria-hidden="true"></div>
@@ -306,7 +302,6 @@ import ThreadHistoryContent from './components/ThreadHistoryContent.vue';
 import SubagentContent from './components/ToolWindow/Subagent.vue';
 import WebContent from './components/ToolWindow/Web.vue';
 import SidePanel, { type SidePanelTab } from './components/SidePanel.vue';
-import Welcome from './components/Welcome.vue';
 import TopPanel, {
   type TopPanelNotificationSession,
   type TopPanelWorktree,
@@ -348,8 +343,13 @@ import {
 } from './utils/toolRenderers';
 import * as opencodeApi from './utils/opencode';
 import { opencodeTheme, resolveTheme, resolveAgentColor } from './utils/theme';
-import { splitFileContentDirectoryAndPath } from './utils/path';
+import {
+  splitFileContentDirectoryAndPath,
+  stripTrailingSlashes as normalizeDirectory,
+} from './utils/path';
 import { formatSessionTitle } from './utils/formatters';
+import { toNavigableSessionTree } from './utils/sessionTree';
+import type { SessionTarget } from './types/session';
 import { pickLocalDirectory } from './utils/pickLocalDirectory';
 import { rememberInstanceDirectories } from './utils/instanceDirectories';
 import { useCredentials } from './composables/useCredentials';
@@ -533,7 +533,7 @@ const REASONING_CLOSE_DELAY_MS = 3000;
 const SUBAGENT_CLOSE_DELAY_MS = 3000;
 const ATTACHMENT_MIME_ALLOWLIST = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
-type TodoPanelSession = {
+type TodoSession = {
   sessionId: string;
   title: string;
   isSubagent: boolean;
@@ -817,7 +817,6 @@ const agentOptions = ref<
 const thinkingOptions = ref<Array<string | undefined>>([]);
 const providersLoaded = ref(false);
 const providersLoading = ref(false);
-const providersFetchCount = ref(0);
 const agentsLoading = ref(false);
 const commandsLoading = ref(false);
 const serverState = useServerState();
@@ -958,7 +957,6 @@ const isSettingsOpen = ref(false);
 const selectedMode = ref('build');
 const selectedModel = ref('');
 const selectedThinking = ref<string | undefined>(undefined);
-const projectError = ref('');
 const worktreeError = ref('');
 const sessionError = ref('');
 const messageInput = ref('');
@@ -997,10 +995,10 @@ const statusText = computed(() => {
   if (openCodeApi.pending.value) {
     return 'Synchronizing with SSE updates...';
   }
-  return projectError.value || worktreeError.value || sessionError.value || sendStatus.value;
+  return worktreeError.value || sessionError.value || sendStatus.value;
 });
 const isStatusError = computed(() =>
-  Boolean(projectError.value || worktreeError.value || sessionError.value || retryStatus.value),
+  Boolean(worktreeError.value || sessionError.value || retryStatus.value),
 );
 
 const sessionParentRecord = reactive<Record<string, string | undefined>>({});
@@ -1088,22 +1086,7 @@ const topPanelTreeData = computed<TopPanelWorktree[]>(() => {
   return entries;
 });
 
-// Navigable session tree: mirrors TopPanel's displayedTree (no-search mode).
-// Filters archived sessions, truncates per-sandbox, and drops empty worktrees.
-const NAVIGABLE_MAX_SESSIONS = 5;
-const navigableTree = computed(() => {
-  return topPanelTreeData.value
-    .map((worktree) => ({
-      ...worktree,
-      sandboxes: worktree.sandboxes
-        .map((sandbox) => ({
-          ...sandbox,
-          sessions: sandbox.sessions.filter((s) => !s.archivedAt).slice(0, NAVIGABLE_MAX_SESSIONS),
-        }))
-        .filter((sandbox) => worktree.projectId !== 'global' || sandbox.sessions.length > 0),
-    }))
-    .filter((worktree) => worktree.sandboxes.some((sandbox) => sandbox.sessions.length > 0));
-});
+const navigableTree = computed(() => toNavigableSessionTree(topPanelTreeData.value));
 
 const allowedSessionIds = computed(() => {
   const rootId = selectedSessionId.value;
@@ -1222,7 +1205,7 @@ watch(
 
 const todoPanelSessions = computed(() => {
   const allowed = allowedSessionIds.value;
-  if (allowed.size === 0) return [] as TodoPanelSession[];
+  if (allowed.size === 0) return [] as TodoSession[];
   const list = Array.from(allowed).map((sessionId) => {
     const session = sessions.value.find((item) => item.id === sessionId);
     const title = sessionLabel(session ?? { id: sessionId });
@@ -1237,7 +1220,7 @@ const todoPanelSessions = computed(() => {
     };
   });
   const visible = list.filter((entry) => entry.todos.length > 0 || Boolean(entry.error));
-  if (visible.length === 0) return [] as TodoPanelSession[];
+  if (visible.length === 0) return [] as TodoSession[];
   visible.sort((a, b) => {
     if (a.sessionId === selectedSessionId.value) return -1;
     if (b.sessionId === selectedSessionId.value) return 1;
@@ -1281,7 +1264,7 @@ const bookmarkedSessionItems = computed(() =>
         projectId: live.worktree.projectId || selectedProjectId.value,
         worktree: live.worktree.directory,
         directory: live.sandbox.directory,
-        title: live.session.title || live.session.slug || live.session.id,
+        title: formatSessionTitle(live.session.title, live.session.slug, live.session.id),
         branch: live.sandbox.branch,
         projectName: live.worktree.name,
         available: true,
@@ -1356,7 +1339,7 @@ function toggleCurrentSessionBookmark() {
     projectId: live?.worktree.projectId || selectedProjectId.value,
     worktree: live?.worktree.directory || projectDirectory.value,
     directory: live?.sandbox.directory || activeDirectory.value,
-    title: live?.session.title || live?.session.slug || sessionId,
+    title: live ? formatSessionTitle(live.session.title, live.session.slug, sessionId) : sessionId,
     branch: live?.sandbox.branch,
     projectName: live?.worktree.name || currentProjectName.value,
     savedAt: Date.now(),
@@ -1432,11 +1415,6 @@ const commandOptions = computed(() => {
   list.sort((a, b) => a.name.localeCompare(b.name));
   return list;
 });
-
-function normalizeDirectory(value: string) {
-  const trimmed = value.replace(/\/+$/, '');
-  return trimmed || value;
-}
 
 function replaceHomePrefix(path: string) {
   const normalizedPath = normalizeDirectory(path);
@@ -2252,7 +2230,10 @@ function clampInputPanelHeightToBounds() {
   const column = appMainColumnEl.value;
   if (!column) return;
   const outputMin = 120;
-  const maxH = Math.max(200, column.getBoundingClientRect().height - outputMin - PANEL_SASH_SIZE_PX);
+  const maxH = Math.max(
+    200,
+    column.getBoundingClientRect().height - outputMin - PANEL_SASH_SIZE_PX,
+  );
   inputPanelHeight.value = clamp(inputPanelHeight.value, 200, maxH);
 }
 
@@ -2431,125 +2412,52 @@ function handleNotificationSessionSelect() {
   void switchSessionSelection(entry.projectId.trim(), entry.sessionId.trim());
 }
 
-async function deleteSession(
-  payload: string | { sessionId: string; directory?: string; projectId?: string },
+async function mutateSession(
+  action: string,
+  errorPrefix: string,
+  payload: SessionTarget,
+  run: (resolved: { sessionId: string; directory?: string; projectId: string }) => Promise<unknown>,
 ) {
-  if (!ensureConnectionReady('Deleting session')) return;
-  sessionError.value = '';
-  const sessionId = typeof payload === 'string' ? payload : payload.sessionId;
-  const directory =
-    typeof payload === 'string'
-      ? activeDirectory.value.trim()
-      : (payload.directory || activeDirectory.value).trim();
-  const projectId =
-    typeof payload === 'string'
-      ? selectedProjectId.value
-      : (payload.projectId || selectedProjectId.value);
-  if (!sessionId) return;
-  try {
-    await openCodeApi.deleteSession({
-      sessionId,
-      projectId,
-      directory: directory || undefined,
-    });
-  } catch (error) {
-    sessionError.value = `Session delete failed: ${toErrorMessage(error)}`;
-  }
-}
-
-async function archiveSession(payload: {
-  sessionId: string;
-  directory?: string;
-  projectId?: string;
-}) {
-  if (!ensureConnectionReady('Archiving session')) return;
+  if (!ensureConnectionReady(action)) return;
   sessionError.value = '';
   const sessionId = payload.sessionId.trim();
   if (!sessionId) return;
   try {
     const directory = (payload.directory || activeDirectory.value).trim();
-    await openCodeApi.archiveSession({
+    await run({
       sessionId,
       projectId: payload.projectId || selectedProjectId.value,
       directory: directory || undefined,
     });
   } catch (error) {
-    sessionError.value = `Session archive failed: ${toErrorMessage(error)}`;
+    sessionError.value = `${errorPrefix}: ${toErrorMessage(error)}`;
   }
 }
 
-async function unarchiveSession(payload: {
-  sessionId: string;
-  directory?: string;
-  projectId?: string;
-}) {
-  if (!ensureConnectionReady('Unarchiving session')) return;
-  sessionError.value = '';
-  const sessionId = payload.sessionId.trim();
-  if (!sessionId) return;
-  try {
-    const directory = (payload.directory || activeDirectory.value).trim();
-    await openCodeApi.unarchiveSession({
-      sessionId,
-      projectId: payload.projectId || selectedProjectId.value,
-      directory: directory || undefined,
-    });
-  } catch (error) {
-    sessionError.value = `Session unarchive failed: ${toErrorMessage(error)}`;
-  }
+async function deleteSession(payload: SessionTarget) {
+  await mutateSession('Deleting session', 'Session delete failed', payload, (resolved) =>
+    openCodeApi.deleteSession(resolved),
+  );
 }
 
-function handleRecentPin(session: { sessionId: string }) {
-  togglePinned(session.sessionId);
+async function archiveSession(payload: SessionTarget) {
+  await mutateSession('Archiving session', 'Session archive failed', payload, (resolved) =>
+    openCodeApi.archiveSession(resolved),
+  );
 }
 
-async function handleRecentRename(payload: {
-  session: {
-    sessionId: string;
-    directory: string;
-    projectId: string;
-  };
-  title: string;
-}) {
-  if (!ensureConnectionReady('Renaming session')) return;
-  sessionError.value = '';
-  const sessionId = payload.session.sessionId.trim();
+async function unarchiveSession(payload: SessionTarget) {
+  await mutateSession('Unarchiving session', 'Session unarchive failed', payload, (resolved) =>
+    openCodeApi.unarchiveSession(resolved),
+  );
+}
+
+async function handleRecentRename(payload: { session: SessionTarget; title: string }) {
   const title = payload.title.trim();
-  if (!sessionId || !title) return;
-  try {
-    await openCodeApi.renameSession({
-      sessionId,
-      projectId: payload.session.projectId || selectedProjectId.value,
-      directory: payload.session.directory || activeDirectory.value || undefined,
-      title,
-    });
-  } catch (error) {
-    sessionError.value = `Session rename failed: ${toErrorMessage(error)}`;
-  }
-}
-
-async function handleRecentArchive(session: {
-  sessionId: string;
-  directory: string;
-  projectId: string;
-}) {
-  await archiveSession({
-    sessionId: session.sessionId,
-    directory: session.directory,
-    projectId: session.projectId,
-  });
-}
-
-async function handleRecentDelete(session: {
-  sessionId: string;
-  directory: string;
-  projectId: string;
-}) {
-  await deleteSession({
-    sessionId: session.sessionId,
-    directory: session.directory,
-    projectId: session.projectId,
-  });
+  if (!title) return;
+  await mutateSession('Renaming session', 'Session rename failed', payload.session, (resolved) =>
+    openCodeApi.renameSession({ ...resolved, title }),
+  );
 }
 
 async function handleRevertMessage(payload: { sessionId: string; messageId: string }) {
@@ -2637,8 +2545,7 @@ async function bootstrapSelections() {
 async function fetchProviders(force = false) {
   if (providersLoading.value || (!force && providersLoaded.value)) return;
   providersLoading.value = true;
-  providersFetchCount.value += 1;
-  log('providers fetch start', providersFetchCount.value);
+  log('providers fetch start');
   try {
     const data = (await opencodeApi.listProviders()) as ProviderResponse;
     providers.value = Array.isArray(data.providers) ? data.providers : [];
@@ -4279,22 +4186,12 @@ const TOOL_RENDERER_READ_EVENT_TYPES = new Set(['session.diff', 'file.edited']);
 
 const TOOL_RENDERER_WRITE_EVENT_TYPES = new Set<string>([]);
 
-const TOOL_RENDERER_MESSAGE_EVENTS = new Set([
-  'message.updated',
-  'message.part.updated',
-  'message.removed',
-  'message.part.removed',
-]);
-
 const toolRendererReadTypesKey = `FILE_${'READ'}_EVENT_TYPES`;
 const toolRendererWriteTypesKey = `FILE_${'WRITE'}_EVENT_TYPES`;
-const toolRendererMessageTypesKey = `MESSAGE_${'EVENT_TYPES'}`;
 
 const toolRendererHelpers = {
   [toolRendererReadTypesKey]: TOOL_RENDERER_READ_EVENT_TYPES,
   [toolRendererWriteTypesKey]: TOOL_RENDERER_WRITE_EVENT_TYPES,
-  [toolRendererMessageTypesKey]: TOOL_RENDERER_MESSAGE_EVENTS,
-  parsePatchTextBlocks,
   guessLanguage,
   shouldRenderToolWindow,
   extractToolOutputText: parseToolOutputText,
@@ -4518,82 +4415,6 @@ const TOOL_WINDOW_SUPPORTED = new Set([
 
 function shouldRenderToolWindow(tool: string) {
   return !TOOL_WINDOW_HIDDEN.has(tool) && TOOL_WINDOW_SUPPORTED.has(tool);
-}
-
-function parsePatchTextBlocks(patchText: string) {
-  const lines = patchText.split('\n');
-  const blocks: Array<{ path?: string; content: string }> = [];
-  let currentPath: string | undefined;
-  let currentKind: 'update' | 'add' | 'delete' | undefined;
-  let currentLines: string[] = [];
-
-  const pushCurrent = () => {
-    if (!currentPath || currentLines.length === 0) {
-      currentPath = undefined;
-      currentKind = undefined;
-      currentLines = [];
-      return;
-    }
-    blocks.push({
-      path: currentPath,
-      content: currentLines.join('\n').trim(),
-    });
-    currentPath = undefined;
-    currentKind = undefined;
-    currentLines = [];
-  };
-
-  const startFileBlock = (kind: 'update' | 'add' | 'delete', path: string) => {
-    pushCurrent();
-    currentPath = path.trim();
-    currentKind = kind;
-    currentLines = [`diff --git a/${currentPath} b/${currentPath}`];
-    if (kind === 'add') {
-      currentLines.push('--- /dev/null');
-      currentLines.push(`+++ b/${currentPath}`);
-    } else if (kind === 'delete') {
-      currentLines.push(`--- a/${currentPath}`);
-      currentLines.push('+++ /dev/null');
-    } else {
-      currentLines.push(`--- a/${currentPath}`);
-      currentLines.push(`+++ b/${currentPath}`);
-    }
-  };
-
-  for (const line of lines) {
-    if (line.startsWith('*** Update File: ')) {
-      startFileBlock('update', line.replace('*** Update File: ', ''));
-      continue;
-    }
-    if (line.startsWith('*** Add File: ')) {
-      startFileBlock('add', line.replace('*** Add File: ', ''));
-      continue;
-    }
-    if (line.startsWith('*** Delete File: ')) {
-      startFileBlock('delete', line.replace('*** Delete File: ', ''));
-      continue;
-    }
-    if (line.startsWith('*** Move to: ') && currentPath && currentKind === 'update') {
-      const moveTo = line.replace('*** Move to: ', '').trim();
-      currentLines.push(`rename from ${currentPath}`);
-      currentLines.push(`rename to ${moveTo}`);
-      currentPath = moveTo;
-      continue;
-    }
-    if (!currentPath) continue;
-    if (
-      line.startsWith('@@') ||
-      line.startsWith('+') ||
-      line.startsWith('-') ||
-      line.startsWith(' ') ||
-      line.startsWith('\\')
-    ) {
-      currentLines.push(line);
-    }
-  }
-
-  pushCurrent();
-  return blocks;
 }
 
 function toUint8ArrayFromBase64(input: string) {
