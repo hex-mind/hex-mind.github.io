@@ -31,6 +31,8 @@
                 :resolve-model-meta="resolveModelMeta"
                 :model-options="modelOptions"
                 :selected-model="selectedModel"
+                :agent-options="agentOptions"
+                :selected-mode="selectedMode"
                 :compute-context-percent="computeContextPercent"
                 :session-revert="sessionRevert"
                 :assistant-html="getAssistantHtml(root.id)"
@@ -114,6 +116,8 @@ const props = defineProps<{
     providerLabel?: string;
   }>;
   selectedModel: string;
+  agentOptions: Array<{ id: string; label: string; description?: string; color?: string }>;
+  selectedMode: string;
   computeContextPercent?: (
     tokens: MessageTokens,
     providerId?: string,
@@ -140,6 +144,7 @@ const emit = defineEmits<{
       messageId: string;
       text: string;
       model: string;
+      agent: string;
     },
   ): void;
   (event: 'revert-message', payload: { sessionId: string; messageId: string }): void;
@@ -435,9 +440,9 @@ defineExpose({ panelEl });
   aspect-ratio: 1 / 1;
   box-sizing: border-box;
   border-radius: 999px;
-  border: 1px solid #334155;
-  background: rgba(15, 23, 42, 0.92);
-  color: #e2e8f0;
+  border: 1px solid #2b2b2b;
+  background: #1f1f1f;
+  color: #cccccc;
   font-size: 18px;
   line-height: 1;
   display: grid;
@@ -448,7 +453,7 @@ defineExpose({ panelEl });
 }
 
 .follow-button:hover {
-  background: rgba(30, 41, 59, 0.98);
+  background: #2b2b2b;
 }
 
 .session-revert-banner {

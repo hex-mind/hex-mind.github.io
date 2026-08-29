@@ -70,12 +70,12 @@
       <button
         v-if="canRevert"
         type="button"
-        class="ib-action ib-action-danger"
-        title="Revert to this message"
-        aria-label="Revert to this message"
+        class="ib-action"
+        title="Restore checkpont"
+        aria-label="Restore checkpont"
         @click="$emit('revert')"
       >
-        <Icon icon="lucide:rotate-ccw" :width="14" :height="14" />
+        <Icon icon="lucide:undo-2" :width="14" :height="14" />
       </button>
     </span>
   </div>
@@ -185,7 +185,7 @@ defineEmits<{
 }
 
 .ib-action:hover {
-  background: rgba(51, 65, 85, 0.45);
+  background: rgba(255, 255, 255, 0.08);
   color: #e2e8f0;
 }
 

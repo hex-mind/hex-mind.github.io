@@ -54,6 +54,10 @@ function onClick(event: MouseEvent) {
     if (props.href) event.preventDefault();
     return;
   }
+  if ((event.target as HTMLElement | null)?.closest('button')) {
+    event.preventDefault();
+    return;
+  }
   if (
     props.href &&
     (event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey)
@@ -102,13 +106,13 @@ a.ui-dropdown-item {
 }
 
 .ui-dropdown-item.is-active {
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid transparent;
 }
 
 .ui-dropdown-item:hover,
 .ui-dropdown-item[aria-selected='true'] {
-  background: rgba(15, 23, 42, 0.9);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .ui-dropdown-item.is-disabled {

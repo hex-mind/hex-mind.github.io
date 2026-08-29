@@ -68,21 +68,21 @@ function onKeydown(e: KeyboardEvent) {
 .ui-dropdown-search-input {
   flex: 1;
   min-width: 0;
-  border: 1px solid #334155;
+  border: 1px solid #3c3c3c;
   border-radius: 5px;
   padding: 4px 10px;
-  background: rgba(30, 41, 59, 0.55);
-  color: #e2e8f0;
+  background: #252526;
+  color: #cccccc;
   outline: none;
   box-sizing: border-box;
   font-size: 12px;
 }
 
 .ui-dropdown-search-input:focus {
-  border-color: #60a5fa;
+  border-color: #0078d4;
 }
 
 .ui-dropdown-search-input::placeholder {
-  color: #64748b;
+  color: #9d9d9d;
 }
 </style>

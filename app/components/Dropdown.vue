@@ -472,9 +472,9 @@ defineExpose({ moveHighlight, selectHighlighted, updateSearch, clearHighlight })
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: #0b1320;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: #1f1f1f;
+  color: #cccccc;
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
   padding: 6px 8px;
   font-size: 12px;
@@ -514,15 +514,21 @@ defineExpose({ moveHighlight, selectHighlighted, updateSearch, clearHighlight })
   width: var(--ui-dropdown-trigger-width);
   max-width: calc(100vw - 16px);
   max-height: 60vh;
-  background: rgba(2, 6, 23, 0.98);
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: #1f1f1f;
+  color: #cccccc;
+  border: 1px solid #2b2b2b;
   border-radius: 10px;
   padding: 6px;
   scroll-padding: 6px;
-  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.45);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
   overflow: auto;
   z-index: 120;
+  outline: none;
+}
+
+.ui-dropdown-menu:focus,
+.ui-dropdown-menu:focus-visible {
+  outline: none;
 }
 
 .ui-dropdown-menu:not(.is-open) {

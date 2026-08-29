@@ -116,108 +116,27 @@
       <div class="input-toolbar">
         <div class="input-selects">
           <div class="input-field compact">
-            <Dropdown
+            <AgentPicker
               v-model="modeValue"
-              :placeholder="hasAgentOptions ? 'Select agent' : 'Loading agents...'"
+              :options="agentOptions"
               :disabled="props.disabled || !hasAgentOptions"
-              button-class="input-control input-dropdown-button"
-              popup-class="input-dropdown-popup"
               placement="top"
-              menu-icon="lucide:chevron-up"
-              auto-close
               title="Agent (Tab)"
+              :resolve-agent-color="props.resolveAgentColor"
               @update:open="handleModelDropdownOpenChange"
-            >
-              <template #value="{ value: id }">
-                <span class="agent-value-name" :style="agentValueStyle(id)">{{
-                  findAgent(id)?.label
-                }}</span>
-              </template>
-              <template #default>
-                <div class="dropdown-list">
-                  <div v-if="!hasAgentOptions" class="dropdown-empty">Loading agents...</div>
-                  <DropdownItem v-for="agent in agentOptions" :key="agent.id" :value="agent.id">
-                    <span
-                      class="agent-dropdown-name"
-                      :class="{
-                        'is-build': agent.id.toLowerCase() === 'build',
-                        'is-plan': agent.id.toLowerCase() === 'plan',
-                      }"
-                      :style="agentOptionNameStyle(agent)"
-                    >
-                      {{ agent.label }}
-                    </span>
-                  </DropdownItem>
-                </div>
-              </template>
-            </Dropdown>
+            />
           </div>
         </div>
         <div class="input-field compact">
           <div ref="modelDropdownRef" class="input-dropdown-root">
-            <Dropdown
+            <ModelPicker
               v-model="modelValue"
-              :placeholder="hasModelOptions ? 'Select model' : 'Loading models...'"
+              :options="modelOptions"
               :disabled="props.disabled || !hasModelOptions"
-              button-class="input-control input-dropdown-button"
-              popup-class="input-dropdown-popup"
               placement="top"
-              menu-icon="lucide:chevron-up"
-              auto-close
               title="Model (Ctrl-M)"
               @update:open="handleModelDropdownOpenChange"
-            >
-              <template #value="{ value: id }">
-                <div class="model-button-label">
-                  <span
-                    v-if="findModelOption(id)?.providerLabel ?? findModelOption(id)?.providerID"
-                    class="model-button-provider"
-                    >{{
-                      findModelOption(id)?.providerLabel ?? findModelOption(id)?.providerID
-                    }}</span
-                  >
-                  <span class="model-button-name">{{ findModelOption(id)?.displayName }}</span>
-                </div>
-              </template>
-              <template #default>
-                <div class="model-picker">
-                  <DropdownSearch
-                    v-model="modelSearchQuery"
-                    placeholder="Search..."
-                    class="model-search"
-                  />
-                  <div class="model-picker-list">
-                    <div class="dropdown-list">
-                      <div v-if="!hasModelOptions" class="dropdown-empty">Loading models...</div>
-                      <div
-                        v-else-if="filteredGroupedModelOptions.length === 0"
-                        class="dropdown-empty"
-                      >
-                        No matching models
-                      </div>
-                      <template
-                        v-for="group in filteredGroupedModelOptions"
-                        :key="group.providerID"
-                      >
-                        <DropdownLabel>{{ group.label }}</DropdownLabel>
-                        <DropdownItem
-                          v-for="model in group.models"
-                          :key="model.id"
-                          :value="model.id"
-                        >
-                          <div class="model-dropdown-item">
-                            <span class="model-dropdown-name">{{ model.displayName }}</span>
-                            <span class="model-dropdown-path"
-                              >{{ model.providerID }}/{{ model.modelID }}</span
-                            >
-                          </div>
-                        </DropdownItem>
-                      </template>
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </Dropdown>
+            />
           </div>
         </div>
         <div class="input-field compact">
@@ -225,7 +144,7 @@
             v-model="thinkingKeyValue"
             :placeholder="hasThinkingOptions ? 'Select variant' : 'Loading...'"
             :disabled="props.disabled || !hasThinkingOptions"
-            button-class="input-control input-dropdown-button"
+            button-class="chrome-select-button input-dropdown-button"
             popup-class="input-dropdown-popup"
             placement="top"
             menu-icon="lucide:chevron-up"
@@ -314,8 +233,8 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
-import DropdownLabel from './Dropdown/Label.vue';
-import DropdownSearch from './Dropdown/Search.vue';
+import AgentPicker from './AgentPicker.vue';
+import ModelPicker from './ModelPicker.vue';
 import { useMessages } from '../composables/useMessages';
 import { useSettings } from '../composables/useSettings';
 type ModelOption = {
@@ -383,10 +302,9 @@ const messageValue = computed({
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const modelDropdownRef = ref<HTMLElement | null>(null);
-const modelSearchQuery = ref('');
 const acceptMime = 'image/png,image/jpeg,image/gif,image/webp';
 
-const { enterToSend, suppressAutoWindows, theme } = useSettings();
+const { enterToSend, suppressAutoWindows } = useSettings();
 
 // --- Input history navigation ---
 const { roots: messageRoots, getTextContent } = useMessages();
@@ -614,9 +532,7 @@ function openModelPicker() {
 }
 
 function handleModelDropdownOpenChange(open: boolean) {
-  if (open) {
-    modelSearchQuery.value = '';
-  } else {
+  if (!open) {
     nextTick(() => {
       textareaRef.value?.focus();
     });
@@ -771,32 +687,6 @@ const modelValue = computed({
   set: (value) => emit('update:selected-model', value),
 });
 
-function findAgent(id: unknown): AgentOption | undefined {
-  if (id == null) return undefined;
-  return (props.agentOptions ?? []).find((a) => a.id === id);
-}
-
-function resolveAgentStyle(name?: string, explicitColor?: string) {
-  const normalizedName = name?.toLowerCase();
-  if (normalizedName === 'build') {
-    return { color: theme.value === 'light' ? '#2563eb' : '#60a5fa' };
-  }
-  if (normalizedName === 'plan') {
-    return { color: theme.value === 'light' ? '#b45309' : '#f59e0b' };
-  }
-  const color = explicitColor || props.resolveAgentColor?.(name);
-  return color ? { color } : undefined;
-}
-
-function agentValueStyle(id: unknown) {
-  const agent = findAgent(id);
-  return resolveAgentStyle(agent?.id, agent?.color);
-}
-
-function agentOptionNameStyle(agent: AgentOption) {
-  return resolveAgentStyle(agent.id, agent.color);
-}
-
 function findModelOption(id: unknown): ModelOption | undefined {
   if (id == null) return undefined;
   return (props.modelOptions ?? []).find((m) => m.id === id);
@@ -833,56 +723,12 @@ function thinkingValueStyle(key: unknown) {
   return { color: '#f59e0b' };
 }
 
-const groupedModelOptions = computed(() => {
-  const grouped = new Map<string, { providerID: string; label: string; models: ModelOption[] }>();
-  const models = (props.modelOptions ?? []).map((model) => ({
-    ...model,
-    displayName: model.displayName || model.label,
-  }));
-  models.forEach((model) => {
-    const providerID = model.providerID?.trim() || 'unknown';
-    const providerLabel = model.providerLabel?.trim() || providerID;
-    const existing = grouped.get(providerID);
-    if (existing) {
-      existing.models.push(model);
-      return;
-    }
-    grouped.set(providerID, {
-      providerID,
-      label: providerLabel,
-      models: [model],
-    });
-  });
-  return Array.from(grouped.values());
-});
-
-function matchesQuery(query: string, ...fields: (string | undefined)[]) {
-  const terms = query.split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return false;
-  return terms.every((term) => fields.some((field) => field?.toLowerCase().includes(term)));
-}
-
-const filteredGroupedModelOptions = computed(() => {
-  const query = modelSearchQuery.value.trim().toLowerCase();
-  if (!query) return groupedModelOptions.value;
-  return groupedModelOptions.value
-    .map((group) => {
-      const models = group.models.filter((model) =>
-        matchesQuery(query, model.displayName, model.modelID, model.providerID, group.label),
-      );
-      if (models.length === 0) return null;
-      return { ...group, models };
-    })
-    .filter((group): group is NonNullable<typeof group> => group !== null);
-});
-
 function focus() {
   textareaRef.value?.focus();
 }
 
 function reset() {
   historyOpen.value = false;
-  modelSearchQuery.value = '';
 }
 
 defineExpose({ focus, reset });
@@ -927,7 +773,7 @@ defineExpose({ focus, reset });
   align-items: center;
   gap: 4px;
   padding: 4px 8px 8px;
-  border-top: 1px solid rgba(51, 65, 85, 0.35);
+  border-top: 1px solid #2b2b2b;
   flex: 0 0 auto;
 }
 
@@ -964,7 +810,7 @@ defineExpose({ focus, reset });
   width: 100%;
   background: transparent;
   color: #94a3b8;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: 8px;
   padding: 4px 8px;
   font-size: 11px;
@@ -973,12 +819,11 @@ defineExpose({ focus, reset });
   box-sizing: border-box;
   transition:
     background 0.15s,
-    border-color 0.15s,
     color 0.15s;
 }
 
 :deep(.input-control):hover:not(:disabled) {
-  background: rgba(51, 65, 85, 0.35);
+  background: rgba(255, 255, 255, 0.08);
   color: #e2e8f0;
 }
 
@@ -993,10 +838,6 @@ defineExpose({ focus, reset });
 :deep(.input-dropdown-popup) {
   max-height: 280px;
   outline: none;
-}
-
-:deep(.input-dropdown-popup:has(.model-picker)) {
-  overflow: hidden;
 }
 
 .dropdown-list {
@@ -1017,89 +858,6 @@ defineExpose({ focus, reset });
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.agent-dropdown-name {
-  font-size: 12px;
-  color: #e2e8f0;
-  line-height: 1.2;
-}
-
-.model-button-label {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  line-height: 1.15;
-  text-align: left;
-  align-self: flex-start;
-}
-
-.model-button-provider {
-  position: fixed;
-  font-size: 9px;
-  color: #94a3b8;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  transform: translate(-3px, -11px);
-}
-
-.model-button-name {
-  font-size: 12px;
-  color: #e2e8f0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.model-picker {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(280px - 12px);
-  overflow: hidden;
-  margin: -6px;
-  padding: 6px;
-}
-
-.model-picker-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.model-search {
-  flex: 0 0 auto;
-  padding: 0 0 4px;
-}
-
-.model-search :deep(.ui-dropdown-search-input) {
-  border-radius: 6px;
-  font-size: 11px;
-  font-family: inherit;
-  padding: 4px 6px;
-}
-
-.model-dropdown-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  min-width: 0;
-}
-
-.model-dropdown-name {
-  font-size: 12px;
-  color: #e2e8f0;
-  line-height: 1.2;
-}
-
-.model-dropdown-path {
-  font-size: 10px;
-  color: #94a3b8;
-  line-height: 1.2;
 }
 
 .input-textarea:disabled {
@@ -1138,7 +896,7 @@ defineExpose({ focus, reset });
   gap: 6px;
   width: 100%;
   padding: 6px 8px 8px;
-  border-top: 1px solid #1e293b;
+  border-top: 1px solid #2b2b2b;
   box-sizing: border-box;
   max-height: 45%;
   overflow: auto;
@@ -1154,8 +912,8 @@ defineExpose({ focus, reset });
   gap: 8px;
   padding: 6px 8px;
   border-radius: 8px;
-  border: 1px solid #1e293b;
-  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid #2b2b2b;
+  background: #181818;
   box-sizing: border-box;
 }
 
@@ -1163,9 +921,9 @@ defineExpose({ focus, reset });
   width: 36px;
   height: 36px;
   border-radius: 6px;
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   object-fit: cover;
-  background: #0b1320;
+  background: #1f1f1f;
 }
 
 .attachment-thumb.clickable {
@@ -1194,9 +952,9 @@ defineExpose({ focus, reset });
 }
 
 .attachment-remove {
-  background: #1e293b;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: #252526;
+  color: #cccccc;
+  border: 1px solid #2b2b2b;
   border-radius: 6px;
   padding: 4px;
   font-size: 10px;
@@ -1224,8 +982,8 @@ defineExpose({ focus, reset });
 }
 
 :deep(.command-popup) .ui-dropdown-item[aria-selected='true'] {
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: #2b2b2b;
+  border: 1px solid #3c3c3c;
 }
 
 .command-dropdown-item {
@@ -1264,17 +1022,17 @@ defineExpose({ focus, reset });
   max-height: 50vh;
   overflow: auto;
   /* Match input panel background */
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid #334155;
+  background: #1f1f1f;
+  border: 1px solid #2b2b2b;
   outline: none;
-  box-shadow: 0 -8px 24px rgba(2, 6, 23, 0.5);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
   box-sizing: border-box;
 }
 
 :deep(.history-popup) .ui-dropdown-item {
   /* Match thread-block style */
-  background: rgba(2, 6, 23, 0.6);
-  border: 1px solid #1e293b;
+  background: #181818;
+  border: 1px solid #2b2b2b;
   border-radius: 10px;
   padding: 8px;
 }
@@ -1285,12 +1043,12 @@ defineExpose({ focus, reset });
 
 :deep(.history-popup) .ui-dropdown-item[aria-selected='true'],
 :deep(.history-popup) .ui-dropdown-item:hover {
-  background: rgba(30, 41, 59, 0.7);
-  border-color: #475569;
+  background: #2b2b2b;
+  border-color: #3c3c3c;
 }
 
 .history-item {
-  border-left: 3px solid #334155;
+  border-left: 3px solid #2b2b2b;
   padding-left: 8px;
   flex: 1 1 auto;
   min-width: 0;

@@ -149,9 +149,9 @@ function statusIcon(status: string) {
 }
 
 .todo-group {
-  border: 1px solid rgba(71, 85, 105, 0.55);
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.6);
+  background: #1f1f1f;
 }
 
 .todo-group-header {

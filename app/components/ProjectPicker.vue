@@ -558,7 +558,7 @@ function cleanDirectoryPath(p: string): string {
 }
 
 .modal-backdrop::backdrop {
-  background: rgba(2, 6, 23, 0.65);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .modal {
@@ -567,8 +567,8 @@ function cleanDirectoryPath(p: string): string {
   display: flex;
   flex-direction: column;
   padding: 12px;
-  background: rgba(15, 23, 42, 0.98);
-  border: 1px solid #334155;
+  background: #1f1f1f;
+  border: 1px solid #2b2b2b;
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(2, 6, 23, 0.45);
   color: #e2e8f0;
@@ -605,9 +605,9 @@ function cleanDirectoryPath(p: string): string {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #0b1320;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: #252526;
+  color: #cccccc;
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
   padding: 6px 10px;
   font-size: 12px;
@@ -616,15 +616,15 @@ function cleanDirectoryPath(p: string): string {
 }
 
 .browse-button:hover {
-  background: #1e293b;
+  background: #2b2b2b;
 }
 
 .path-input {
   flex: 1;
   min-width: 0;
-  background: #0b1320;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: #252526;
+  color: #cccccc;
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
   padding: 6px 8px;
   font-size: 12px;
@@ -683,15 +683,15 @@ function cleanDirectoryPath(p: string): string {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   border-radius: 6px;
   background: transparent;
-  color: #94a3b8;
+  color: #9d9d9d;
   cursor: pointer;
 }
 
 .modal-close-button:hover {
-  background: #1e293b;
-  color: #e2e8f0;
+  background: #2b2b2b;
+  color: #cccccc;
 }
 </style>

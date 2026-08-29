@@ -60,7 +60,7 @@ const hasTarget = computed(() => {
 }
 
 .ib-target-model {
-  color: #f8fafc;
+  color: #cccccc;
 }
 
 .ib-target-provider {

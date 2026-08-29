@@ -286,9 +286,9 @@ function emitReply(reply: PermissionReply) {
 .permission-button {
   border-radius: 8px;
   padding: 6px 10px;
-  border: 1px solid #334155;
-  background: #0f172a;
-  color: #e2e8f0;
+  border: 1px solid #2b2b2b;
+  background: #1f1f1f;
+  color: #cccccc;
   font-size: 11px;
   cursor: pointer;
 }

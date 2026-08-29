@@ -14,6 +14,32 @@
         <Icon :icon="tab.icon" :width="21" :height="21" />
       </button>
       <div class="activity-spacer"></div>
+      <Dropdown
+        v-model:open="tipsMenuOpen"
+        placement="top"
+        :popup-style="{ width: '280px', marginLeft: '44px' }"
+      >
+        <template #trigger>
+          <button
+            type="button"
+            class="activity-button activity-utility-button"
+            aria-label="Tips"
+            title="Tips"
+            @click.stop="tipsMenuOpen = !tipsMenuOpen"
+          >
+            <Icon icon="lucide:lightbulb" :width="21" :height="21" />
+          </button>
+        </template>
+        <div class="activity-tips" @click.stop>
+          <p>
+            Hold <kbd>Shift</kbd> to show delete for a worktree, branch, or session.
+          </p>
+          <p>
+            Feedback? Discord:
+            <span class="activity-tips-handle">dreamingasfish</span>
+          </p>
+        </div>
+      </Dropdown>
       <a
         href="https://github.com/hex-mind/hex-mind.github.io"
         target="_blank"
@@ -75,6 +101,14 @@
         @select-session="(session) => emit('select-bookmark', session)"
         @remove-bookmark="(sessionId) => emit('remove-bookmark', sessionId)"
       />
+      <BookmarksList
+        v-else-if="activeTab === 'recent'"
+        :sessions="recentSessions"
+        icon="lucide:history"
+        empty-text="No recent sessions."
+        hide-remove
+        @select-session="(session) => emit('select-bookmark', session)"
+      />
       <div v-else-if="activeTab === 'search'" class="search-panel">
         <label class="search-field">
           <span class="sr-only">Search</span>
@@ -84,7 +118,7 @@
       </div>
       <TreeView
         v-else
-        :panel-mode="activeTab"
+        :panel-mode="activeTab === 'git' ? 'git' : 'files'"
         :root-nodes="treeNodes"
         :expanded-paths="expandedTreePaths"
         :selected-path="selectedTreePath"
@@ -143,6 +177,7 @@ const props = defineProps<{
   activeTab: SidePanelTab;
   todoSessions: TodoPanelSession[];
   bookmarkedSessions: BookmarkedSessionView[];
+  recentSessions: BookmarkedSessionView[];
   treeNodes: TreeNode[];
   expandedTreePaths: string[];
   selectedTreePath?: string;
@@ -172,9 +207,10 @@ const emit = defineEmits<{
   (event: 'logout'): void;
 }>();
 
-export type SidePanelTab = 'files' | 'git' | 'search' | 'todo' | 'bookmarks';
+export type SidePanelTab = 'recent' | 'files' | 'git' | 'search' | 'todo' | 'bookmarks';
 
 const tabs: { id: SidePanelTab; label: string; icon: string }[] = [
+  { id: 'recent', label: 'Recent', icon: 'lucide:history' },
   { id: 'files', label: 'Files', icon: 'lucide:files' },
   { id: 'git', label: 'Git', icon: 'lucide:git-branch' },
   { id: 'search', label: 'Search', icon: 'lucide:search' },
@@ -186,6 +222,7 @@ const activeTabLabel = computed(
   () => tabs.find((tab) => tab.id === props.activeTab)?.label.toUpperCase() ?? '',
 );
 const settingsMenuOpen = ref(false);
+const tipsMenuOpen = ref(false);
 
 function onSettingsMenuSelect(value: unknown) {
   if (value === 'settings') emit('open-settings');
@@ -197,6 +234,7 @@ const {
   activeTab,
   todoSessions,
   bookmarkedSessions,
+  recentSessions,
   treeNodes,
   expandedTreePaths,
   selectedTreePath,
@@ -275,12 +313,50 @@ const {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #e2e8f0;
+  color: #cccccc;
 }
 
-.activity-button:hover {
+.activity-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 10px;
+  color: #cccccc;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.activity-tips p {
+  margin: 0;
+}
+
+.activity-tips kbd {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid #3c3c3c;
+  border-radius: 4px;
+  background: #2b2b2b;
+  font-size: 11px;
+  font-family: inherit;
+  color: #e6e6e6;
+}
+
+.activity-tips-handle {
+  color: #5ba3f5;
+  font-weight: 600;
+  user-select: all;
+}
+
+.activity-button:hover,
+.activity-bar :deep(.ui-dropdown.is-open) .activity-button {
   background: rgba(255, 255, 255, 0.08);
   color: #d7d7d7;
+}
+
+.activity-button:focus,
+.activity-button:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .activity-button.is-active {
@@ -339,7 +415,7 @@ const {
 
 .side-close:hover {
   color: #ffffff;
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .side-panel.is-collapsed {
@@ -361,14 +437,14 @@ const {
   align-items: center;
   gap: 6px;
   padding: 0 7px;
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
-  background: #0b1320;
-  color: #94a3b8;
+  background: #181818;
+  color: #9d9d9d;
 }
 
 .search-field:focus-within {
-  border-color: #60a5fa;
+  border-color: #0078d4;
 }
 
 .search-field input {

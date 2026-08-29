@@ -101,16 +101,16 @@ defineExpose({
   gap: 4px;
   padding: 8px;
   border-radius: 8px;
-  border: 1px solid #334155;
-  background: rgba(15, 23, 42, 0.98);
-  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.5);
+  border: 1px solid #2b2b2b;
+  background: #1f1f1f;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
 .file-ref-popup-item {
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   border-radius: 6px;
-  background: rgba(30, 41, 59, 0.7);
-  color: #cbd5e1;
+  background: #252526;
+  color: #cccccc;
   text-align: left;
   font-size: 12px;
   line-height: 1.3;

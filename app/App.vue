@@ -47,6 +47,7 @@
             :active-tab="sidePanelActiveTab"
             :todo-sessions="todoPanelSessions"
             :bookmarked-sessions="bookmarkedSessionItems"
+            :recent-sessions="recentSessionItems"
             :tree-nodes="treeNodes"
             :expanded-tree-paths="expandedTreePaths"
             :selected-tree-path="selectedTreePath"
@@ -102,6 +103,8 @@
                     :resolve-model-meta="resolveModelMetaForPath"
                     :model-options="modelOptions"
                     :selected-model="selectedModel"
+                    :agent-options="agentOptions"
+                    :selected-mode="selectedMode"
                     :compute-context-percent="computeContextPercent"
                     :session-revert="sessionRevert"
                     @message-rendered="handleOutputPanelMessageRendered"
@@ -341,6 +344,7 @@ import {
 import * as opencodeApi from './utils/opencode';
 import { opencodeTheme, resolveTheme, resolveAgentColor } from './utils/theme';
 import { splitFileContentDirectoryAndPath } from './utils/path';
+import { formatSessionTitle } from './utils/formatters';
 import { pickLocalDirectory } from './utils/pickLocalDirectory';
 import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
@@ -1290,6 +1294,42 @@ const bookmarkedSessionItems = computed(() =>
   }),
 );
 
+const recentSessionItems = computed(() => {
+  const items: Array<{
+    sessionId: string;
+    projectId: string;
+    worktree: string;
+    directory: string;
+    title: string;
+    branch?: string;
+    projectName?: string;
+    available: boolean;
+    isSelected: boolean;
+    timeUpdated: number;
+  }> = [];
+  for (const worktree of topPanelTreeData.value) {
+    for (const sandbox of worktree.sandboxes) {
+      for (const session of sandbox.sessions) {
+        if (session.archivedAt) continue;
+        items.push({
+          sessionId: session.id,
+          projectId: worktree.projectId || selectedProjectId.value,
+          worktree: worktree.directory,
+          directory: sandbox.directory,
+          title: formatSessionTitle(session.title, session.slug, session.id),
+          branch: sandbox.branch,
+          projectName: worktree.name,
+          available: true,
+          isSelected: session.id === selectedSessionId.value,
+          timeUpdated: session.timeUpdated ?? session.timeCreated ?? 0,
+        });
+      }
+    }
+  }
+  items.sort((a, b) => b.timeUpdated - a.timeUpdated);
+  return items.slice(0, 40).map(({ timeUpdated: _timeUpdated, ...session }) => session);
+});
+
 function toggleCurrentSessionBookmark() {
   const sessionId = selectedSessionId.value.trim();
   if (!sessionId) return;
@@ -1394,7 +1434,7 @@ function replaceHomePrefix(path: string) {
 }
 
 function sessionLabel(session: SessionInfo) {
-  return session.title || session.slug || session.id;
+  return formatSessionTitle(session.title, session.slug, session.id);
 }
 
 function getSelectedWorktreeDirectory() {
@@ -1473,6 +1513,13 @@ const resolvedTheme = computed(() => resolveTheme(opencodeTheme, uiTheme.value))
 const visibleAgents = computed(() => agents.value.filter((a) => !a.hidden));
 
 function resolveAgentColorForName(agentName?: string) {
+  const normalized = agentName?.trim().toLowerCase();
+  if (normalized === 'build') {
+    return uiTheme.value === 'light' ? '#2563eb' : '#60a5fa';
+  }
+  if (normalized === 'plan') {
+    return uiTheme.value === 'light' ? '#b45309' : '#f59e0b';
+  }
   const agent = agentName ? agents.value.find((a) => a.name === agentName) : undefined;
   return resolveAgentColor(agentName ?? '', agent?.color, visibleAgents.value, resolvedTheme.value);
 }
@@ -1682,7 +1729,15 @@ function persistInputPanelCollapsed(value: boolean) {
 
 function readSidePanelTab(): SidePanelTab {
   const raw = storageGet(StorageKeys.state.sidePanelTab);
-  if (raw === 'git' || raw === 'search' || raw === 'todo' || raw === 'bookmarks') return raw;
+  if (
+    raw === 'recent' ||
+    raw === 'git' ||
+    raw === 'search' ||
+    raw === 'todo' ||
+    raw === 'bookmarks'
+  ) {
+    return raw;
+  }
   return 'files';
 }
 
@@ -2246,18 +2301,22 @@ async function deleteWorktree(directory: string) {
   if (!ensureConnectionReady('Deleting worktree')) return;
   worktreeError.value = '';
   if (!directory) return;
-  if (!projectDirectory.value) {
+  const targetDir = directory.replace(/\/+$/, '');
+  const owner = Object.values(serverState.projects).find((project) => {
+    const sandboxes = project.sandboxes ?? {};
+    return Object.keys(sandboxes).some((path) => path.replace(/\/+$/, '') === targetDir);
+  });
+  const baseDir = (owner?.worktree || projectDirectory.value || '').replace(/\/+$/, '');
+  if (!baseDir) {
     worktreeError.value = 'Worktree base directory not set.';
     return;
   }
-  const baseDir = projectDirectory.value.replace(/\/+$/, '');
-  const targetDir = directory.replace(/\/+$/, '');
-  if (baseDir && targetDir === baseDir) return;
+  if (targetDir === baseDir) return;
   try {
     await openCodeApi.deleteWorktree({
-      directory: projectDirectory.value,
+      directory: baseDir,
       targetDirectory: targetDir,
-      projectId: selectedProjectId.value,
+      projectId: owner?.id || selectedProjectId.value,
     });
     if (normalizeDirectory(activeDirectory.value) === targetDir) {
       const projectId = selectedProjectId.value.trim();
@@ -2354,15 +2413,25 @@ function handleNotificationSessionSelect() {
   void switchSessionSelection(entry.projectId.trim(), entry.sessionId.trim());
 }
 
-async function deleteSession(sessionId: string) {
+async function deleteSession(
+  payload: string | { sessionId: string; directory?: string; projectId?: string },
+) {
   if (!ensureConnectionReady('Deleting session')) return;
   sessionError.value = '';
+  const sessionId = typeof payload === 'string' ? payload : payload.sessionId;
+  const directory =
+    typeof payload === 'string'
+      ? activeDirectory.value.trim()
+      : (payload.directory || activeDirectory.value).trim();
+  const projectId =
+    typeof payload === 'string'
+      ? selectedProjectId.value
+      : (payload.projectId || selectedProjectId.value);
   if (!sessionId) return;
   try {
-    const directory = activeDirectory.value.trim();
     await openCodeApi.deleteSession({
       sessionId,
-      projectId: selectedProjectId.value,
+      projectId,
       directory: directory || undefined,
     });
   } catch (error) {
@@ -3750,8 +3819,8 @@ function handleGlobalKeydown(event: KeyboardEvent) {
     }
   }
 
-  // Ctrl-;: new chat
-  if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === ';') {
+  // Cmd/Ctrl-J: new session
+  if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'j') {
     event.preventDefault();
     createNewSession();
     return;
@@ -4956,6 +5025,7 @@ async function handleEditMessage(payload: {
   messageId: string;
   text: string;
   model: string;
+  agent: string;
 }) {
   if (!ensureConnectionReady('Editing message')) return;
   if (!payload.text.trim()) return;
@@ -4970,6 +5040,9 @@ async function handleEditMessage(payload: {
       directory: directory || undefined,
     });
     messageInput.value = payload.text;
+    if (payload.agent && payload.agent !== selectedMode.value) {
+      handleSelectedModeUpdate(payload.agent);
+    }
     if (payload.model && payload.model !== selectedModel.value) {
       applyModelVariantSelection(payload.model, undefined);
     }
@@ -5593,11 +5666,11 @@ onBeforeUnmount(() => {
 .app-loading-card {
   position: relative;
   width: min(420px, 92vw);
-  border: 1px solid #334155;
-  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #2b2b2b;
+  background: #1f1f1f;
   border-radius: 14px;
   padding: 20px;
-  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.5);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
   text-align: center;
 }
 
@@ -5637,9 +5710,9 @@ onBeforeUnmount(() => {
 
 .app-loading-retry {
   margin-top: 14px;
-  border: 1px solid #334155;
-  background: #1e293b;
-  color: #e2e8f0;
+  border: 1px solid #2b2b2b;
+  background: #252526;
+  color: #cccccc;
   border-radius: 8px;
   padding: 6px 12px;
   font-size: 12px;
@@ -5647,7 +5720,7 @@ onBeforeUnmount(() => {
 }
 
 .app-loading-retry:hover {
-  background: #334155;
+  background: #2b2b2b;
 }
 
 .app-loading-actions {
@@ -5663,8 +5736,8 @@ onBeforeUnmount(() => {
 }
 
 .app-loading-abort:hover {
-  background: #1e293b;
-  color: #e2e8f0;
+  background: #252526;
+  color: #cccccc;
 }
 
 .app-login-form {
@@ -5683,8 +5756,8 @@ onBeforeUnmount(() => {
 .app-login-input {
   width: 100%;
   padding: 8px 12px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: #252526;
+  border: 1px solid #2b2b2b;
   border-radius: 6px;
   color: #e2e8f0;
   font-size: 13px;
@@ -5698,7 +5771,7 @@ onBeforeUnmount(() => {
 .app-login-input:focus {
   outline: none;
   border-color: #475569;
-  background: #0f172a;
+  background: #1f1f1f;
 }
 
 .app-login-input:disabled {

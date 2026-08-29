@@ -15,21 +15,29 @@
           ref="editTextareaRef"
           v-model="editText"
           class="ib-user-editor-input"
+          rows="1"
           aria-label="Edit prompt"
-          @keydown.meta.enter.prevent="submitEdit(root)"
-          @keydown.ctrl.enter.prevent="submitEdit(root)"
-          @keydown.esc.prevent="cancelEdit"
+          @input="syncEditTextareaHeight"
+          @keydown="handleEditKeydown(root, $event)"
         ></textarea>
         <div class="ib-user-editor-footer">
-          <select
-            v-model="editModel"
-            class="ib-user-editor-model"
-            aria-label="Model for edited prompt"
-          >
-            <option v-for="model in modelOptions" :key="model.id" :value="model.id">
-              {{ model.providerLabel || model.providerID || 'Model' }} · {{ model.displayName }}
-            </option>
-          </select>
+          <div class="ib-user-editor-selects">
+            <AgentPicker
+              v-model="editMode"
+              class="ib-user-editor-agent"
+              :options="agentOptions"
+              placement="bottom"
+              title="Agent (Tab)"
+              :resolve-agent-color="resolveAgentColor"
+            />
+            <ModelPicker
+              v-model="editModel"
+              class="ib-user-editor-picker"
+              :options="modelOptions"
+              placement="bottom"
+              title="Model"
+            />
+          </div>
           <div class="ib-user-editor-actions">
             <button type="button" class="ib-user-editor-button cancel" @click="cancelEdit">
               Cancel
@@ -156,8 +164,10 @@
 
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed, nextTick, onBeforeUnmount, ref, Transition } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch, Transition } from 'vue';
+import AgentPicker, { type AgentOption } from './AgentPicker.vue';
 import MessageViewer from './MessageViewer.vue';
+import ModelPicker from './ModelPicker.vue';
 import ThreadFooter from './ThreadFooter.vue';
 import ThreadTarget from './ThreadTarget.vue';
 import { useMessages } from '../composables/useMessages';
@@ -189,6 +199,8 @@ const props = defineProps<{
     providerLabel?: string;
   }>;
   selectedModel: string;
+  agentOptions: AgentOption[];
+  selectedMode: string;
   resolveAgentColor?: (agent?: string) => string;
   resolveModelMeta?: (modelPath?: string) => ModelMeta | undefined;
   computeContextPercent?: (
@@ -214,6 +226,7 @@ const emit = defineEmits<{
       messageId: string;
       text: string;
       model: string;
+      agent: string;
     },
   ): void;
   (event: 'revert-message', payload: { sessionId: string; messageId: string }): void;
@@ -230,6 +243,7 @@ const questionCopied = ref(false);
 const isEditing = ref(false);
 const editText = ref('');
 const editModel = ref('');
+const editMode = ref('');
 const editTextareaRef = ref<HTMLTextAreaElement | null>(null);
 let copiedResetTimer: number | undefined;
 let questionCopiedResetTimer: number | undefined;
@@ -476,12 +490,66 @@ function confirmRevert(root: MessageInfo) {
   emit('revert-message', { sessionId: root.sessionID, messageId: root.id });
 }
 
+function syncEditTextareaHeight() {
+  const textarea = editTextareaRef.value;
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
+watch(editText, () => {
+  if (!isEditing.value) return;
+  nextTick(syncEditTextareaHeight);
+});
+
+function resolveEditMode(root: MessageInfo) {
+  const fromThread = (root.agent ?? getFinalAnswer(root)?.agent)?.trim();
+  if (fromThread && props.agentOptions.some((agent) => agent.id === fromThread)) {
+    return fromThread;
+  }
+  return props.selectedMode;
+}
+
+function cycleEditMode(direction: 'next' | 'prev') {
+  const options = props.agentOptions.map((agent) => agent.id);
+  if (options.length === 0) return false;
+  const current = editMode.value || props.selectedMode;
+  const index = options.indexOf(current);
+  const nextIndex =
+    direction === 'next'
+      ? (index < 0 ? 0 : (index + 1) % options.length)
+      : (index < 0 ? options.length - 1 : (index - 1 + options.length) % options.length);
+  const next = options[nextIndex];
+  if (!next) return false;
+  editMode.value = next;
+  return true;
+}
+
+function handleEditKeydown(root: MessageInfo, event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    cancelEdit();
+    return;
+  }
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.altKey) {
+    event.preventDefault();
+    submitEdit(root);
+    return;
+  }
+  if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    if (!cycleEditMode(event.shiftKey ? 'prev' : 'next')) return;
+    event.preventDefault();
+  }
+}
+
 function startEdit(root: MessageInfo) {
   editText.value = getMessageContent(root);
   editModel.value = props.selectedModel;
+  editMode.value = resolveEditMode(root);
   isEditing.value = true;
   nextTick(() => {
     const textarea = editTextareaRef.value;
+    syncEditTextareaHeight();
     textarea?.focus();
     textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
   });
@@ -491,6 +559,7 @@ function cancelEdit() {
   isEditing.value = false;
   editText.value = '';
   editModel.value = '';
+  editMode.value = '';
 }
 
 function submitEdit(root: MessageInfo) {
@@ -502,10 +571,12 @@ function submitEdit(root: MessageInfo) {
     messageId: root.id,
     text,
     model: editModel.value || props.selectedModel,
+    agent: editMode.value || props.selectedMode,
   });
   isEditing.value = false;
   editText.value = '';
   editModel.value = '';
+  editMode.value = '';
 }
 
 async function copyQuestion(root: MessageInfo) {
@@ -667,8 +738,8 @@ function getThreadUserRenderKey(root: MessageInfo): string {
   max-width: min(85%, 760px);
   font-size: 13px;
   padding: 8px 10px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: #252526;
+  border: 1px solid #2b2b2b;
   border-radius: 12px 12px 3px 12px;
 }
 
@@ -697,28 +768,31 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 }
 
 .ib-user-action:hover {
-  background: rgba(51, 65, 85, 0.45);
+  background: rgba(255, 255, 255, 0.08);
   color: #e2e8f0;
 }
 
 .ib-user-editor {
   width: 100%;
   padding: 10px;
-  border: 1px solid #3b82f6;
+  border: 1px solid #2b2b2b;
   border-radius: 12px;
-  background: #0f172a;
+  background: #1f1f1f;
   box-sizing: border-box;
 }
 
 .ib-user-editor-input {
   width: 100%;
-  min-height: 72px;
-  padding: 2px;
+  min-height: 1.5em;
+  max-height: min(40vh, 320px);
+  padding: 2px 0;
   border: 0;
   outline: 0;
-  resize: vertical;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: transparent;
-  color: #e2e8f0;
+  color: #cccccc;
   font: inherit;
   font-size: 13px;
   line-height: 1.5;
@@ -733,18 +807,21 @@ function getThreadUserRenderKey(root: MessageInfo): string {
   margin-top: 8px;
 }
 
-.ib-user-editor-model {
+.ib-user-editor-selects {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
-  max-width: min(300px, 48%);
-  height: 30px;
-  padding: 0 28px 0 9px;
-  border: 1px solid #334155;
-  border-radius: 7px;
-  background: #111827;
-  color: #cbd5e1;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
+  flex: 1 1 auto;
+}
+
+.ib-user-editor-agent {
+  flex: 0 0 auto;
+}
+
+.ib-user-editor-picker {
+  min-width: 0;
+  max-width: min(280px, 55%);
 }
 
 .ib-user-editor-actions {
@@ -756,28 +833,28 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 .ib-user-editor-button {
   min-width: 68px;
   padding: 6px 12px;
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   border-radius: 999px;
   background: transparent;
-  color: #cbd5e1;
+  color: #cccccc;
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
 .ib-user-editor-button:hover:not(:disabled) {
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
 }
 
 .ib-user-editor-button.send {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: #0078d4;
+  background: #0078d4;
   color: #ffffff;
 }
 
 .ib-user-editor-button.send:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: #1a86e0;
 }
 
 .ib-user-editor-button:disabled {
@@ -791,7 +868,8 @@ function getThreadUserRenderKey(root: MessageInfo): string {
     flex-direction: column;
   }
 
-  .ib-user-editor-model {
+  .ib-user-editor-picker,
+  .ib-user-editor-agent {
     max-width: none;
     width: 100%;
   }
@@ -828,10 +906,10 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 }
 
 .ib-action {
-  border: 1px solid rgba(148, 163, 184, 0.65);
+  border: 1px solid #2b2b2b;
   border-radius: 6px;
-  background: rgba(15, 23, 42, 0.75);
-  color: #bfdbfe;
+  background: #1f1f1f;
+  color: #cccccc;
   font-size: 10px;
   line-height: 1;
   padding: 3px 7px;
@@ -840,17 +918,17 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 }
 
 .ib-action:hover {
-  background: rgba(30, 41, 59, 0.92);
+  background: #2b2b2b;
 }
 
 .ib-action-undo {
-  border-color: rgba(96, 165, 250, 0.7);
-  background: rgba(30, 58, 138, 0.35);
-  color: #bfdbfe;
+  border-color: #3c3c3c;
+  background: #252526;
+  color: #cccccc;
 }
 
 .ib-action-undo:hover {
-  background: rgba(30, 64, 175, 0.55);
+  background: #2b2b2b;
 }
 
 .ib-error-bar {
@@ -901,9 +979,9 @@ function getThreadUserRenderKey(root: MessageInfo): string {
   width: 100%;
   max-height: 180px;
   border-radius: 8px;
-  border: 1px solid #1e293b;
+  border: 1px solid #2b2b2b;
   object-fit: cover;
-  background: #0b1320;
+  background: #1f1f1f;
 }
 
 .output-entry-attachment.clickable {

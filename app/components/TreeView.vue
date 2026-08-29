@@ -1037,16 +1037,16 @@ function onRowDoubleClick(row: { node: TreeNode }) {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border: 1px solid var(--color-slate-700);
+  border: 0;
   border-radius: 6px;
   padding: 0;
-  background: var(--color-slate-950);
+  background: transparent;
   color: var(--color-slate-400);
   cursor: pointer;
 }
 
 .tree-branch-action-btn:hover {
-  background: var(--color-slate-800);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tree-branch-merge-btn {
@@ -1071,7 +1071,7 @@ function onRowDoubleClick(row: { node: TreeNode }) {
 
 .tree-branch-fetch-btn:hover {
   color: var(--color-slate-300);
-  background: var(--color-slate-800);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tree-branch-action-spacer {
@@ -1219,7 +1219,7 @@ function onRowDoubleClick(row: { node: TreeNode }) {
 .tree-tab {
   flex: 1;
   border: 0;
-  background: rgba(15, 23, 42, 0.7);
+  background: #1f1f1f;
   color: #94a3b8;
   font-size: 11px;
   font-weight: 600;
@@ -1548,7 +1548,7 @@ function onRowDoubleClick(row: { node: TreeNode }) {
 }
 
 .tree-statusbar-btn:hover {
-  background: rgba(51, 65, 85, 0.55);
-  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cccccc;
 }
 </style>

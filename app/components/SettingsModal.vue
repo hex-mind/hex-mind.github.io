@@ -112,7 +112,7 @@ watch(
 }
 
 .modal-backdrop::backdrop {
-  background: rgba(2, 6, 23, 0.65);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .modal {
@@ -121,11 +121,11 @@ watch(
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.98);
-  border: 1px solid #334155;
+  background: #1f1f1f;
+  border: 1px solid #2b2b2b;
   border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.45);
-  color: #e2e8f0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color: #cccccc;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
@@ -147,16 +147,16 @@ watch(
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   border-radius: 6px;
   background: transparent;
-  color: #94a3b8;
+  color: #9d9d9d;
   cursor: pointer;
 }
 
 .modal-close-button:hover {
-  background: #1e293b;
-  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cccccc;
 }
 
 .modal-body {
@@ -171,15 +171,15 @@ watch(
   justify-content: space-between;
   gap: 16px;
   padding: 10px 12px;
-  border: 1px solid #1e293b;
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.45);
+  background: #252526;
 }
 
 .setting-label {
   font-size: 13px;
   font-weight: 500;
-  color: #e2e8f0;
+  color: #cccccc;
 }
 
 .theme-options {
@@ -187,9 +187,9 @@ watch(
   display: inline-flex;
   gap: 3px;
   padding: 3px;
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
-  background: #0b1320;
+  background: #1f1f1f;
 }
 
 .theme-option {
@@ -200,19 +200,19 @@ watch(
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: #94a3b8;
+  color: #9d9d9d;
   font: inherit;
   font-size: 11px;
   cursor: pointer;
 }
 
 .theme-option:hover {
-  color: #e2e8f0;
+  color: #cccccc;
 }
 
 .theme-option.is-active {
-  background: #1e293b;
-  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f3f3f3;
 }
 
 .toggle-switch {
@@ -233,7 +233,7 @@ watch(
 .toggle-track {
   width: 36px;
   height: 20px;
-  background: #334155;
+  background: #3c3c3c;
   border-radius: 10px;
   position: relative;
   transition: background 0.2s;
@@ -254,7 +254,7 @@ watch(
 }
 
 .toggle-input:checked + .toggle-track {
-  background: #3b82f6;
+  background: #0078d4;
 }
 
 .toggle-input:checked + .toggle-track::after {

@@ -1,6 +1,6 @@
 <template>
   <div class="bookmarks-body">
-    <div v-if="sessions.length === 0" class="bookmarks-empty">No saved sessions.</div>
+    <div v-if="sessions.length === 0" class="bookmarks-empty">{{ emptyText }}</div>
     <ul v-else class="bookmarks-list">
       <li
         v-for="session in sessions"
@@ -15,7 +15,13 @@
           :title="session.available ? session.title : 'Session is no longer available'"
           @click="$emit('select-session', session)"
         >
-          <Icon icon="lucide:bookmark" class="bookmark-item-icon" :width="14" :height="14" />
+          <Icon
+            :icon="icon"
+            class="bookmark-item-icon"
+            :class="{ 'is-filled': icon === 'lucide:bookmark' }"
+            :width="14"
+            :height="14"
+          />
           <span class="bookmark-item-text">
             <span class="bookmark-item-title">{{ session.title }}</span>
             <span v-if="sessionMeta(session)" class="bookmark-item-meta">{{
@@ -24,6 +30,7 @@
           </span>
         </button>
         <button
+          v-if="!hideRemove"
           type="button"
           class="bookmark-item-remove"
           title="Remove saved session"
@@ -51,9 +58,19 @@ export type BookmarkedSessionView = {
   isSelected: boolean;
 };
 
-defineProps<{
-  sessions: BookmarkedSessionView[];
-}>();
+withDefaults(
+  defineProps<{
+    sessions: BookmarkedSessionView[];
+    icon?: string;
+    emptyText?: string;
+    hideRemove?: boolean;
+  }>(),
+  {
+    icon: 'lucide:bookmark',
+    emptyText: 'No saved sessions.',
+    hideRemove: false,
+  },
+);
 
 defineEmits<{
   (event: 'select-session', session: BookmarkedSessionView): void;
@@ -97,14 +114,14 @@ function sessionMeta(session: BookmarkedSessionView) {
   display: flex;
   align-items: stretch;
   gap: 2px;
-  border: 1px solid rgba(71, 85, 105, 0.55);
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.6);
+  background: #1f1f1f;
 }
 
 .bookmark-item.is-selected {
-  border-color: rgba(96, 165, 250, 0.55);
-  background: rgba(37, 99, 235, 0.16);
+  border-color: #3c3c3c;
+  background: #2b2b2b;
 }
 
 .bookmark-item.is-unavailable {
@@ -132,11 +149,15 @@ function sessionMeta(session: BookmarkedSessionView) {
 .bookmark-item-icon {
   flex: 0 0 auto;
   margin-top: 1px;
+  color: #9d9d9d;
+}
+
+.bookmark-item-icon.is-filled {
   color: #fbbf24;
 }
 
-.bookmark-item-icon :deep(svg),
-.bookmark-item-icon :deep(path) {
+.bookmark-item-icon.is-filled :deep(svg),
+.bookmark-item-icon.is-filled :deep(path) {
   fill: currentColor;
 }
 
@@ -150,7 +171,7 @@ function sessionMeta(session: BookmarkedSessionView) {
 .bookmark-item-title {
   font-size: 12px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: #cccccc;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -158,7 +179,7 @@ function sessionMeta(session: BookmarkedSessionView) {
 
 .bookmark-item-meta {
   font-size: 10px;
-  color: #94a3b8;
+  color: #9d9d9d;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

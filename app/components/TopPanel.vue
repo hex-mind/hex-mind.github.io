@@ -43,6 +43,7 @@
           placeholder="Select session"
           title="Select session (Ctrl-G)"
           auto-close
+          :auto-highlight="false"
           :popup-style="{ minWidth: '420px', width: 'min(680px, 90vw)', maxWidth: '90vw' }"
           popup-class="max-lg:left-0! max-lg:w-screen! max-lg:min-w-0! max-lg:max-w-none!"
           @select="onTreeSelect"
@@ -113,9 +114,30 @@
                     v-for="sandbox in worktree.sandboxes"
                     :key="sandbox.directory"
                     class="tree-sandbox"
+                    :class="{
+                      'is-expanded': isSandboxExpanded(worktree.directory, sandbox.directory),
+                    }"
                   >
-                    <div class="tree-sandbox-header">
+                    <div
+                      class="tree-sandbox-header"
+                      @click="toggleSandbox(worktree.directory, sandbox.directory)"
+                    >
                       <div class="tree-header-main">
+                        <button
+                          type="button"
+                          class="tree-expand-button"
+                          :class="{
+                            'is-open': isSandboxExpanded(worktree.directory, sandbox.directory),
+                          }"
+                          :title="
+                            isSandboxExpanded(worktree.directory, sandbox.directory)
+                              ? 'Collapse sessions'
+                              : 'Expand sessions'
+                          "
+                          @click.stop="toggleSandbox(worktree.directory, sandbox.directory)"
+                        >
+                          <Icon icon="lucide:chevron-right" :width="14" :height="14" />
+                        </button>
                         <Icon
                           :icon="
                             worktree.projectId === 'global' ? 'lucide:folder' : 'lucide:git-branch'
@@ -131,8 +153,43 @@
                           }}</small>
                         </div>
                       </div>
-                      <div class="tree-actions">
+                      <div class="tree-actions" @click.stop>
                         <button
+                          v-if="
+                            isShiftPressed &&
+                            sandboxHasArchived(worktree.directory, sandbox.directory)
+                          "
+                          type="button"
+                          class="tree-action-button show-archived"
+                          :class="{
+                            'is-on': isArchivedShown(worktree.directory, sandbox.directory),
+                          }"
+                          title="show archived sessions"
+                          @mousedown.prevent.stop
+                          @click.prevent.stop="
+                            toggleShowArchived(worktree.directory, sandbox.directory)
+                          "
+                        >
+                          <Icon icon="lucide:archive-restore" :width="16" :height="16" />
+                        </button>
+                        <button
+                          v-if="
+                            isShiftPressed &&
+                            canDeleteSandbox(sandbox.directory, worktree.directory) &&
+                            worktree.projectId !== 'global'
+                          "
+                          type="button"
+                          class="tree-action-button danger"
+                          title="Delete worktree"
+                          @mousedown.prevent.stop
+                          @click.prevent.stop="
+                            handleSandboxDelete(sandbox.directory, worktree.directory, close)
+                          "
+                        >
+                          <Icon icon="lucide:trash-2" :width="16" :height="16" />
+                        </button>
+                        <button
+                          v-else-if="!isShiftPressed"
                           type="button"
                           class="tree-action-button new-session"
                           title="New session"
@@ -140,27 +197,17 @@
                             handleCreateSessionIn(worktree.directory, sandbox.directory, close)
                           "
                         >
-                          <Icon icon="lucide:message-circle-plus" :width="16" :height="16" />
-                        </button>
-                        <button
-                          v-if="
-                            canDeleteSandbox(sandbox.directory, worktree.directory) &&
-                            worktree.projectId !== 'global'
-                          "
-                          type="button"
-                          class="tree-action-button danger"
-                          @click.stop="handleSandboxDelete(sandbox.directory, close)"
-                        >
-                          <Icon icon="lucide:trash-2" :width="16" :height="16" />
+                          <Icon icon="lucide:notebook-pen" :width="16" :height="16" />
                         </button>
                       </div>
                     </div>
 
-                    <div
-                      v-for="session in sandbox.sessions"
-                      :key="session.id"
-                      class="tree-session-row"
-                    >
+                    <template v-if="isSandboxExpanded(worktree.directory, sandbox.directory)">
+                      <div
+                        v-for="session in sandbox.sessions"
+                        :key="session.id"
+                        class="tree-session-row"
+                      >
                       <DropdownItem
                         :href="sessionShareHref(worktree.projectId, session.id)"
                         :value="{
@@ -178,7 +225,7 @@
                           <div class="session-info">
                             <div class="session-info-top">
                               <span class="session-title">{{
-                                session.title || session.slug || session.id
+                                formatSessionTitle(session.title, session.slug, session.id)
                               }}</span>
                               <span v-if="session.archivedAt" class="session-badge-archived"
                                 >archived</span
@@ -193,25 +240,35 @@
                           </div>
                         </div>
                         <button
-                          v-if="!session.archivedAt"
+                          v-if="isShiftPressed && !session.archivedAt"
                           type="button"
-                          class="tree-action-button session-del"
-                          :class="isShiftPressed ? 'danger' : 'archive'"
-                          :title="
-                            isShiftPressed
-                              ? 'Delete session permanently'
-                              : 'Archive session (with Shift key to delete permanently)'
+                          class="tree-action-button session-del danger"
+                          title="Delete session permanently"
+                          @mousedown.prevent.stop
+                          @click.prevent.stop="
+                            handleSessionDelete(
+                              session.id,
+                              sandbox.directory,
+                              worktree.projectId,
+                              close,
+                            )
                           "
-                          @click.stop.prevent="handleSessionAction(session.id, close)"
                         >
-                          <Icon
-                            :icon="isShiftPressed ? 'lucide:trash-2' : 'lucide:archive'"
-                            :width="16"
-                            :height="16"
-                          />
+                          <Icon icon="lucide:trash-2" :width="16" :height="16" />
+                        </button>
+                        <button
+                          v-else-if="!session.archivedAt"
+                          type="button"
+                          class="tree-action-button session-del archive"
+                          title="Archive"
+                          @mousedown.prevent.stop
+                          @click.prevent.stop="handleSessionArchive(session.id, close)"
+                        >
+                          <Icon icon="lucide:archive" :width="16" :height="16" />
                         </button>
                       </DropdownItem>
                     </div>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -236,9 +293,9 @@
             class="top-icon-button new-session-button"
             :disabled="!selectedSessionId"
             @click="$emit('new-session')"
-            title="New session (Ctrl-;)"
+            title="New session(cmd + J)"
           >
-            <Icon icon="lucide:message-circle-plus" :width="16" :height="16" />
+            <Icon icon="lucide:notebook-pen" :width="16" :height="16" />
           </button>
           <button
             type="button"
@@ -281,6 +338,7 @@ import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
 import DropdownSearch from './Dropdown/Search.vue';
+import { formatSessionTitle } from '../utils/formatters';
 
 declare const __GIT_REVISION__: string;
 const gitRevision = typeof __GIT_REVISION__ !== 'undefined' ? __GIT_REVISION__ : 'dev';
@@ -344,7 +402,7 @@ const emit = defineEmits<{
   (event: 'new-session'): void;
   (event: 'new-session-in', payload: { worktree: string; directory: string }): void;
   (event: 'delete-active-directory', value: string): void;
-  (event: 'delete-session', value: string): void;
+  (event: 'delete-session', payload: { sessionId: string; directory: string; projectId?: string }): void;
   (event: 'archive-session', value: string): void;
   (event: 'open-directory'): void;
   (event: 'open-shell'): void;
@@ -382,6 +440,8 @@ const MAX_SESSIONS = 5;
 
 const searchQuery = ref('');
 const isShiftPressed = ref(false);
+const expandedSandboxKeys = ref(new Set<string>());
+const showArchivedKeys = ref(new Set<string>());
 
 const selectedDisplay = computed(() => {
   const sid = props.selectedSessionId;
@@ -391,7 +451,7 @@ const selectedDisplay = computed(() => {
       const session = sandbox.sessions.find((candidate) => candidate.id === sid);
       if (!session) continue;
       const branch = sandbox.branch || directoryBasename(sandbox.directory);
-      const title = session.title || session.slug || session.id;
+      const title = formatSessionTitle(session.title, session.slug, session.id);
       return { branch, title, status: session.status };
     }
   }
@@ -446,15 +506,9 @@ const displayedTree = computed(() => {
       })
       .filter((worktree): worktree is TopPanelWorktree => worktree !== null);
   } else {
-    worktrees = worktrees
-      .map((worktree) => ({
-        ...worktree,
-        sandboxes: worktree.sandboxes.map((sandbox) => ({
-          ...sandbox,
-          sessions: sandbox.sessions.filter((session) => !session.archivedAt),
-        })),
-      }))
-      .filter((worktree) => worktree.sandboxes.some((sandbox) => sandbox.sessions.length > 0));
+    worktrees = worktrees.filter((worktree) =>
+      worktree.sandboxes.some((sandbox) => sandbox.sessions.length > 0),
+    );
   }
 
   return worktrees.slice(0, MAX_WORKTREES).map((worktree) => ({
@@ -462,12 +516,61 @@ const displayedTree = computed(() => {
     sandboxes: worktree.sandboxes
       .filter((sandbox) => worktree.projectId !== 'global' || sandbox.sessions.length > 0)
       .slice(0, MAX_SANDBOXES)
-      .map((sandbox) => ({
-        ...sandbox,
-        sessions: sandbox.sessions.slice(0, MAX_SESSIONS),
-      })),
+      .map((sandbox) => {
+        const active = sandbox.sessions.filter((session) => !session.archivedAt);
+        const archived = sandbox.sessions.filter((session) => session.archivedAt);
+        const showArchived =
+          Boolean(query) || isArchivedShown(worktree.directory, sandbox.directory);
+        return {
+          ...sandbox,
+          sessions: showArchived
+            ? [...active.slice(0, MAX_SESSIONS), ...archived.slice(0, MAX_SESSIONS)]
+            : active.slice(0, MAX_SESSIONS),
+        };
+      }),
   }));
 });
+
+function sandboxKey(worktreeDirectory: string, sandboxDirectory: string) {
+  return `${worktreeDirectory}\0${sandboxDirectory}`;
+}
+
+function isSandboxExpanded(worktreeDirectory: string, sandboxDirectory: string) {
+  if (searchQuery.value.trim()) return true;
+  return expandedSandboxKeys.value.has(sandboxKey(worktreeDirectory, sandboxDirectory));
+}
+
+function toggleSandbox(worktreeDirectory: string, sandboxDirectory: string) {
+  const key = sandboxKey(worktreeDirectory, sandboxDirectory);
+  const next = new Set(expandedSandboxKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expandedSandboxKeys.value = next;
+}
+
+function sandboxHasArchived(worktreeDirectory: string, sandboxDirectory: string) {
+  const worktree = props.treeData.find((item) => item.directory === worktreeDirectory);
+  const sandbox = worktree?.sandboxes.find((item) => item.directory === sandboxDirectory);
+  return Boolean(sandbox?.sessions.some((session) => session.archivedAt));
+}
+
+function isArchivedShown(worktreeDirectory: string, sandboxDirectory: string) {
+  return showArchivedKeys.value.has(sandboxKey(worktreeDirectory, sandboxDirectory));
+}
+
+function toggleShowArchived(worktreeDirectory: string, sandboxDirectory: string) {
+  const key = sandboxKey(worktreeDirectory, sandboxDirectory);
+  const next = new Set(showArchivedKeys.value);
+  if (next.has(key)) {
+    next.delete(key);
+  } else {
+    next.add(key);
+    const expanded = new Set(expandedSandboxKeys.value);
+    expanded.add(key);
+    expandedSandboxKeys.value = expanded;
+  }
+  showArchivedKeys.value = next;
+}
 
 function matchesQuery(query: string, ...fields: (string | undefined)[]) {
   const terms = query.split(/\s+/).filter(Boolean);
@@ -548,7 +651,7 @@ function handleCreateSessionIn(worktree: string, directory: string, close: () =>
   close();
 }
 
-function handleSandboxDelete(directory: string, close?: () => void) {
+function handleSandboxDelete(directory: string, _worktree: string, close?: () => void) {
   if (typeof window !== 'undefined') {
     const confirmed = window.confirm(`Delete worktree "${directory}"?`);
     if (!confirmed) return;
@@ -557,21 +660,23 @@ function handleSandboxDelete(directory: string, close?: () => void) {
   close?.();
 }
 
-function handleSessionDelete(sessionId: string, close?: () => void) {
+function handleSessionDelete(
+  sessionId: string,
+  directory: string,
+  projectId: string | undefined,
+  close?: () => void,
+) {
   if (typeof window !== 'undefined') {
     const confirmed = window.confirm('Delete session?');
     if (!confirmed) return;
   }
-  emit('delete-session', sessionId);
+  emit('delete-session', { sessionId, directory, projectId });
   close?.();
 }
 
-function handleSessionAction(sessionId: string, close?: () => void) {
-  if (isShiftPressed.value) {
-    handleSessionDelete(sessionId, close);
-    return;
-  }
+function handleSessionArchive(sessionId: string, close?: () => void) {
   emit('archive-session', sessionId);
+  close?.();
 }
 
 function handleGlobalKeydown(event: KeyboardEvent) {
@@ -735,14 +840,14 @@ function handleOpenDirectory(close: () => void) {
   align-items: center;
   gap: 8px;
   padding: 8px;
-  border-bottom: 1px solid #334155;
-  background: rgba(15, 23, 42, 0.9);
+  border-bottom: 1px solid #2b2b2b;
+  background: #1f1f1f;
 }
 
 .search-icon {
   width: 14px;
   height: 14px;
-  color: #64748b;
+  color: #9d9d9d;
 }
 
 .tree-search :deep(.ui-dropdown-search-input) {
@@ -752,13 +857,14 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-search :deep(.ui-dropdown-search-input):focus {
-  background: rgba(30, 64, 175, 0.15);
+  background: #252526;
+  border-color: #0078d4;
 }
 
 .clear-search {
   border: none;
   background: transparent;
-  color: #64748b;
+  color: #9d9d9d;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -772,13 +878,13 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-worktree + .tree-worktree {
-  border-top: 1px solid #334155;
+  border-top: 1px solid #2b2b2b;
 }
 
 .tree-empty {
   padding: 14px;
   text-align: center;
-  color: #94a3b8;
+  color: #9d9d9d;
   font-size: 12px;
 }
 
@@ -805,7 +911,7 @@ function handleOpenDirectory(close: () => void) {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
-  color: #64748b;
+  color: #9d9d9d;
 }
 
 .tree-worktree-header {
@@ -813,7 +919,38 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-sandbox-header {
-  padding: 5px 8px 5px 24px;
+  padding: 5px 8px 5px 16px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.tree-sandbox-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tree-expand-button {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9d9d9d;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease;
+}
+
+.tree-expand-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cccccc;
+}
+
+.tree-expand-button.is-open {
+  transform: rotate(90deg);
 }
 
 .tree-label {
@@ -822,7 +959,7 @@ function handleOpenDirectory(close: () => void) {
 
 .tree-label-name {
   font-size: 12px;
-  color: #e2e8f0;
+  color: #cccccc;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -832,7 +969,7 @@ function handleOpenDirectory(close: () => void) {
 
 .tree-label-type {
   font-size: 10px;
-  color: #64748b;
+  color: #9d9d9d;
   flex-basis: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -844,20 +981,19 @@ function handleOpenDirectory(close: () => void) {
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  /* Reserve space for new-session + delete buttons so layout doesn't shift when delete is hidden */
-  min-width: calc(24px + 6px + 24px);
+  min-width: 24px;
 }
 
 .tree-action-button.new-session {
-  color: #86efac;
+  color: #5ba3f5;
 }
 
 .tree-action-button {
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   box-shadow: none;
-  color: #cbd5e1;
+  color: #cccccc;
   font-size: 10px;
   line-height: 1;
   width: 24px;
@@ -870,11 +1006,19 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-action-button:hover {
-  background: #1d2a45;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tree-action-button.danger {
   color: #fca5a5;
+}
+
+.tree-action-button.show-archived {
+  color: #4ade80;
+}
+
+.tree-action-button.show-archived.is-on {
+  background: rgba(74, 222, 128, 0.16);
 }
 
 .tree-action-button.archive {
@@ -885,17 +1029,16 @@ function handleOpenDirectory(close: () => void) {
 .tree-session-row :deep(.ui-dropdown-item) {
   padding-left: 40px;
   border-radius: 7px;
-  color: #e2e8f0;
+  color: #cccccc;
 }
 
-.tree-session-row :deep(.ui-dropdown-item:hover),
-.tree-session-row :deep(.ui-dropdown-item[aria-selected='true']) {
-  background: rgba(30, 41, 59, 0.8);
+.tree-session-row :deep(.ui-dropdown-item:hover) {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tree-session-row :deep(.ui-dropdown-item.is-active) {
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid transparent;
 }
 
 /* ===== Tree branch connectors ===== */
@@ -912,7 +1055,7 @@ function handleOpenDirectory(close: () => void) {
   left: 15px;
   top: 0;
   bottom: 0;
-  border-left: 1px solid rgba(71, 85, 105, 0.5);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
   pointer-events: none;
 }
 
@@ -923,7 +1066,7 @@ function handleOpenDirectory(close: () => void) {
   top: 13px;
   width: 7px;
   height: 0;
-  border-top: 1px solid rgba(71, 85, 105, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   pointer-events: none;
 }
 
@@ -935,8 +1078,8 @@ function handleOpenDirectory(close: () => void) {
   top: 0;
   width: 7px;
   height: 13px;
-  border-left: 1px solid rgba(71, 85, 105, 0.5);
-  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   border-bottom-left-radius: 4px;
   pointer-events: none;
 }
@@ -953,7 +1096,7 @@ function handleOpenDirectory(close: () => void) {
   left: 31px;
   top: 0;
   bottom: 0;
-  border-left: 1px solid rgba(71, 85, 105, 0.4);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
   pointer-events: none;
 }
 
@@ -964,7 +1107,7 @@ function handleOpenDirectory(close: () => void) {
   top: 14px;
   width: 7px;
   height: 0;
-  border-top: 1px solid rgba(71, 85, 105, 0.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   pointer-events: none;
 }
 
@@ -976,8 +1119,8 @@ function handleOpenDirectory(close: () => void) {
   top: 0;
   width: 7px;
   height: 14px;
-  border-left: 1px solid rgba(71, 85, 105, 0.4);
-  border-bottom: 1px solid rgba(71, 85, 105, 0.4);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   border-bottom-left-radius: 4px;
   pointer-events: none;
 }
@@ -1000,7 +1143,7 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .session-title {
-  color: #e2e8f0;
+  color: #cccccc;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1022,7 +1165,7 @@ function handleOpenDirectory(close: () => void) {
 
 .session-time {
   font-size: 10px;
-  color: #64748b;
+  color: #9d9d9d;
   white-space: nowrap;
   flex-basis: 100%;
 }
@@ -1046,9 +1189,9 @@ function handleOpenDirectory(close: () => void) {
 
 .tree-footer {
   flex: 0 0 auto;
-  border-top: 1px solid #334155;
+  border-top: 1px solid #2b2b2b;
   padding: 8px;
-  background: #0b1320;
+  background: #1f1f1f;
 }
 
 .tree-footer-button {
@@ -1057,24 +1200,24 @@ function handleOpenDirectory(close: () => void) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
-  background: #111a2c;
-  color: #e2e8f0;
+  background: #252526;
+  color: #cccccc;
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
 }
 
 .tree-footer-button:hover {
-  background: #1d2a45;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .control-button {
-  border: 1px solid #334155;
+  border: 1px solid #2b2b2b;
   border-radius: 8px;
-  background: #0b1320;
-  color: #e2e8f0;
+  background: #1f1f1f;
+  color: #cccccc;
   padding: 6px 12px;
   font-size: 12px;
   display: inline-flex;
@@ -1089,12 +1232,12 @@ function handleOpenDirectory(close: () => void) {
   flex-shrink: 0;
   padding: 0;
   justify-content: center;
-  color: #86efac;
+  color: #5ba3f5;
 }
 
 .new-session-button:hover,
 .open-shell-button:hover {
-  background: rgba(51, 65, 85, 0.45);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .open-shell-button {
@@ -1113,7 +1256,7 @@ function handleOpenDirectory(close: () => void) {
   flex-shrink: 0;
   padding: 0;
   justify-content: center;
-  color: #64748b;
+  color: #9d9d9d;
 }
 
 .notification-button.has-notifications {
@@ -1121,8 +1264,8 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .notification-button:hover:not(:disabled) {
-  background: rgba(51, 65, 85, 0.45);
-  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cccccc;
 }
 
 .top-icon-button:disabled {
@@ -1149,20 +1292,21 @@ function handleOpenDirectory(close: () => void) {
 .tree-dropdown-root :deep(.ui-dropdown-button) {
   background: transparent;
   border-color: transparent;
-  color: #e2e8f0;
+  color: #cccccc;
   box-shadow: none;
 }
 
 .tree-dropdown-root :deep(.ui-dropdown-button:hover) {
-  background: rgba(51, 65, 85, 0.45);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tree-dropdown-root :deep(.ui-dropdown-menu) {
-  background: #0b1320;
-  border: 1px solid #334155;
+  background: #1f1f1f;
+  border: 1px solid #2b2b2b;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
 .selected-label {
@@ -1199,7 +1343,7 @@ function handleOpenDirectory(close: () => void) {
   border: 0;
   border-radius: 999px;
   padding: 2px 6px;
-  color: #cbd5e1;
+  color: #9d9d9d;
   background: transparent;
   font-size: 11px;
   line-height: 1;
@@ -1226,25 +1370,22 @@ function handleOpenDirectory(close: () => void) {
   width: 28px;
   height: 28px;
   flex-shrink: 0;
+  border-radius: 6px;
   color: #9d9d9d;
-}
-
-.layout-button.is-active {
-  color: #cccccc;
 }
 
 .layout-button:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
 }
 
 .layout-glyph {
+  --layout-glyph: #9d9d9d;
   position: relative;
-  width: 16px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   box-sizing: border-box;
-  border: 1.5px solid currentColor;
-  border-radius: 2px;
+  border: 1px solid var(--layout-glyph);
+  border-radius: 3px;
   overflow: hidden;
 }
 
@@ -1252,7 +1393,7 @@ function handleOpenDirectory(close: () => void) {
 .layout-glyph::after {
   content: '';
   position: absolute;
-  background: currentColor;
+  background: var(--layout-glyph);
 }
 
 .layout-glyph::before {
@@ -1260,20 +1401,20 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .layout-button.is-active .layout-glyph::before {
-  opacity: 0.5;
+  opacity: 1;
 }
 
 .layout-glyph-left::before {
   top: 0;
   bottom: 0;
   left: 0;
-  width: 5px;
+  width: 50%;
 }
 
 .layout-glyph-left::after {
   top: 0;
   bottom: 0;
-  left: 5px;
+  left: calc(50% - 1px);
   width: 1px;
 }
 
@@ -1281,13 +1422,13 @@ function handleOpenDirectory(close: () => void) {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 4px;
+  height: 50%;
 }
 
 .layout-glyph-bottom::after {
   left: 0;
   right: 0;
-  bottom: 4px;
+  top: 50%;
   height: 1px;
 }
 

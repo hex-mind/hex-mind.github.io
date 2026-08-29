@@ -109,7 +109,7 @@ function handleLoad() {
   height: 100%;
   overflow: hidden;
   position: relative;
-  background: #0f172a;
+  background: #181818;
   cursor: grab;
   display: flex;
   align-items: center;

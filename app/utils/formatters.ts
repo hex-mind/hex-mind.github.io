@@ -42,3 +42,11 @@ export function formatElapsedTime(startMs?: number, endMs?: number): string {
   const rem = sec % 60;
   return rem > 0 ? `${min}m${rem}s` : `${min}m`;
 }
+
+const ISO_TITLE_SUFFIX = /\s*[-–—]\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\s*$/;
+
+export function formatSessionTitle(...parts: (string | undefined)[]): string {
+  const raw = parts.find((part) => part?.trim())?.trim() ?? '';
+  const stripped = raw.replace(ISO_TITLE_SUFFIX, '').trim();
+  return stripped || raw;
+}
