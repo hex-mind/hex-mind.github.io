@@ -1,121 +1,128 @@
 <template>
   <div class="bookmarks-body">
     <div v-if="sessions.length === 0" class="bookmarks-empty">{{ emptyText }}</div>
-    <ul v-else class="bookmarks-list">
-      <li
-        v-for="session in sessions"
-        :key="session.sessionId"
-        class="bookmark-item"
-        :class="{
-          'is-selected': session.isSelected,
-          'is-unavailable': !session.available,
-          'is-menu-open': menuOpenId === session.sessionId,
-          'is-pinned': Boolean(session.pinned),
-        }"
-      >
-        <button
-          type="button"
-          class="bookmark-item-main"
-          :disabled="!session.available || renamingId === session.sessionId"
-          :title="session.available ? session.title : 'Session is no longer available'"
-          @click="$emit('select-session', session)"
-        >
-          <Icon
-            :icon="icon"
-            class="bookmark-item-icon"
-            :class="{ 'is-filled': icon === 'lucide:bookmark' }"
-            :width="14"
-            :height="14"
-          />
-          <span class="bookmark-item-text">
-            <input
-              v-if="renamingId === session.sessionId"
-              ref="renameInput"
-              v-model="renameDraft"
-              class="bookmark-item-rename"
-              @click.stop
-              @keydown.enter.prevent="commitRename(session)"
-              @keydown.esc.prevent="cancelRename"
-              @blur="commitRename(session)"
-            />
-            <span v-else class="bookmark-item-title">{{ session.title }}</span>
-            <span v-if="sessionMeta(session)" class="bookmark-item-meta">{{
-              sessionMeta(session)
-            }}</span>
-          </span>
-        </button>
-        <div v-if="showSessionMenu && session.available" class="bookmark-item-actions">
-          <button
-            v-if="session.pinned"
-            type="button"
-            class="bookmark-item-action is-pin"
-            title="Unpin chat"
-            @click.stop="$emit('toggle-pin', session)"
+    <div v-else class="bookmarks-scroll">
+      <section v-for="group in sessionGroups" :key="group.id" class="bookmarks-group">
+        <div v-if="group.label" class="bookmarks-group-label">{{ group.label }}</div>
+        <ul class="bookmarks-list">
+          <li
+            v-for="session in group.sessions"
+            :key="session.sessionId"
+            class="bookmark-item"
+            :class="{
+              'is-selected': session.isSelected,
+              'is-unavailable': !session.available,
+              'is-menu-open': menuOpenId === session.sessionId,
+              'is-pinned': Boolean(session.pinned),
+            }"
           >
-            <Icon icon="lucide:pin" :width="13" :height="13" />
-          </button>
-          <Dropdown
-            :open="menuOpenId === session.sessionId"
-            class="bookmark-item-menu"
-            align="start"
-            auto-close
-            :auto-highlight="false"
-            @update:open="(open) => setMenuOpen(session.sessionId, open)"
-            @select="(value) => onMenuSelect(session, value)"
-          >
-            <template #trigger>
+            <button
+              type="button"
+              class="bookmark-item-main"
+              :class="{ 'has-icon': !hideIcon }"
+              :disabled="!session.available || renamingId === session.sessionId"
+              :title="session.available ? session.title : 'Session is no longer available'"
+              @click="$emit('select-session', session)"
+            >
+              <Icon
+                v-if="!hideIcon"
+                :icon="icon"
+                class="bookmark-item-icon"
+                :class="{ 'is-filled': icon === 'lucide:bookmark' }"
+                :width="14"
+                :height="14"
+              />
+              <span class="bookmark-item-text">
+                <input
+                  v-if="renamingId === session.sessionId"
+                  ref="renameInput"
+                  v-model="renameDraft"
+                  class="bookmark-item-rename"
+                  @click.stop
+                  @keydown.enter.prevent="commitRename(session)"
+                  @keydown.esc.prevent="cancelRename"
+                  @blur="commitRename(session)"
+                />
+                <span v-else class="bookmark-item-title">{{ session.title }}</span>
+                <span v-if="sessionMeta(session)" class="bookmark-item-meta">{{
+                  sessionMeta(session)
+                }}</span>
+              </span>
+            </button>
+            <div v-if="showSessionMenu && session.available" class="bookmark-item-actions">
               <button
+                v-if="session.pinned"
                 type="button"
-                class="bookmark-item-action"
-                title="More"
-                @click.stop="setMenuOpen(session.sessionId, menuOpenId !== session.sessionId)"
+                class="bookmark-item-action is-pin"
+                title="Unpin chat"
+                @click.stop="$emit('toggle-pin', session)"
               >
-                <Icon icon="lucide:ellipsis" :width="14" :height="14" />
+                <Icon icon="lucide:pin" :width="13" :height="13" />
               </button>
-            </template>
-            <DropdownItem value="rename">
-              <span class="session-menu-item">
-                <Icon icon="lucide:pencil" :width="14" :height="14" />
-                Rename
-              </span>
-            </DropdownItem>
-            <div class="session-menu-divider" />
-            <DropdownItem value="pin">
-              <span class="session-menu-item">
-                <Icon icon="lucide:pin" :width="14" :height="14" />
-                {{ session.pinned ? 'Unpin chat' : 'Pin chat' }}
-              </span>
-            </DropdownItem>
-            <DropdownItem value="archive">
-              <span class="session-menu-item">
-                <Icon icon="lucide:archive" :width="14" :height="14" />
-                Archive
-              </span>
-            </DropdownItem>
-            <DropdownItem value="delete">
-              <span class="session-menu-item is-danger">
-                <Icon icon="lucide:trash-2" :width="14" :height="14" />
-                Delete
-              </span>
-            </DropdownItem>
-          </Dropdown>
-        </div>
-        <button
-          v-else-if="!hideRemove"
-          type="button"
-          class="bookmark-item-remove"
-          title="Remove saved session"
-          @click="$emit('remove-bookmark', session.sessionId)"
-        >
-          <Icon icon="lucide:x" :width="13" :height="13" />
-        </button>
-      </li>
-    </ul>
+              <Dropdown
+                :open="menuOpenId === session.sessionId"
+                class="bookmark-item-menu"
+                align="start"
+                auto-close
+                :auto-highlight="false"
+                @update:open="(open) => setMenuOpen(session.sessionId, open)"
+                @select="(value) => onMenuSelect(session, value)"
+              >
+                <template #trigger>
+                  <button
+                    type="button"
+                    class="bookmark-item-action"
+                    title="More"
+                    @click.stop="setMenuOpen(session.sessionId, menuOpenId !== session.sessionId)"
+                  >
+                    <Icon icon="lucide:ellipsis" :width="14" :height="14" />
+                  </button>
+                </template>
+                <DropdownItem value="rename">
+                  <span class="session-menu-item">
+                    <Icon icon="lucide:pencil" :width="14" :height="14" />
+                    Rename
+                  </span>
+                </DropdownItem>
+                <div class="session-menu-divider" />
+                <DropdownItem value="pin">
+                  <span class="session-menu-item">
+                    <Icon icon="lucide:pin" :width="14" :height="14" />
+                    {{ session.pinned ? 'Unpin chat' : 'Pin chat' }}
+                  </span>
+                </DropdownItem>
+                <DropdownItem value="archive">
+                  <span class="session-menu-item">
+                    <Icon icon="lucide:archive" :width="14" :height="14" />
+                    Archive
+                  </span>
+                </DropdownItem>
+                <DropdownItem value="delete">
+                  <span class="session-menu-item is-danger">
+                    <Icon icon="lucide:trash-2" :width="14" :height="14" />
+                    Delete
+                  </span>
+                </DropdownItem>
+              </Dropdown>
+            </div>
+            <button
+              v-else-if="!hideRemove"
+              type="button"
+              class="bookmark-item-remove"
+              title="Remove saved session"
+              @click="$emit('remove-bookmark', session.sessionId)"
+            >
+              <Icon icon="lucide:x" :width="13" :height="13" />
+            </button>
+          </li>
+        </ul>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
@@ -131,21 +138,28 @@ export type BookmarkedSessionView = {
   available: boolean;
   isSelected: boolean;
   pinned?: boolean;
+  timeUpdated?: number;
 };
 
-withDefaults(
+const MS_DAY = 24 * 60 * 60 * 1000;
+
+const props = withDefaults(
   defineProps<{
     sessions: BookmarkedSessionView[];
     icon?: string;
     emptyText?: string;
     hideRemove?: boolean;
+    hideIcon?: boolean;
     showSessionMenu?: boolean;
+    groupByTime?: boolean;
   }>(),
   {
     icon: 'lucide:bookmark',
     emptyText: 'No saved sessions.',
     hideRemove: false,
+    hideIcon: false,
     showSessionMenu: false,
+    groupByTime: false,
   },
 );
 
@@ -162,6 +176,46 @@ const menuOpenId = ref('');
 const renamingId = ref('');
 const renameDraft = ref('');
 const renameInput = ref<HTMLInputElement | HTMLInputElement[] | null>(null);
+
+type SessionGroup = {
+  id: string;
+  label: string;
+  sessions: BookmarkedSessionView[];
+};
+
+function startOfLocalDay(ms: number) {
+  const date = new Date(ms);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function recencyBucket(timeUpdated: number | undefined, now: number): 'today' | 'week' | 'older' {
+  const today = startOfLocalDay(now);
+  const weekAgo = today - 7 * MS_DAY;
+  const time = typeof timeUpdated === 'number' && timeUpdated > 0 ? timeUpdated : 0;
+  if (time >= today) return 'today';
+  if (time >= weekAgo) return 'week';
+  return 'older';
+}
+
+const sessionGroups = computed((): SessionGroup[] => {
+  if (!props.groupByTime) {
+    return [{ id: 'all', label: '', sessions: props.sessions }];
+  }
+  const now = Date.now();
+  const groups: SessionGroup[] = [
+    { id: 'today', label: 'Today', sessions: [] },
+    { id: 'week', label: 'Previous 7 days', sessions: [] },
+    { id: 'older', label: 'Older', sessions: [] },
+  ];
+  for (const session of props.sessions) {
+    const bucket = recencyBucket(session.timeUpdated, now);
+    if (bucket === 'today') groups[0].sessions.push(session);
+    else if (bucket === 'week') groups[1].sessions.push(session);
+    else groups[2].sessions.push(session);
+  }
+  return groups.filter((group) => group.sessions.length > 0);
+});
 
 function sessionMeta(session: BookmarkedSessionView) {
   const parts = [session.projectName, session.branch].filter(Boolean);
@@ -235,14 +289,39 @@ function focusRenameInput() {
   font-size: 12px;
 }
 
-.bookmarks-list {
-  list-style: none;
-  margin: 0;
+.bookmarks-scroll {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding: 8px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.bookmarks-group {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  overflow: auto;
+  min-width: 0;
+}
+
+.bookmarks-group-label {
+  padding: 2px 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #9d9d9d;
+}
+
+.bookmarks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   min-height: 0;
 }
 
@@ -250,14 +329,20 @@ function focusRenameInput() {
   display: flex;
   align-items: stretch;
   gap: 2px;
-  border: 1px solid #2b2b2b;
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: #1f1f1f;
+  background: transparent;
 }
 
-.bookmark-item.is-selected {
-  border-color: #3c3c3c;
-  background: #2b2b2b;
+.bookmark-item:hover,
+.bookmark-item.is-menu-open {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bookmark-item.is-selected,
+.bookmark-item.is-selected:hover,
+.bookmark-item.is-selected.is-menu-open {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .bookmark-item.is-unavailable {
@@ -276,6 +361,10 @@ function focusRenameInput() {
   color: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.bookmark-item-main:not(.has-icon) {
+  padding-left: 10px;
 }
 
 .bookmark-item-main:disabled {

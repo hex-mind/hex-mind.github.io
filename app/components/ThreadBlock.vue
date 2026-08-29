@@ -152,7 +152,6 @@
       :timestamp="formatThreadTimestamp(root)"
       :elapsed="formatThreadElapsed(root)"
       :context-percent="getThreadContextPercent(root)"
-      :tokens="getThreadTokens(root)"
       :has-diffs="hasThreadDiffs(root)"
       :can-copy-answer="canCopyAnswer(root)"
       :copied="copied"
@@ -627,41 +626,6 @@ function getCompletedTime(message?: MessageInfo): number | undefined {
 function formatThreadElapsed(root: MessageInfo): string {
   const final = getFinalAnswer(root);
   return formatElapsedTime(getMessageTime(root), getCompletedTime(final));
-}
-
-function getThreadTokens(root: MessageInfo): MessageTokens | null {
-  const thread = getThread(root.id);
-  let input = 0;
-  let output = 0;
-  let reasoning = 0;
-  let totalAcc = 0;
-  let cacheRead = 0;
-  let cacheWrite = 0;
-  let found = false;
-
-  for (const m of thread) {
-    if (m.role !== 'assistant') continue;
-    const usage = getMessageUsage(m);
-    if (!usage) continue;
-    const t = usage.tokens;
-    if (t.input <= 0 && t.output <= 0) continue;
-    input += t.input;
-    output += t.output;
-    reasoning += t.reasoning;
-    totalAcc += t.total ?? 0;
-    cacheRead += t.cache?.read ?? 0;
-    cacheWrite += t.cache?.write ?? 0;
-    found = true;
-  }
-
-  if (!found) return null;
-  return {
-    input,
-    output,
-    reasoning,
-    total: totalAcc || undefined,
-    cache: { read: cacheRead, write: cacheWrite },
-  };
 }
 
 function getThreadContextPercent(root: MessageInfo): number | null {

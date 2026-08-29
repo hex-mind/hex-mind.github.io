@@ -44,7 +44,7 @@
               Open
             </button>
           </div>
-          <div v-if="error" class="error-text">{{ error }}</div>
+          <div v-if="error || resolveHint" class="error-text">{{ error || resolveHint }}</div>
         </template>
 
         <DropdownItem v-if="showCurrentEntry" value=".">./</DropdownItem>
@@ -57,8 +57,12 @@
         >
           {{ item.name }}/
         </DropdownItem>
-        <div v-if="!isLoading && suggestions.length === 0 && currentDir" class="picker-empty">
-          {{ parsed.filter ? 'No matches' : 'No subdirectories' }}
+        <div v-if="!isLoading && suggestions.length === 0 && (currentDir || parsed.filter)" class="picker-empty">
+          {{
+            parsed.filter
+              ? 'No matches. Enter the full path, e.g. /Users/you/project'
+              : 'No subdirectories'
+          }}
         </div>
       </Dropdown>
     </div>
@@ -70,7 +74,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
-import * as opencodeApi from '../utils/opencode';
+import { formatDirectoryListError, listFilesAt } from '../utils/opencode';
 import { pickLocalDirectory } from '../utils/pickLocalDirectory';
 
 type FileNode = {
@@ -104,6 +108,7 @@ const inputRef = ref<HTMLInputElement | null>(null);
 const rawInput = ref('');
 const isLoading = ref(false);
 const error = ref('');
+const resolveHint = ref('');
 const allEntries = ref<FileNode[]>([]);
 const dropdownOpen = ref(false);
 const hasGitDirectory = ref(false);
@@ -169,7 +174,9 @@ const hasDirectoryEntries = computed(() =>
   allEntries.value.some((n) => n.type === 'directory' && !n.ignored),
 );
 
-const canOpen = computed(() => Boolean(resolveOpenDirectory()));
+const canOpen = computed(
+  () => !error.value && !isLoading.value && Boolean(resolveOpenDirectory()),
+);
 
 const isDrillDownLocked = computed(() => hasGitDirectory.value);
 
@@ -207,12 +214,17 @@ watch(
 
 function initPicker() {
   error.value = '';
+  resolveHint.value = '';
   allEntries.value = [];
   hasGitDirectory.value = false;
   rawInput.value = '';
 
   const seed = props.initialPath?.trim() || homePrefix.value || '/';
-  rawInput.value = collapseTilde(ensureTrailingSlash(expandTilde(seed)));
+  const expanded = expandTilde(seed);
+  rawInput.value = collapseTilde(expanded);
+  if (!parsed.value.filter) {
+    rawInput.value = collapseTilde(ensureTrailingSlash(expandTilde(rawInput.value)));
+  }
   const dir = currentDir.value;
   if (dir) void fetchDirectory(dir);
 
@@ -232,7 +244,8 @@ async function handleBrowse() {
     return;
   }
   error.value = '';
-  rawInput.value = collapseTilde(ensureTrailingSlash(expandTilde(result.hint)));
+  resolveHint.value = `Could not resolve “${result.folderName}”. Navigate from home or paste the full path.`;
+  rawInput.value = collapseTilde(expandTilde(result.hint));
   nextTick(() => {
     inputRef.value?.focus();
     const len = rawInput.value.length;
@@ -259,19 +272,13 @@ async function fetchDirectory(dir: string) {
   try {
     const cleanDir = dir.replace(/\/+$/, '') || '/';
     const data = await listDirectory(cleanDir, controller.signal);
-    let gitEntries: FileNode[] = [];
-    try {
-      gitEntries = await listDirectory(`${cleanDir}/.git`, controller.signal);
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') throw err;
-    }
     if (requestId !== fetchRequestId) return;
     allEntries.value = data;
-    hasGitDirectory.value = gitEntries.length > 0;
+    hasGitDirectory.value = data.some((entry) => entry.name === '.git' && entry.type === 'directory');
   } catch (err) {
     if ((err as Error).name === 'AbortError') return;
     if (requestId !== fetchRequestId) return;
-    error.value = err instanceof Error ? err.message : String(err);
+    error.value = formatDirectoryListError(err);
     allEntries.value = [];
     hasGitDirectory.value = false;
   } finally {
@@ -281,13 +288,7 @@ async function fetchDirectory(dir: string) {
 
 async function listDirectory(dir: string, signal: AbortSignal) {
   const directory = dir.replace(/\/+$/, '') || '/';
-  const data = (await opencodeApi.listFiles(
-    {
-      directory,
-      path: '.',
-    },
-    { signal },
-  )) as FileNode[];
+  const data = (await listFilesAt(directory, props.homePath, { signal })) as FileNode[];
   return Array.isArray(data) ? data : [];
 }
 
@@ -670,6 +671,7 @@ function cleanDirectoryPath(p: string): string {
   font-size: 12px;
   color: #64748b;
   padding: 4px 8px;
+  line-height: 1.45;
 }
 
 .error-text {

@@ -1,3 +1,5 @@
+import { splitFileContentDirectoryAndPath } from './path';
+
 type QueryValue = string | number | boolean | undefined;
 
 type JsonBody = Record<string, unknown> | Array<unknown>;
@@ -156,6 +158,28 @@ export function listFiles(payload: { directory: string; path?: string }, options
     },
     options,
   ) as Promise<unknown>;
+}
+
+/** OpenCode `/file` returns 500 (not 404) when the path does not exist. */
+export function isMissingPathError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\/file request failed \(500\)/i.test(message) || /\/file request failed \(404\)/.test(message);
+}
+
+export function formatDirectoryListError(error: unknown): string {
+  if (isMissingPathError(error)) return 'Directory not found.';
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** List an absolute directory via home (or `/`) so missing guesses do not spawn instances. */
+export function listFilesAt(absoluteDirectory: string, homePath?: string, options?: RequestOptions) {
+  const home = homePath?.replace(/\/+$/, '') || null;
+  const { directory, path } = splitFileContentDirectoryAndPath(absoluteDirectory, home);
+  return listFiles({ directory, path }, options);
+}
+
+export function listFileStatus(directory?: string, options?: RequestOptions) {
+  return getJson('/file/status', { directory }, options) as Promise<unknown>;
 }
 
 export function findFiles(

@@ -40,6 +40,7 @@ type ConnectionState = {
   notificationManager: ReturnType<typeof createNotificationManager>;
   bootstrapPromise?: Promise<void>;
   knownDirectories: Set<string>;
+  syncedDirectories: Set<string>;
   knownSessionIds: Set<string>;
   activeSelection: {
     port: MessagePort;
@@ -51,6 +52,25 @@ type ConnectionState = {
 const connections = new Map<string, ConnectionState>();
 const portToKey = new Map<MessagePort, string>();
 let opencodeQueue: Promise<void> = Promise.resolve();
+
+const LAZY_DIRECTORY_LIMIT = 12;
+const DIRECTORY_SYNC_CONCURRENCY = 3;
+
+async function mapPool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
+  if (items.length === 0) return;
+  let index = 0;
+  const width = Math.min(Math.max(1, limit), items.length);
+  await Promise.all(
+    Array.from({ length: width }, async () => {
+      while (index < items.length) {
+        const current = items[index];
+        index += 1;
+        if (current === undefined) return;
+        await worker(current);
+      }
+    }),
+  );
+}
 
 function toKey(baseUrl: string, authorization?: string) {
   return `${baseUrl.replace(/\/+$/, '')}\u0000${authorization ?? ''}`;
@@ -869,7 +889,8 @@ async function loadKnownDirectories(state: ConnectionState, directories: string[
 
   await queueOpencodeTask(state, async () => {
     const projectIds = new Set<string>();
-    for (const directory of unique) {
+    await mapPool(unique, DIRECTORY_SYNC_CONCURRENCY, async (directory) => {
+      state.syncedDirectories.add(directory);
       const sessions = await syncDirectorySessions(state.stateBuilder, directory);
       for (const session of sessions) {
         const pid = session.projectID?.trim();
@@ -887,10 +908,20 @@ async function loadKnownDirectories(state: ConnectionState, directories: string[
         const projectId = state.stateBuilder.resolveProjectIdForDirectory(directory);
         if (projectId) projectIds.add(projectId);
       }
-    }
+    });
     for (const projectId of projectIds) {
       emitProjectUpdated(state, projectId);
     }
+  });
+}
+
+function scheduleLazyDirectorySync(state: ConnectionState) {
+  const extra = Array.from(state.knownDirectories)
+    .filter((directory) => directory && !state.syncedDirectories.has(directory))
+    .slice(0, LAZY_DIRECTORY_LIMIT);
+  if (extra.length === 0) return;
+  void loadKnownDirectories(state, extra).catch((error) => {
+    console.error('[sse-worker] lazy loadKnownDirectories failed', error);
   });
 }
 
@@ -938,24 +969,13 @@ async function bootstrapState(state: ConnectionState): Promise<void> {
       });
     });
 
-    state.knownDirectories.forEach((directory) => {
-      directories.add(directory);
-    });
-
-    const fromSessions = await resolveDirectoriesFromSessionIds(state.knownSessionIds);
-    fromSessions.forEach((directory) => directories.add(directory));
-
     await syncPending(directories);
 
-    for (let round = 0; round < 5; round++) {
-      const discovered = collectSessionDirectories(builder);
-      state.knownDirectories.forEach((directory) => discovered.add(directory));
-      const fromSessions = await resolveDirectoriesFromSessionIds(state.knownSessionIds);
-      fromSessions.forEach((directory) => discovered.add(directory));
-      const pending = Array.from(discovered).filter((directory) => !synced.has(directory));
-      if (pending.length === 0) break;
-      await syncPending(pending);
-    }
+    const discovered = collectSessionDirectories(builder);
+    await syncPending(discovered);
+    synced.forEach((directory) => {
+      if (directory) state.syncedDirectories.add(directory);
+    });
 
     await Promise.all(
       Array.from(synced).map(async (directory) => {
@@ -985,6 +1005,20 @@ async function bootstrapState(state: ConnectionState): Promise<void> {
     }
   });
   state.bootstrapPromise = bootstrapPromise;
+  void run
+    .then(() => {
+      scheduleLazyDirectorySync(state);
+      if (state.knownSessionIds.size === 0) return;
+      return queueOpencodeTask(state, () =>
+        resolveDirectoriesFromSessionIds(state.knownSessionIds),
+      ).then((directories) => {
+        mergeKnownDirectories(state, Array.from(directories));
+        scheduleLazyDirectorySync(state);
+      });
+    })
+    .catch((error) => {
+      console.error('[sse-worker] lazy directory sync failed', error);
+    });
   return bootstrapPromise;
 }
 
@@ -1022,6 +1056,7 @@ function createConnectionState(baseUrl: string, authorization?: string) {
       sessionId: state.stateBuilder.resolveRootSessionIdForProject(projectId, sessionId),
     })),
     knownDirectories: new Set<string>(),
+    syncedDirectories: new Set<string>(),
     knownSessionIds: new Set<string>(),
     activeSelection: null,
     client: createSseConnection({

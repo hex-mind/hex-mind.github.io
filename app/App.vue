@@ -50,9 +50,10 @@
             :tree-nodes="treeNodes"
             :expanded-tree-paths="expandedTreePaths"
             :selected-tree-path="selectedTreePath"
-            :tree-loading="treeLoading"
+            :tree-loading="sidePanelActiveTab === 'git' ? gitStatusLoading : treeLoading"
             :tree-error="treeError"
             :tree-status-by-path="gitStatusByPath"
+            :tree-git-status-loaded="gitStatus !== null"
             :tree-branch-info="gitStatus?.branch"
             :tree-diff-stats="gitStatus?.diffStats"
             :tree-directory-name="treeDirectoryName"
@@ -75,7 +76,8 @@
             "
             @open-file="openFileViewer"
             @select-search-hit="handleSearchHit"
-            @reload="reloadTree().then(() => refreshGitStatus())"
+            @reload="handleTreeReload"
+            @load-branches="refreshBranchEntries"
             @open-settings="isSettingsOpen = true"
             @logout="handleLogout"
           />
@@ -320,6 +322,7 @@ import {
   formatWebfetchToolTitle,
   formatQueryToolTitle,
   toolColor,
+  WINDOW_COLOR,
 } from './components/ToolWindow/utils';
 import { useAutoScroller, type ScrollMode } from './composables/useAutoScroller';
 import { useFileTree, type FileNode } from './composables/useFileTree';
@@ -445,7 +448,7 @@ function buildWorktreeSnapshotScript(mode: WorktreeSnapshotMode): string {
     filterLines = ['  [ "$x" = " " ] && continue', '  [ "$x" = "?" ] && continue'];
   } else if (mode === 'changes') {
     // Only files with worktree changes (y != ' ' and y != '?')
-    filterLines = ['  [ "$y" = " " ] && continue', '  [ "$y" = "?" ] && continue'];
+    filterLines = ['  [ "$y" = " " ] && continue'];
   } else {
     // All: skip untracked only
     filterLines = ['  [ "$x" = "?" ] && [ "$y" = "?" ] && continue'];
@@ -513,6 +516,8 @@ function buildWorktreeSnapshotScript(mode: WorktreeSnapshotMode): string {
     '  code=M',
     '  if [ "$x" = "D" ] || [ "$y" = "D" ]; then',
     '    code=D',
+    '  elif [ "$x" = "?" ]; then',
+    '    code=A',
     '  elif [ "$x" = "A" ]; then',
     '    code=A',
     '  elif [ "$x" = "R" ] || [ "$y" = "R" ]; then',
@@ -1162,6 +1167,7 @@ const {
   treeError,
   gitStatus,
   gitStatusByPath,
+  gitStatusLoading,
   refreshGitStatus,
   reloadTree,
   toggleTreeDirectory,
@@ -1344,7 +1350,7 @@ const recentSessionItems = computed(() => {
     if (pinnedB >= 0) return 1;
     return b.timeUpdated - a.timeUpdated;
   });
-  return items.slice(0, 40).map(({ timeUpdated: _timeUpdated, ...session }) => session);
+  return items.slice(0, 40);
 });
 
 function toggleCurrentSessionBookmark() {
@@ -1780,6 +1786,14 @@ function selectSidePanelTab(value: SidePanelTab) {
   sidePanelActiveTab.value = value;
   persistSidePanelTab(value);
   if (sidePanelCollapsed.value) toggleSidePanelCollapsed();
+}
+
+function handleTreeReload() {
+  if (sidePanelActiveTab.value === 'git') {
+    void refreshGitStatus();
+    return;
+  }
+  void reloadTree();
 }
 
 function handleSearchHit(hit: { threadId: string }) {
@@ -2592,7 +2606,7 @@ async function bootstrapSelections() {
     }
 
     if (activeDirectory.value) {
-      await fetchCommands(activeDirectory.value);
+      void fetchCommands(activeDirectory.value);
     }
   } finally {
     isBootstrapping.value = false;
@@ -2799,7 +2813,6 @@ type UserMessageMeta = {
 type MessageTokens = {
   input: number;
   output: number;
-  reasoning: number;
   cache?: {
     read: number;
     write: number;
@@ -2997,7 +3010,7 @@ function ensureShellWindow(pty: PtyInfo) {
     closable: true,
     resizable: true,
     scroll: 'none',
-    color: '#475569',
+    color: WINDOW_COLOR.blue,
     title: pty.title || 'Shell',
     width,
     height,
@@ -4009,9 +4022,7 @@ watch(
 );
 
 async function reloadSelectedSessionState() {
-  if (selectedSessionId.value && isBootstrapping.value && !activeDirectory.value) {
-    return;
-  }
+  if (isBootstrapping.value) return;
   fw.closeAll({ exclude: (key) => key.startsWith('shell:') });
   msg.reset();
   resetFollow();
@@ -4139,6 +4150,16 @@ watch(sidePanelCollapsed, () => {
 watch(sidePanelActiveTab, () => {
   persistSidePanelTab(sidePanelActiveTab.value);
 });
+
+watch(
+  [sidePanelActiveTab, workingDirectory, gitStatus],
+  () => {
+    if (sidePanelActiveTab.value !== 'git') return;
+    if (gitStatus.value !== null) return;
+    if (!workingDirectory.value.trim()) return;
+    void refreshGitStatus();
+  },
+);
 
 watch(
   allowedSessionIds,
@@ -4858,7 +4879,7 @@ function handleOpenHistoryReasoning(payload: { part: ReasoningPart }) {
     closable: true,
     resizable: true,
     focusOnOpen: true,
-    color: '#8b5cf6',
+    color: WINDOW_COLOR.purple,
     variant: 'message',
     expiry: Infinity,
     width: winW,
@@ -5285,22 +5306,19 @@ async function startInitialization() {
     await fetchHomePath();
     initLoadingMessage.value = 'Loading projects and sessions...';
     await bootstrapSelections();
-    if (selectedSessionId.value) {
-      initLoadingMessage.value = 'Loading session history...';
-      await reloadSelectedSessionState();
-    }
-    if (activeDirectory.value) {
-      initLoadingMessage.value = 'Loading worktree state...';
-      await fetchCommands(activeDirectory.value || undefined);
-      const directory = activeDirectory.value || undefined;
-      await fetchPendingPermissions(directory);
-      await fetchPendingQuestions(directory);
-      void refreshGitStatus();
-    }
     connectionState.value = 'ready';
     uiInitState.value = 'ready';
-    await fetchProviders();
-    await fetchAgents();
+    if (selectedSessionId.value) {
+      initLoadingMessage.value = 'Loading session history...';
+      void reloadSelectedSessionState();
+    }
+    if (workingDirectory.value) {
+      void fetchCommands(workingDirectory.value);
+      void fetchPendingPermissions(workingDirectory.value);
+      void fetchPendingQuestions(workingDirectory.value);
+    }
+    void fetchProviders();
+    void fetchAgents();
   } catch (error) {
     if (!initializationInFlight) return;
     ge.disconnect();

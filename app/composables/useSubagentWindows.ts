@@ -7,6 +7,7 @@ import type {
 } from '../types/sse';
 import type { SessionScope } from './useGlobalEvents';
 import type { useFloatingWindows } from './useFloatingWindows';
+import { WINDOW_COLOR } from '../components/ToolWindow/utils';
 import { useDeltaAccumulator } from './useDeltaAccumulator';
 
 type SubagentEntry = {
@@ -26,7 +27,7 @@ type UseSubagentWindowsOptions = {
 };
 
 const SUBAGENT_WINDOW_PREFIX = 'subagent:';
-const SUBAGENT_WINDOW_COLOR = '#0ea5e9';
+const SUBAGENT_WINDOW_COLOR = WINDOW_COLOR.cyan;
 
 export function useSubagentWindows(options: UseSubagentWindowsOptions) {
   const {

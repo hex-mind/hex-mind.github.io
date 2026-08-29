@@ -246,7 +246,7 @@
           :aria-selected="viewMode === 'staged'"
           @click="setViewMode('staged')"
         >
-          Staged
+          Staged{{ stagedCount ? ` (${stagedCount})` : '' }}
         </button>
         <button
           type="button"
@@ -256,7 +256,7 @@
           :aria-selected="viewMode === 'changes'"
           @click="setViewMode('changes')"
         >
-          Changes
+          Changes{{ changesCount ? ` (${changesCount})` : '' }}
         </button>
       </div>
     </div>
@@ -265,7 +265,7 @@
       class="tree-empty"
       @click="emit('select-file', '')"
     >
-      No files.
+      {{ emptyLabel }}
     </div>
     <div v-else class="tree-scroll" @click="onTreeScrollClick">
       <div
@@ -293,7 +293,7 @@
           type="button"
           class="tree-toggle"
           :aria-label="isExpanded(row.node.path) ? 'Collapse directory' : 'Expand directory'"
-          @click.stop="emit('toggle-dir', row.node.path)"
+          @click.stop="toggleDirectory(row.node.path)"
         >
           <Icon
             :icon="isExpanded(row.node.path) ? 'lucide:chevron-down' : 'lucide:chevron-right'"
@@ -330,7 +330,8 @@
         <button
           type="button"
           class="tree-statusbar-btn"
-          aria-label="Reload file tree"
+          :aria-label="panelMode === 'git' ? 'Reload git status' : 'Reload file tree'"
+          :title="panelMode === 'git' ? 'Reload git status' : 'Reload file tree'"
           @click="emit('reload')"
         >
           <Icon icon="lucide:refresh-cw" :width="13" :height="13" />
@@ -406,6 +407,7 @@ const props = defineProps<{
   isLoading: boolean;
   error?: string;
   gitStatusByPath?: Record<string, GitFileStatus>;
+  gitStatusLoaded?: boolean;
   branchInfo?: GitBranchInfo | null;
   diffStats?: GitDiffStats | null;
   directoryName?: string;
@@ -421,6 +423,7 @@ const emit = defineEmits<{
   (event: 'open-diff-all', payload: { mode: 'staged' | 'changes' | 'all' }): void;
   (event: 'open-file', path: string): void;
   (event: 'reload'): void;
+  (event: 'load-branches'): void;
 }>();
 
 const viewMode = ref<TreeViewMode>('all');
@@ -429,12 +432,56 @@ const branchSearchQuery = ref('');
 const pushMenuOpen = ref(false);
 const pullMenuOpen = ref(false);
 
+const gitCollapsed = ref(new Set<string>());
+
+watch(
+  () => props.gitStatusLoaded,
+  (loaded) => {
+    if (!loaded) gitCollapsed.value = new Set();
+  },
+);
+
+function hasStaged(status: GitFileStatus) {
+  return status.index !== '' && status.index !== '?';
+}
+
+function hasChanges(status: GitFileStatus) {
+  return status.index === '?' || status.worktree === '?' || status.worktree !== '';
+}
+
 watch(
   () => props.panelMode,
   (mode) => {
     viewMode.value = mode === 'git' ? 'changes' : 'all';
   },
   { immediate: true },
+);
+
+const stagedCount = computed(
+  () => Object.values(props.gitStatusByPath ?? {}).filter(hasStaged).length,
+);
+const changesCount = computed(
+  () => Object.values(props.gitStatusByPath ?? {}).filter(hasChanges).length,
+);
+
+const emptyLabel = computed(() => {
+  if (props.panelMode !== 'git') return 'No files.';
+  if (!props.gitStatusLoaded) return 'Click refresh to load git status.';
+  if (viewMode.value === 'staged') return 'No staged files.';
+  if (viewMode.value === 'changes') return 'No unstaged changes.';
+  return 'No files.';
+});
+
+watch(
+  () => [props.panelMode, props.gitStatusLoaded, stagedCount.value, changesCount.value] as const,
+  ([mode, loaded, staged, changes]) => {
+    if (mode !== 'git' || !loaded) return;
+    if (viewMode.value === 'changes' && changes === 0 && staged > 0) {
+      viewMode.value = 'staged';
+    } else if (viewMode.value === 'staged' && staged === 0 && changes > 0) {
+      viewMode.value = 'changes';
+    }
+  },
 );
 const expanded = computed(() => new Set(props.expandedPaths));
 const branchIcon = computed(() => (props.branchInfo ? 'lucide:git-branch' : 'lucide:folder'));
@@ -497,7 +544,19 @@ function fileTypeClass(name: string) {
 }
 
 function isExpanded(path: string) {
+  if (props.panelMode === 'git') return !gitCollapsed.value.has(path);
   return expanded.value.has(path);
+}
+
+function toggleDirectory(path: string) {
+  if (props.panelMode === 'git') {
+    const next = new Set(gitCollapsed.value);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    gitCollapsed.value = next;
+    return;
+  }
+  emit('toggle-dir', path);
 }
 
 const filteredLocalBranches = computed(() => {
@@ -576,14 +635,6 @@ function normalizePath(value: string) {
     .replace(/^(\.\.\/)+/, '')
     .replace(/^\//, '')
     .replace(/\/$/, '');
-}
-
-function hasStaged(status: GitFileStatus) {
-  return status.index !== '' && status.index !== '?';
-}
-
-function hasChanges(status: GitFileStatus) {
-  return status.index === '?' || status.worktree === '?' || status.worktree !== '';
 }
 
 function needsPseudoNode(status: GitFileStatus) {
@@ -677,7 +728,11 @@ const visibleRows = computed(() => {
   const pushRows = (nodes: TreeNode[], depth: number) => {
     nodes.forEach((node) => {
       rows.push({ node, depth });
-      if (node.type === 'directory' && expanded.value.has(node.path) && node.children?.length) {
+      if (
+        node.type === 'directory' &&
+        node.children?.length &&
+        isExpanded(node.path)
+      ) {
         pushRows(node.children, depth + 1);
       }
     });
@@ -832,6 +887,7 @@ function onBranchPickerToggle() {
   branchMenuOpen.value = !branchMenuOpen.value;
   if (!branchMenuOpen.value) return;
   branchSearchQuery.value = '';
+  emit('load-branches');
 }
 
 function onBranchSelect(value: unknown) {
@@ -895,7 +951,7 @@ function onTreeScrollClick(event: MouseEvent) {
 
 function onRowClick(row: { node: TreeNode }, event: MouseEvent) {
   if (row.node.type === 'directory') {
-    emit('toggle-dir', row.node.path);
+    toggleDirectory(row.node.path);
     return;
   }
   if (event.detail > 1) return;

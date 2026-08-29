@@ -2,6 +2,8 @@
 
 > Cast a HEX on your code.
 
+Architecture for contributors and agents: [docs/architecture.md](docs/architecture.md), [AGENTS.md](AGENTS.md). Git panel fetch policy: [docs/prd-git-panel.md](docs/prd-git-panel.md).
+
 ## Quick start
 
 Start OpenCode with CORS enabled:

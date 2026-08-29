@@ -170,7 +170,7 @@ const renderedRoots = computed(() => {
   return visibleRoots.value.slice(0, revertedRootIndex.value);
 });
 
-const { files, fileCacheVersion } = useFileTree();
+const { files } = useFileTree();
 
 const filesWithBasenames = computed(() => {
   const set = new Set<string>();
@@ -228,7 +228,6 @@ const { initialRenderTrackingActive, beginInitialRenderTracking, handleMessageRe
 const { getAssistantHtml, getDeferredTransitionKey } = useAssistantPreRenderer({
   visibleRoots: renderedRoots,
   theme: computed(() => props.theme),
-  fileCacheVersion,
   filesWithBasenames,
   getFinalAnswer,
   hasAssistantMessages,

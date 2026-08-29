@@ -7,6 +7,7 @@ import type {
 } from '../types/sse';
 import type { SessionScope } from './useGlobalEvents';
 import type { useFloatingWindows } from './useFloatingWindows';
+import { WINDOW_COLOR } from '../components/ToolWindow/utils';
 import { useDeltaAccumulator } from './useDeltaAccumulator';
 
 export type ReasoningFinish = {
@@ -31,7 +32,7 @@ type UseReasoningWindowsOptions = {
 };
 
 const REASONING_WINDOW_PREFIX = 'reasoning:';
-const REASONING_WINDOW_COLOR = '#8b5cf6';
+const REASONING_WINDOW_COLOR = WINDOW_COLOR.purple;
 
 export function useReasoningWindows(options: UseReasoningWindowsOptions) {
   const {

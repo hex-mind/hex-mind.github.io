@@ -89,6 +89,7 @@
 <script setup lang="ts">
 import MessageViewer from './MessageViewer.vue';
 import { useFloatingWindow } from '../composables/useFloatingWindow';
+import { toolColor } from './ToolWindow/utils';
 import type { QuestionInfo, ReasoningPart, ToolPart } from '../types/sse';
 
 type QuestionHistoryEntry = {
@@ -220,18 +221,7 @@ function toolStatusLabel(part: ToolPart): string {
 }
 
 function toolHeaderColor(tool: string): string {
-  switch (tool) {
-    case 'bash':
-      return '#a855f7';
-    case 'edit':
-    case 'multiedit':
-    case 'apply_patch':
-      return '#f97316';
-    case 'write':
-      return '#f97316';
-    default:
-      return '#64748b';
-  }
+  return toolColor(tool);
 }
 
 function formatMessageTime(value?: number) {
@@ -300,19 +290,19 @@ function formatMessageTime(value?: number) {
 
 .history-item-reasoning {
   cursor: pointer;
-  border-color: color-mix(in srgb, #8b5cf6 40%, #1e293b);
+  border-color: color-mix(in srgb, #6c32f3 40%, #1e293b);
   transition:
     border-color 0.15s,
     background 0.15s;
 }
 
 .history-item-reasoning:hover {
-  border-color: color-mix(in srgb, #8b5cf6 60%, #1e293b);
-  background: color-mix(in srgb, #8b5cf6 6%, #020617);
+  border-color: color-mix(in srgb, #6c32f3 60%, #1e293b);
+  background: color-mix(in srgb, #6c32f3 6%, #020617);
 }
 
 .history-item-reasoning .history-meta {
-  background: color-mix(in srgb, #8b5cf6 18%, rgba(15, 23, 42, 0.82));
+  background: color-mix(in srgb, #6c32f3 18%, rgba(15, 23, 42, 0.82));
   border-bottom: none;
 }
 

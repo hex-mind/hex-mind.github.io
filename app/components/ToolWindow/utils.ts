@@ -65,37 +65,36 @@ export function formatQueryToolTitle(
   return query || undefined;
 }
 
+/** One accent per window role, sampled from the HEX logo. */
+export const WINDOW_COLOR = {
+  cyan: '#5ecbf5',
+  blue: '#4b7cec',
+  purple: '#6c32f3',
+  magenta: '#9622f5',
+} as const;
+
 export function toolColor(tool: string): string {
   switch (tool) {
-    case 'bash':
-      return '#a855f7';
-    case 'read':
-      return '#60a5fa';
     case 'grep':
-      return '#facc15';
     case 'glob':
-      return '#facc15';
-    case 'list':
-      return '#60a5fa';
-    case 'edit':
-    case 'multiedit':
-    case 'apply_patch':
-      return '#f97316';
-    case 'write':
-      return '#f97316';
     case 'webfetch':
     case 'websearch':
     case 'codesearch':
-      return '#2dd4bf';
+    case 'read':
+    case 'list':
+      return WINDOW_COLOR.cyan;
+    case 'bash':
+      return WINDOW_COLOR.blue;
     case 'task':
-      return '#818cf8';
     case 'batch':
-      return '#818cf8';
-    case 'plan_enter':
-    case 'plan_exit':
-      return '#94a3b8';
+      return WINDOW_COLOR.purple;
+    case 'edit':
+    case 'multiedit':
+    case 'apply_patch':
+    case 'write':
+      return WINDOW_COLOR.magenta;
     default:
-      return '#64748b';
+      return WINDOW_COLOR.blue;
   }
 }
 

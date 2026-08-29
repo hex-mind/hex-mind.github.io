@@ -5,27 +5,6 @@ import * as opencodeApi from '../utils/opencode';
 import { stripTrailingSlashes as normalizeDirectory } from '../utils/path';
 import { usePtyOneshot } from './usePtyOneshot';
 
-const GIT_ENV_PREAMBLE = [
-  'stty -opost -echo 2>/dev/null',
-  'export GIT_PAGER=cat',
-  'export GIT_TERMINAL_PROMPT=0',
-  'export NO_COLOR=1',
-  'export GIT_CONFIG_NOSYSTEM=1',
-  'export TERM=dumb',
-  'git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0',
-].join('\n');
-
-const GIT_STATUS_SCRIPT = [
-  GIT_ENV_PREAMBLE,
-  'git -c color.status=false -c color.ui=false --no-pager status --porcelain=v1 -z -b 2>/dev/null',
-  "printf '\\0##HEAD\\0'",
-  'git rev-parse --short HEAD 2>/dev/null',
-  "printf '\\0##DIFFSTAT\\0'",
-  'git diff --shortstat 2>/dev/null',
-  "printf '\\0##DIFFSTAT_CACHED\\0'",
-  'git diff --cached --shortstat 2>/dev/null',
-].join('\n');
-
 export type TreeNode = {
   name: string;
   path: string;
@@ -103,6 +82,7 @@ const treeLoading = ref(false);
 const treeError = ref('');
 const gitStatus = ref<GitStatus | null>(null);
 const gitStatusByPath = ref<Record<string, GitFileStatus>>({});
+const gitStatusLoading = ref(false);
 const files = ref<string[]>([]);
 const fileCacheVersion = ref(0);
 const branchEntries = ref<BranchEntry[]>([]);
@@ -110,6 +90,7 @@ const branchListLoading = ref(false);
 
 let fileCacheBuildId = 0;
 const DIRECTORY_RELOAD_DEBOUNCE_MS = 120;
+const AUTO_SCAN_FILE_LIMIT = 1000;
 const scheduledDirectoryReloads = new Map<string, ReturnType<typeof setTimeout>>();
 let gitStatusGeneration = 0;
 let branchListGeneration = 0;
@@ -319,171 +300,100 @@ function scheduleDirectoryReload(path: string) {
   );
 }
 
-function normalizeGitStatusCode(value: string): GitStatusCode {
-  if (value === ' ') return '';
-  if (value === '?') return '?';
-  if (value === 'M') return 'M';
-  if (value === 'A') return 'A';
-  if (value === 'D') return 'D';
-  if (value === 'R') return 'R';
-  if (value === 'C') return 'C';
+const GIT_STATUS_SCRIPT = [
+  'export GIT_PAGER=cat',
+  'export GIT_TERMINAL_PROMPT=0',
+  'printf "##BRANCH\\n"',
+  'git -c core.quotepath=false rev-parse --abbrev-ref HEAD 2>/dev/null || printf "(detached)\\n"',
+  'printf "##STATUS\\n"',
+  'git --no-pager -c core.quotepath=false status --porcelain=v1 2>/dev/null',
+  'printf "##UNSTAGED\\n"',
+  'git --no-pager -c core.quotepath=false diff --numstat 2>/dev/null',
+  'printf "##STAGED\\n"',
+  'git --no-pager -c core.quotepath=false diff --cached --numstat 2>/dev/null',
+].join('\n');
+
+function gitCodeFromPorcelain(char: string): GitStatusCode {
+  if (char === ' ' || char === '') return '';
+  if (char === 'M' || char === 'A' || char === 'D' || char === 'R' || char === 'C' || char === '?') {
+    return char;
+  }
+  if (char === 'T' || char === 'U') return 'M';
   return '';
 }
 
-function parseGitStatusBranch(line: string): GitBranchInfo {
-  const raw = line.replace(/^##\s*/, '').trim();
-  let ahead = 0;
-  let behind = 0;
-  let branchPart = raw;
-
-  const markerStart = raw.indexOf(' [');
-  if (markerStart >= 0 && raw.endsWith(']')) {
-    branchPart = raw.slice(0, markerStart);
-    const marker = raw.slice(markerStart + 2, -1);
-    const aheadMatch = marker.match(/ahead\s+(\d+)/);
-    const behindMatch = marker.match(/behind\s+(\d+)/);
-    ahead = aheadMatch ? Number.parseInt(aheadMatch[1], 10) || 0 : 0;
-    behind = behindMatch ? Number.parseInt(behindMatch[1], 10) || 0 : 0;
+function unquoteGitPath(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      return JSON.parse(
+        trimmed.replace(/\\([0-7]{3})/g, (_, oct) => String.fromCharCode(Number.parseInt(oct, 8))),
+      );
+    } catch {
+      return trimmed.slice(1, -1);
+    }
   }
+  return trimmed;
+}
 
-  const divergenceIndex = branchPart.indexOf('...');
-  if (divergenceIndex < 0) {
-    return {
-      branch: branchPart || '(detached)',
-      ahead,
-      behind,
-    };
+function parsePorcelainLine(line: string): GitFileStatus | null {
+  if (line.length < 4) return null;
+  if (line.startsWith('!!')) return null;
+  const index = gitCodeFromPorcelain(line[0] ?? '');
+  const worktree = gitCodeFromPorcelain(line[1] ?? '');
+  let rest = line.slice(3);
+  let origPath: string | undefined;
+  const arrow = ' -> ';
+  const arrowAt = rest.indexOf(arrow);
+  if (arrowAt >= 0) {
+    origPath = unquoteGitPath(rest.slice(0, arrowAt));
+    rest = rest.slice(arrowAt + arrow.length);
   }
+  const path = unquoteGitPath(rest).replace(/\/+$/, '');
+  if (!path) return null;
+  return origPath ? { path, index, worktree, origPath } : { path, index, worktree };
+}
 
-  const branch = branchPart.slice(0, divergenceIndex).trim() || '(detached)';
-  const upstream = branchPart.slice(divergenceIndex + 3).trim();
+function parseNumstatSection(text: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    const parts = line.split('\t');
+    if (parts.length < 3) continue;
+    const added = parts[0] === '-' ? 0 : Number.parseInt(parts[0] ?? '', 10);
+    const removed = parts[1] === '-' ? 0 : Number.parseInt(parts[1] ?? '', 10);
+    if (Number.isFinite(added)) additions += added;
+    if (Number.isFinite(removed)) deletions += removed;
+  }
+  return { additions, deletions };
+}
+
+function parseGitStatusOutput(output: string): {
+  branch: string;
+  files: GitFileStatus[];
+  diffStats: GitDiffStats;
+} {
+  const normalized = output.replace(/\r/g, '');
+  const take = (name: string) => {
+    const start = normalized.indexOf(`##${name}\n`);
+    if (start < 0) return '';
+    const from = start + name.length + 3;
+    const next = normalized.indexOf('\n##', from);
+    return (next < 0 ? normalized.slice(from) : normalized.slice(from, next)).replace(/\n+$/, '');
+  };
+  const branch = take('BRANCH').split('\n')[0]?.trim() || '(detached)';
+  const files = take('STATUS')
+    .split('\n')
+    .map((line) => parsePorcelainLine(line))
+    .filter((entry): entry is GitFileStatus => Boolean(entry))
+    .sort((a, b) => a.path.localeCompare(b.path));
   return {
     branch,
-    upstream: upstream || undefined,
-    ahead,
-    behind,
-  };
-}
-
-function stripAnsi(value: string) {
-  const ansiPattern = new RegExp(`${String.raw`\u001b`}\\[[0-?]*[ -/]*[@-~]`, 'g');
-  return value.replace(ansiPattern, '');
-}
-
-function parseShortstatLine(line: string): { additions: number; deletions: number } {
-  const addMatch = line.match(/(\d+)\s+insertion/);
-  const delMatch = line.match(/(\d+)\s+deletion/);
-  return {
-    additions: addMatch ? Number.parseInt(addMatch[1], 10) || 0 : 0,
-    deletions: delMatch ? Number.parseInt(delMatch[1], 10) || 0 : 0,
-  };
-}
-
-function parseGitStatusOutput(output: string): GitStatus {
-  const cleaned = stripAnsi(output).replace(/\r/g, '');
-  const tokens = cleaned.split('\0');
-
-  let branch: GitBranchInfo = {
-    branch: '(detached)',
-    ahead: 0,
-    behind: 0,
-  };
-  const entries: GitFileStatus[] = [];
-  let section: 'status' | 'head' | 'diffstat' | 'diffstat_cached' = 'status';
-  let headShort = '';
-  let unstagedAdditions = 0;
-  let unstagedDeletions = 0;
-  let stagedAdditions = 0;
-  let stagedDeletions = 0;
-  let pendingRename: { index: GitStatusCode; worktree: GitStatusCode; path: string } | null = null;
-
-  for (const rawToken of tokens) {
-    const trimmed = rawToken.trim();
-    if (!trimmed) continue;
-
-    // Section markers (may contain embedded newlines from surrounding commands)
-    const stripped = trimmed.replace(/\n/g, '').trim();
-    if (stripped === '##HEAD') {
-      section = 'head';
-      continue;
-    }
-    if (stripped === '##DIFFSTAT') {
-      section = 'diffstat';
-      continue;
-    }
-    if (stripped === '##DIFFSTAT_CACHED') {
-      section = 'diffstat_cached';
-      continue;
-    }
-
-    if (section === 'head') {
-      const lines = rawToken.split('\n');
-      for (const line of lines) {
-        const t = line.trim();
-        if (!headShort && /^[0-9a-f]+$/i.test(t)) {
-          headShort = t;
-        }
-      }
-      continue;
-    }
-
-    if (section === 'diffstat' || section === 'diffstat_cached') {
-      const lines = rawToken.split('\n');
-      for (const line of lines) {
-        const stat = parseShortstatLine(line);
-        if (section === 'diffstat') {
-          unstagedAdditions += stat.additions;
-          unstagedDeletions += stat.deletions;
-        } else {
-          stagedAdditions += stat.additions;
-          stagedDeletions += stat.deletions;
-        }
-      }
-      continue;
-    }
-
-    // Use rawToken (not trimmed) — X can be space (e.g. " M path")
-    if (pendingRename) {
-      entries.push({
-        path: pendingRename.path,
-        index: pendingRename.index,
-        worktree: pendingRename.worktree,
-        origPath: trimmed,
-      });
-      pendingRename = null;
-      continue;
-    }
-
-    if (trimmed.startsWith('## ')) {
-      branch = parseGitStatusBranch(trimmed);
-      continue;
-    }
-
-    if (rawToken.length >= 4 && rawToken[2] === ' ') {
-      const x = normalizeGitStatusCode(rawToken[0]);
-      const y = normalizeGitStatusCode(rawToken[1]);
-      const path = rawToken.slice(3);
-      if (!path) continue;
-
-      if (x === 'R' || x === 'C') {
-        pendingRename = { index: x, worktree: y, path };
-        continue;
-      }
-
-      entries.push({ path, index: x, worktree: y });
-    }
-  }
-
-  if (headShort) {
-    branch.headShort = headShort;
-  }
-
-  return {
-    branch,
-    files: entries,
+    files,
     diffStats: {
-      staged: { additions: stagedAdditions, deletions: stagedDeletions },
-      unstaged: { additions: unstagedAdditions, deletions: unstagedDeletions },
+      staged: parseNumstatSection(take('STAGED')),
+      unstaged: parseNumstatSection(take('UNSTAGED')),
     },
   };
 }
@@ -512,29 +422,40 @@ async function refreshGitStatusOnly() {
   const generation = ++gitStatusGeneration;
   const { runOneShotPtyCommand } = usePtyOneshot();
   try {
-    const output = await runOneShotPtyCommand('bash', [
-      '--noprofile',
-      '--norc',
-      '-c',
-      GIT_STATUS_SCRIPT,
-    ]);
+    const output = await runOneShotPtyCommand('bash', ['-c', GIT_STATUS_SCRIPT]);
     if (generation !== gitStatusGeneration) return;
-    if (!output.includes('##HEAD')) {
-      setGitStatus(null);
-      return;
-    }
+    if (getOptions().activeDirectory.value.trim() !== directory) return;
+
     const parsed = parseGitStatusOutput(output);
-    const filesByPath = new Map(parsed.files.map((entry) => [entry.path, entry]));
-    parsed.files = Array.from(filesByPath.values()).sort((a, b) => a.path.localeCompare(b.path));
-    setGitStatus(parsed);
+    setGitStatus({
+      branch: {
+        branch: parsed.branch || '(detached)',
+        ahead: 0,
+        behind: 0,
+      },
+      files: parsed.files,
+      diffStats: parsed.diffStats,
+    });
   } catch {
     if (generation !== gitStatusGeneration) return;
-    setGitStatus(null);
+    setGitStatus({
+      branch: { branch: '(detached)', ahead: 0, behind: 0 },
+      files: [],
+      diffStats: {
+        staged: { additions: 0, deletions: 0 },
+        unstaged: { additions: 0, deletions: 0 },
+      },
+    });
   }
 }
 
 async function refreshGitStatus() {
-  await refreshGitStatusOnly();
+  gitStatusLoading.value = true;
+  try {
+    await refreshGitStatusOnly();
+  } finally {
+    gitStatusLoading.value = false;
+  }
 }
 
 function parseBranchEntries(output: string): BranchEntry[] {
@@ -684,7 +605,7 @@ async function loadSingleDirectory(path: string) {
     treeNodes.value = updateTreeNodeChildren(treeNodes.value, path, mergedChildren);
     replaceDirectoryFilesInCache(path, mergedChildren);
   } catch (error) {
-    void error;
+    treeError.value = opencodeApi.formatDirectoryListError(error);
   }
 }
 
@@ -727,61 +648,68 @@ async function rebuildFileCache() {
     return;
   }
 
-  const AUTO_SCAN_FILE_LIMIT = 1000;
-  const queue: string[] = ['.'];
-  const visited = new Set<string>();
-  const collected: string[] = [];
-  let didSetRoot = false;
+  try {
+    const data = await opencodeApi.listFiles({ directory, path: '.' });
+    if (buildId !== fileCacheBuildId) return;
+    if (options.activeDirectory.value.trim() !== directory) return;
+
+    const list = Array.isArray(data) ? data : [];
+    const children = buildTreeNodes(list, directory, '.');
+    treeNodes.value = children;
+    replaceDirectoryFilesInCache('.', children);
+    treeError.value = '';
+    treeLoading.value = false;
+    void scanFilesInBackground(directory, buildId, children);
+  } catch (error) {
+    if (buildId !== fileCacheBuildId) return;
+    if (options.activeDirectory.value.trim() !== directory) return;
+    treeNodes.value = [];
+    files.value = [];
+    fileCacheVersion.value += 1;
+    treeError.value = opencodeApi.formatDirectoryListError(error);
+    treeLoading.value = false;
+  }
+}
+
+async function scanFilesInBackground(directory: string, buildId: number, rootChildren: TreeNode[]) {
+  const queue = rootChildren
+    .filter((child) => child.type === 'directory' && !child.ignored)
+    .map((child) => child.path);
+  const visited = new Set<string>(['.']);
+  const collected = files.value.slice();
 
   try {
     while (queue.length > 0) {
+      if (buildId !== fileCacheBuildId) return;
+      if (getOptions().activeDirectory.value.trim() !== directory) return;
       const path = queue.shift();
       if (!path || visited.has(path)) continue;
       visited.add(path);
 
       const data = await opencodeApi.listFiles({ directory, path });
       if (buildId !== fileCacheBuildId) return;
-      if (options.activeDirectory.value.trim() !== directory) return;
-
       const list = Array.isArray(data) ? data : [];
       const children = buildTreeNodes(list, directory, path);
-      if (path === '.') {
-        treeNodes.value = children;
-        didSetRoot = true;
-      } else {
-        treeNodes.value = updateTreeNodeChildren(treeNodes.value, path, children);
-      }
-
       for (const child of children) {
         if (child.type === 'file') {
           collected.push(child.path);
           continue;
         }
-        if (!child.ignored && !visited.has(child.path)) {
-          queue.push(child.path);
-        }
+        if (!child.ignored && !visited.has(child.path)) queue.push(child.path);
       }
-
       if (collected.length > AUTO_SCAN_FILE_LIMIT) break;
     }
 
     if (buildId !== fileCacheBuildId) return;
-    if (options.activeDirectory.value.trim() !== directory) return;
-    files.value = Array.from(new Set(collected)).sort((a, b) => a.localeCompare(b));
+    if (getOptions().activeDirectory.value.trim() !== directory) return;
+    const next = Array.from(new Set(collected)).sort((a, b) => a.localeCompare(b));
+    const changed =
+      next.length !== files.value.length || next.some((path, index) => path !== files.value[index]);
+    if (!changed) return;
+    files.value = next;
     fileCacheVersion.value += 1;
   } catch {
-    if (buildId !== fileCacheBuildId) return;
-    if (options.activeDirectory.value.trim() !== directory) return;
-    if (!didSetRoot) {
-      treeNodes.value = [];
-      files.value = [];
-      fileCacheVersion.value += 1;
-    }
-    treeError.value = '';
-  } finally {
-    if (buildId === fileCacheBuildId && options.activeDirectory.value.trim() === directory) {
-      treeLoading.value = false;
-    }
+    // Root listing is already visible; keep it if the background scan fails.
   }
 }
 
@@ -825,8 +753,6 @@ function initializeFileTree(options: UseFileTreeOptions) {
         return;
       }
       void reloadTree();
-      void refreshGitStatus();
-      void refreshBranchEntries();
     },
     { immediate: true },
   );
@@ -847,6 +773,7 @@ export function useFileTree(options?: UseFileTreeOptions) {
     treeError,
     gitStatus,
     gitStatusByPath,
+    gitStatusLoading,
     files,
     fileCacheVersion,
     reloadTree,

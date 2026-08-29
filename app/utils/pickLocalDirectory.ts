@@ -3,7 +3,7 @@ import * as opencodeApi from './opencode';
 export type PickDirectoryResult =
   | { status: 'cancelled' }
   | { status: 'resolved'; path: string }
-  | { status: 'unresolved'; hint: string };
+  | { status: 'unresolved'; hint: string; folderName: string };
 
 type FileWithPath = File & { path?: string };
 
@@ -77,11 +77,12 @@ async function resolveFromFiles(files: File[], homePath?: string): Promise<PickD
   const folderName = folderNameFromFiles(files);
   if (!folderName) return { status: 'cancelled' };
 
-  const hint = homePath ? `~/${folderName}/` : `${folderName}/`;
+  // No trailing slash: the picker treats `~/name` as home + filter, not a missing directory.
+  const hint = homePath ? `~/${folderName}` : folderName;
   const sampleRel = sampleInnerRelative(files);
   const resolved = await resolveFolderName(folderName, homePath, sampleRel);
   if (resolved) return { status: 'resolved', path: resolved };
-  return { status: 'unresolved', hint };
+  return { status: 'unresolved', hint, folderName };
 }
 
 function folderNameFromFiles(files: File[]): string {
@@ -174,13 +175,15 @@ async function resolveFolderName(
 
   const verified: string[] = [];
   for (const candidate of candidates) {
-    if (await matchesPickedFolder(candidate)) verified.push(candidate);
+    if (await parentContains(parentDir(candidate), basename(candidate), homePath)) {
+      verified.push(candidate);
+    }
   }
   if (verified.length === 0) return null;
   if (sampleRel) {
     const withSample = [];
     for (const dir of verified) {
-      if (await containsRelative(dir, sampleRel)) withSample.push(dir);
+      if (await containsRelative(dir, sampleRel, homePath)) withSample.push(dir);
     }
     if (withSample.length === 1) return withSample[0];
     if (withSample.length > 1) {
@@ -190,34 +193,45 @@ async function resolveFolderName(
   return verified.slice().sort((a, b) => b.length - a.length)[0] ?? null;
 }
 
-async function matchesPickedFolder(directory: string): Promise<boolean> {
+async function listEntries(absoluteDir: string, homePath?: string): Promise<unknown[]> {
   try {
-    const data = await opencodeApi.listFiles({ directory, path: '.' });
-    return Array.isArray(data);
+    const data = await opencodeApi.listFilesAt(absoluteDir, homePath);
+    return Array.isArray(data) ? data : [];
   } catch {
-    return false;
+    return [];
   }
 }
 
-async function containsRelative(directory: string, relPath: string): Promise<boolean> {
+function isNamedDirectory(entry: unknown, name: string): boolean {
+  if (!entry || typeof entry !== 'object') return false;
+  const record = entry as { name?: unknown; type?: unknown };
+  return record.name === name && record.type !== 'file';
+}
+
+async function parentContains(parent: string, name: string, homePath?: string): Promise<boolean> {
+  if (!name) return false;
+  const entries = await listEntries(parent, homePath);
+  return entries.some((entry) => isNamedDirectory(entry, name));
+}
+
+async function containsRelative(
+  directory: string,
+  relPath: string,
+  homePath?: string,
+): Promise<boolean> {
   const normalized = relPath.replace(/\\/g, '/').replace(/^\/+/, '');
   if (!normalized) return true;
   const parts = normalized.split('/');
   const name = parts.pop();
-  const parent = parts.join('/') || '.';
-  try {
-    const data = await opencodeApi.listFiles({ directory, path: parent });
-    if (!Array.isArray(data)) return false;
-    return data.some(
-      (entry) =>
-        entry &&
-        typeof entry === 'object' &&
-        'name' in entry &&
-        (entry as { name?: unknown }).name === name,
-    );
-  } catch {
-    return false;
-  }
+  if (!name) return true;
+  const parent = parts.length > 0 ? joinPath(directory, ...parts) : directory;
+  return parentContains(parent, name, homePath);
+}
+
+function parentDir(path: string): string {
+  const clean = path.replace(/\/+$/, '') || '/';
+  const index = clean.lastIndexOf('/');
+  return index <= 0 ? '/' : clean.slice(0, index);
 }
 
 function joinPath(...parts: string[]): string {

@@ -116,7 +116,7 @@ const api: FloatingWindowAPI = {
 provide(FLOATING_WINDOW_KEY, api);
 
 const windowStyle = computed(() => {
-  const color = props.entry.color || '#3a4150';
+  const color = props.entry.color || '#4b7cec';
   return {
     '--win-x': `${props.entry.x}px`,
     '--win-y': `${props.entry.y}px`,
@@ -125,14 +125,6 @@ const windowStyle = computed(() => {
     zIndex: props.entry.zIndex,
     '--window-color': color,
   };
-});
-
-const windowKind = computed(() => {
-  const key = props.entry.key;
-  if (key === 'thread-history' || key.startsWith('history-tool:')) return 'history';
-  if (key.startsWith('reasoning:') || key.startsWith('history-reasoning:')) return 'thinking';
-  if (key.startsWith('shell:')) return 'shell';
-  return 'tool';
 });
 
 const scrollClass = computed(() => {
@@ -446,7 +438,6 @@ function onResizeEnd(e: PointerEvent) {
     :style="windowStyle"
     @pointerdown.capture="onFocus"
     :data-floating-key="entry.key"
-    :data-window-kind="windowKind"
   >
     <div class="floating-window-titlebar" @pointerdown="onDragStart">
       <span class="title">{{ entry.title || 'Tool' }}</span>
@@ -536,20 +527,14 @@ function onResizeEnd(e: PointerEvent) {
   display: flex;
   flex-direction: column;
   max-width: 100vw;
-  background: color-mix(in srgb, var(--window-color, #3a4150) 12%, #1a1d24);
-  border: 1px solid var(--window-color, #3a4150);
+  background: #1a1d24;
+  border: 1px solid var(--window-color, #4b7cec);
   border-radius: 5px;
   font-family: var(--term-font-family, monospace);
   font-size: var(--term-font-size, 14px);
   line-height: var(--term-line-height, 1.5);
   color: #e2e8f0;
   pointer-events: auto;
-}
-
-.floating-window[data-window-kind='history'],
-.floating-window[data-window-kind='thinking'] {
-  background: color-mix(in srgb, var(--window-color, #3a4150) 8%, rgba(15, 23, 42, 0.7));
-  backdrop-filter: blur(18px);
 }
 
 .floating-window-titlebar {
@@ -559,10 +544,10 @@ function onResizeEnd(e: PointerEvent) {
   justify-content: space-between;
   padding: 0 4px;
   font-size: 12px;
-  color: color-mix(in srgb, var(--window-color, #3a4150) 40%, #e2e8f0);
-  background: color-mix(in srgb, var(--window-color, #3a4150) 22%, rgba(36, 40, 50, 0.95));
+  color: color-mix(in srgb, var(--window-color, #4b7cec) 40%, #e2e8f0);
+  background: color-mix(in srgb, var(--window-color, #4b7cec) 22%, rgba(36, 40, 50, 0.95));
   border-bottom: 1px solid
-    color-mix(in srgb, var(--window-color, #3a4150) 35%, rgba(90, 100, 120, 0.35));
+    color-mix(in srgb, var(--window-color, #4b7cec) 35%, rgba(90, 100, 120, 0.35));
   border-radius: 4px 4px 0 0;
   cursor: grab;
   user-select: none;
@@ -671,7 +656,7 @@ function onResizeEnd(e: PointerEvent) {
   align-items: center;
   gap: 4px;
   padding: 0 6px;
-  border: 1px solid var(--window-color, #3a4150);
+  border: 1px solid var(--window-color, #4b7cec);
   border-top: none;
   border-radius: 0 0 4px 4px;
   background: rgba(20, 23, 30, 0.96);
@@ -742,7 +727,7 @@ function onResizeEnd(e: PointerEvent) {
   height: 0;
   border-style: solid;
   border-width: 0 0 5px 5px;
-  border-color: transparent transparent var(--window-color, #3a4150) transparent;
+  border-color: transparent transparent var(--window-color, #4b7cec) transparent;
 }
 
 .floating-window-resizer:hover::before {

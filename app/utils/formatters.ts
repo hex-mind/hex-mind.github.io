@@ -1,11 +1,3 @@
-export function formatTokenCount(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '0';
-  if (n < 1000) return String(n);
-  if (n < 10_000) return `${(n / 1000).toFixed(1)}K`;
-  if (n < 1_000_000) return `${Math.round(n / 1000)}K`;
-  return `${(n / 1_000_000).toFixed(1)}M`;
-}
-
 export function contextSeverityClass(percent: number): string {
   if (percent >= 90) return 'ib-ctx-critical';
   if (percent >= 75) return 'ib-ctx-high';

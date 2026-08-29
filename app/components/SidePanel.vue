@@ -138,9 +138,10 @@
       <BookmarksList
         v-else-if="activeTab === 'recent'"
         :sessions="recentSessions"
-        icon="lucide:history"
         empty-text="No recent sessions."
         hide-remove
+        hide-icon
+        group-by-time
         show-session-menu
         @select-session="(session) => emit('select-bookmark', session)"
         @rename-session="(payload) => emit('rename-session', payload)"
@@ -161,6 +162,7 @@
         :is-loading="treeLoading"
         :error="treeError"
         :git-status-by-path="treeStatusByPath"
+        :git-status-loaded="treeGitStatusLoaded"
         :branch-info="treeBranchInfo"
         :diff-stats="treeDiffStats"
         :directory-name="treeDirectoryName"
@@ -173,6 +175,7 @@
         @open-diff-all="(payload) => emit('open-diff-all', payload)"
         @open-file="(path) => emit('open-file', path)"
         @reload="emit('reload')"
+        @load-branches="emit('load-branches')"
       />
     </div>
   </aside>
@@ -222,6 +225,7 @@ const props = defineProps<{
   treeLoading: boolean;
   treeError?: string;
   treeStatusByPath: Record<string, GitFileStatus>;
+  treeGitStatusLoaded?: boolean;
   treeBranchInfo?: GitBranchInfo | null;
   treeDiffStats?: GitDiffStats | null;
   treeDirectoryName?: string;
@@ -245,6 +249,7 @@ const emit = defineEmits<{
   (event: 'open-diff-all', payload: { mode: 'staged' | 'changes' | 'all' }): void;
   (event: 'open-file', path: string): void;
   (event: 'reload'): void;
+  (event: 'load-branches'): void;
   (event: 'open-settings'): void;
   (event: 'logout'): void;
   (event: 'select-search-hit', hit: SessionSearchHit): void;
@@ -289,6 +294,7 @@ const {
   treeLoading,
   treeError,
   treeStatusByPath,
+  treeGitStatusLoaded,
   treeBranchInfo,
   treeDiffStats,
   treeDirectoryName,

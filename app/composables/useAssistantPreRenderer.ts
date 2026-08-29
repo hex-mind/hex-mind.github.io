@@ -6,7 +6,6 @@ import { renderWorkerHtml } from '../utils/workerRenderer';
 type UseAssistantPreRendererOptions = {
   visibleRoots: Ref<MessageInfo[]>;
   theme: Ref<string>;
-  fileCacheVersion: Ref<number>;
   filesWithBasenames: Ref<string[]>;
   getFinalAnswer: (root: MessageInfo) => MessageInfo | undefined;
   hasAssistantMessages: (root: MessageInfo) => boolean;
@@ -22,10 +21,7 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
 
   const submitSeqMap = new Map<string, number>();
   const appliedSeqMap = new Map<string, number>();
-  const lastSubmitted = new Map<
-    string,
-    { answerId: string; content: string; theme: string; fileCacheVersion: number }
-  >();
+  const lastSubmitted = new Map<string, { answerId: string; content: string; theme: string }>();
 
   function submitAssistantRender(rootId: string, answerId: string, content: string) {
     const seq = (submitSeqMap.get(rootId) ?? 0) + 1;
@@ -59,7 +55,6 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
 
   watchEffect(() => {
     const theme = options.theme.value;
-    const nextFileCacheVersion = options.fileCacheVersion.value;
     for (const root of options.visibleRoots.value) {
       if (!options.hasAssistantMessages(root)) continue;
       const final = options.getFinalAnswer(root);
@@ -67,13 +62,7 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
       const content = options.getFinalAnswerContent(root);
 
       const last = lastSubmitted.get(root.id);
-      if (
-        last &&
-        last.answerId === answerId &&
-        last.content === content &&
-        last.theme === theme &&
-        last.fileCacheVersion === nextFileCacheVersion
-      ) {
+      if (last && last.answerId === answerId && last.content === content && last.theme === theme) {
         // Notify that cached HTML is already available so initial render
         // tracking can resolve the assistant key (prevents stuck spinner
         // when the same session is reloaded by FORK / REVERT / UNDO).
@@ -86,7 +75,6 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
         answerId,
         content,
         theme,
-        fileCacheVersion: nextFileCacheVersion,
       });
       submitAssistantRender(root.id, answerId, content);
     }

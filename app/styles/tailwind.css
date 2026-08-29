@@ -35,8 +35,7 @@ html:not([data-theme='light'])
     .modal,
     .project-picker-dialog,
     .ui-dropdown-menu,
-    .file-ref-popup,
-    .floating-window
+    .file-ref-popup
   ) {
   background-color: #1f1f1f;
   border-color: #2b2b2b;
@@ -227,7 +226,7 @@ html[data-theme='light']
   color: #2f2f2f !important;
 }
 
-html[data-theme='light'] :is(.thread-block, .todo-group, .bookmark-item) {
+html[data-theme='light'] :is(.thread-block, .todo-group) {
   background: #ffffff !important;
   border-color: #ececec !important;
 }
@@ -415,20 +414,14 @@ html[data-theme='light'] .modal-backdrop::backdrop {
 
 html[data-theme='light'] .floating-window {
   background: #ffffff !important;
-  border-color: color-mix(in srgb, var(--window-color, #9ca3af) 45%, #d1d5db) !important;
+  border-color: color-mix(in srgb, var(--window-color, #4b7cec) 45%, #d1d5db) !important;
   color: #2f2f2f !important;
 }
 
 html[data-theme='light'] .floating-window-titlebar {
-  background: color-mix(in srgb, var(--window-color, #9ca3af) 12%, #f7f7f8) !important;
+  background: color-mix(in srgb, var(--window-color, #4b7cec) 12%, #f7f7f8) !important;
   color: #374151 !important;
   border-bottom-color: #e5e7eb !important;
-}
-
-html[data-theme='light']
-  .floating-window:is([data-window-kind='history'], [data-window-kind='thinking']) {
-  background: rgba(255, 255, 255, 0.7) !important;
-  backdrop-filter: blur(18px);
 }
 
 html[data-theme='light'] .history-item {
@@ -675,9 +668,21 @@ html[data-theme='light'] .input-button.send-button.stop:hover:not(:disabled) {
   color: #b91c1c !important;
 }
 
-html[data-theme='light'] .bookmark-item.is-selected {
-  background: #f4f4f4 !important;
-  border-color: #e5e5e5 !important;
+html[data-theme='light'] .bookmark-item {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+html[data-theme='light'] .bookmark-item:hover,
+html[data-theme='light'] .bookmark-item.is-menu-open {
+  background: #ececec !important;
+}
+
+html[data-theme='light'] .bookmark-item.is-selected,
+html[data-theme='light'] .bookmark-item.is-selected:hover,
+html[data-theme='light'] .bookmark-item.is-selected.is-menu-open {
+  background: #e4e4e7 !important;
+  border-color: transparent !important;
 }
 
 html[data-theme='light'] .bookmark-item-title {
@@ -686,6 +691,7 @@ html[data-theme='light'] .bookmark-item-title {
 
 html[data-theme='light'] .bookmark-item-meta,
 html[data-theme='light'] .bookmarks-empty,
+html[data-theme='light'] .bookmarks-group-label,
 html[data-theme='light'] .search-empty,
 html[data-theme='light'] .search-hit-label {
   color: #6b7280 !important;
@@ -1141,16 +1147,6 @@ html[data-theme='light'] .agent-dropdown-name.is-build {
 
 html[data-theme='light'] .agent-dropdown-name.is-plan {
   color: #b45309 !important;
-}
-
-html[data-theme='light'] .floating-window[data-window-kind='shell'] {
-  border-color: #ddd6fe !important;
-}
-
-html[data-theme='light'] .floating-window[data-window-kind='shell'] .floating-window-titlebar {
-  background: #f5f3ff !important;
-  border-bottom-color: #ede9fe !important;
-  color: #6d28d9 !important;
 }
 
 html[data-theme='light'] :is(.attachment-item, .history-popup .ui-dropdown-item) {

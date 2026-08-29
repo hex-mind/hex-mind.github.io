@@ -17,23 +17,6 @@
         <Icon icon="lucide:gauge" :width="10" :height="10" />
         {{ contextPercent }}%
       </span>
-      <span v-if="tokens" class="ib-meta-item ib-meta-tokens">
-        <span class="ib-token-in" title="Input tokens"
-          ><Icon icon="lucide:arrow-up" :width="9" :height="9" />{{
-            formatTokenCount(tokens.input)
-          }}</span
-        >
-        <span class="ib-token-out" title="Output tokens"
-          ><Icon icon="lucide:arrow-down" :width="9" :height="9" />{{
-            formatTokenCount(tokens.output)
-          }}</span
-        >
-        <span class="ib-token-reason" title="Reasoning tokens"
-          ><Icon icon="lucide:brain" :width="9" :height="9" />{{
-            formatTokenCount(tokens.reasoning)
-          }}</span
-        >
-      </span>
     </span>
     <span class="ib-footer-actions">
       <button
@@ -83,14 +66,12 @@
 
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import type { MessageTokens } from '../types/message';
-import { contextSeverityClass, formatTokenCount } from '../utils/formatters';
+import { contextSeverityClass } from '../utils/formatters';
 
 defineProps<{
   timestamp: string;
   elapsed: string;
   contextPercent: number | null;
-  tokens: MessageTokens | null;
   hasDiffs: boolean;
   canCopyAnswer: boolean;
   copied: boolean;
@@ -133,18 +114,6 @@ defineEmits<{
   display: inline-flex;
   align-items: center;
   gap: 3px;
-}
-
-.ib-meta-tokens {
-  gap: 6px;
-}
-
-.ib-token-in,
-.ib-token-out,
-.ib-token-reason {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
 }
 
 .ib-ctx-low {
