@@ -15,6 +15,7 @@ import {
   getVcsInfo,
   listProjects,
   listSessions,
+  getSession,
   setAuthorization,
   setBaseUrl,
 } from '../utils/opencode';
@@ -37,6 +38,8 @@ type ConnectionState = {
   stateBuilder: ReturnType<typeof createStateBuilder>;
   notificationManager: ReturnType<typeof createNotificationManager>;
   bootstrapPromise?: Promise<void>;
+  knownDirectories: Set<string>;
+  knownSessionIds: Set<string>;
   activeSelection: {
     port: MessagePort;
     projectId: string;
@@ -787,6 +790,103 @@ function handleStatePacket(state: ConnectionState, packet: SsePacket) {
   }
 }
 
+function collectSessionDirectories(
+  builder: ReturnType<typeof createStateBuilder>,
+): Set<string> {
+  const directories = new Set<string>();
+  for (const project of Object.values(builder.getState().projects)) {
+    const worktree = normalizeDirectory(project.worktree);
+    if (worktree && worktree !== '/') directories.add(worktree);
+    for (const sandbox of Object.values(project.sandboxes)) {
+      const directory = normalizeDirectory(sandbox.directory);
+      if (directory && directory !== '/') directories.add(directory);
+      for (const session of Object.values(sandbox.sessions)) {
+        const sessionDirectory = normalizeDirectory(session.directory);
+        if (sessionDirectory && sessionDirectory !== '/') directories.add(sessionDirectory);
+      }
+    }
+  }
+  return directories;
+}
+
+function mergeKnownSessionIds(state: ConnectionState, sessionIds?: string[]) {
+  const added: string[] = [];
+  for (const entry of sessionIds ?? []) {
+    const sessionId = entry.trim();
+    if (!sessionId || state.knownSessionIds.has(sessionId)) continue;
+    state.knownSessionIds.add(sessionId);
+    added.push(sessionId);
+  }
+  return added;
+}
+
+async function resolveDirectoriesFromSessionIds(sessionIds: Iterable<string>) {
+  const directories = new Set<string>();
+  for (const sessionId of sessionIds) {
+    const trimmed = sessionId.trim();
+    if (!trimmed) continue;
+    try {
+      const raw = await getSession(trimmed);
+      const record = asRecord(raw);
+      const directory = normalizeDirectory(asString(record?.directory));
+      if (directory && directory !== '/') directories.add(directory);
+    } catch {
+      // Session may have been deleted; ignore and continue bootstrap.
+    }
+  }
+  return directories;
+}
+
+function mergeKnownDirectories(state: ConnectionState, directories?: string[]) {
+  const added: string[] = [];
+  for (const entry of directories ?? []) {
+    const directory = normalizeDirectory(entry);
+    if (!directory || directory === '/') continue;
+    if (state.knownDirectories.has(directory)) continue;
+    state.knownDirectories.add(directory);
+    added.push(directory);
+  }
+  return added;
+}
+
+async function loadKnownDirectories(state: ConnectionState, directories: string[]) {
+  const unique = Array.from(
+    new Set(directories.map((directory) => normalizeDirectory(directory)).filter(Boolean)),
+  );
+  if (unique.length === 0) return;
+
+  await queueOpencodeTask(state, async () => {
+    const projectIds = new Set<string>();
+    for (const directory of unique) {
+      const [rawSessions, rawStatuses] = await Promise.all([
+        listSessions({ directory, roots: true }).catch(() => []),
+        getSessionStatusMap(directory).catch(() => ({})),
+      ]);
+      const sessions = asObjectArray(rawSessions) as Parameters<
+        typeof state.stateBuilder.applySessions
+      >[0];
+      state.stateBuilder.applySessions(sessions);
+      state.stateBuilder.applyStatuses(asStatusMap(rawStatuses));
+      for (const session of sessions) {
+        const pid = session.projectID?.trim();
+        if (pid) projectIds.add(pid);
+      }
+
+      const raw = await getVcsInfo(directory).catch(() => null);
+      const vcsInfo = asRecord(raw);
+      const branch = asString(vcsInfo?.branch);
+      if (branch) {
+        state.stateBuilder.applyVcsInfo(directory, { branch });
+        const projectId = state.stateBuilder.resolveProjectIdForDirectory(directory);
+        if (projectId) projectIds.add(projectId);
+      }
+    }
+    for (const projectId of projectIds) {
+      emitProjectUpdated(state, projectId);
+    }
+  });
+}
+
 async function bootstrapState(state: ConnectionState): Promise<void> {
   if (state.bootstrapPromise) {
     return state.bootstrapPromise;
@@ -796,14 +896,28 @@ async function bootstrapState(state: ConnectionState): Promise<void> {
   const run = queueOpencodeTask(state, async () => {
     const projects = asObjectArray<Record<string, unknown>>(await listProjects());
     const directories = new Set<string>(['']);
+    const synced = new Set<string>();
 
     const syncDirectoryState = async (directory: string) => {
       const [sessions, statuses] = await Promise.all([
-        listSessions({ directory, roots: true }),
-        getSessionStatusMap(directory),
+        listSessions({ directory, roots: true }).catch(() => []),
+        getSessionStatusMap(directory).catch(() => ({})),
       ]);
       builder.applySessions(asObjectArray(sessions) as Parameters<typeof builder.applySessions>[0]);
       builder.applyStatuses(asStatusMap(statuses));
+    };
+
+    const syncPending = async (pending: Iterable<string>) => {
+      const next = Array.from(new Set(Array.from(pending))).filter(
+        (directory) => !synced.has(directory),
+      );
+      if (next.length === 0) return;
+      await Promise.all(
+        next.map(async (directory) => {
+          synced.add(directory);
+          await syncDirectoryState(directory);
+        }),
+      );
     };
 
     builder.applyProjects(projects as Parameters<typeof builder.applyProjects>[0]);
@@ -822,14 +936,28 @@ async function bootstrapState(state: ConnectionState): Promise<void> {
       });
     });
 
-    await Promise.all(
-      Array.from(directories).map(async (directory) => {
-        await syncDirectoryState(directory);
-      }),
-    );
+    state.knownDirectories.forEach((directory) => {
+      directories.add(directory);
+    });
+
+    const fromSessions = await resolveDirectoriesFromSessionIds(state.knownSessionIds);
+    fromSessions.forEach((directory) => directories.add(directory));
+
+    await syncPending(directories);
+
+    for (let round = 0; round < 5; round++) {
+      const discovered = collectSessionDirectories(builder);
+      state.knownDirectories.forEach((directory) => discovered.add(directory));
+      const fromSessions = await resolveDirectoriesFromSessionIds(state.knownSessionIds);
+      fromSessions.forEach((directory) => discovered.add(directory));
+      const pending = Array.from(discovered).filter((directory) => !synced.has(directory));
+      if (pending.length === 0) break;
+      await syncPending(pending);
+    }
 
     await Promise.all(
-      Array.from(directories).map(async (directory) => {
+      Array.from(synced).map(async (directory) => {
+        if (!directory) return;
         const raw = await getVcsInfo(directory).catch(() => null);
         const vcsInfo = asRecord(raw);
         if (!vcsInfo) return;
@@ -891,6 +1019,8 @@ function createConnectionState(baseUrl: string, authorization?: string) {
       projectId,
       sessionId: state.stateBuilder.resolveRootSessionIdForProject(projectId, sessionId),
     })),
+    knownDirectories: new Set<string>(),
+    knownSessionIds: new Set<string>(),
     activeSelection: null,
     client: createSseConnection({
       onPacket(packet) {
@@ -919,7 +1049,13 @@ function createConnectionState(baseUrl: string, authorization?: string) {
   return state;
 }
 
-function attachPort(port: MessagePort, baseUrl: string, authorization?: string) {
+function attachPort(
+  port: MessagePort,
+  baseUrl: string,
+  authorization?: string,
+  directories?: string[],
+  sessionIds?: string[],
+) {
   detachPort(port);
   const key = toKey(baseUrl, authorization);
   const existing = connections.get(key);
@@ -928,6 +1064,8 @@ function attachPort(port: MessagePort, baseUrl: string, authorization?: string) 
     connections.set(key, state);
   }
 
+  const addedDirectories = mergeKnownDirectories(state, directories);
+  const addedSessionIds = mergeKnownSessionIds(state, sessionIds);
   state.ports.add(port);
   portToKey.set(port, key);
 
@@ -939,6 +1077,21 @@ function attachPort(port: MessagePort, baseUrl: string, authorization?: string) 
         projects: state.stateBuilder.getState().projects,
         notifications: state.notificationManager.getState(),
       });
+      if (addedDirectories.length > 0 || addedSessionIds.length > 0) {
+        void (async () => {
+          const extra = [...addedDirectories];
+          if (addedSessionIds.length > 0) {
+            const resolved = await queueOpencodeTask(state, () =>
+              resolveDirectoriesFromSessionIds(addedSessionIds),
+            );
+            extra.push(...resolved);
+            mergeKnownDirectories(state, extra);
+          }
+          if (extra.length > 0) {
+            await loadKnownDirectories(state, extra);
+          }
+        })().catch(() => {});
+      }
     }
   }
 }
@@ -952,7 +1105,13 @@ function handleMessage(port: MessagePort, event: MessageEvent<TabToWorkerMessage
       send(port, { type: 'connection.error', message: 'SSE base URL is empty.' });
       return;
     }
-    attachPort(port, message.baseUrl, message.authorization);
+    attachPort(
+      port,
+      message.baseUrl,
+      message.authorization,
+      message.directories,
+      message.sessionIds,
+    );
     return;
   }
 
@@ -969,29 +1128,9 @@ function handleMessage(port: MessagePort, event: MessageEvent<TabToWorkerMessage
   if (message.type === 'load-sessions') {
     const directory = normalizeDirectory(message.directory);
     if (!directory) return;
+    mergeKnownDirectories(state, [directory]);
 
-    void queueOpencodeTask(state, async () => {
-      const [rawSessions, rawStatuses] = await Promise.all([
-        listSessions({ directory, roots: true }),
-        getSessionStatusMap(directory),
-      ]);
-
-      const sessions = asObjectArray(rawSessions) as Parameters<
-        typeof state.stateBuilder.applySessions
-      >[0];
-      state.stateBuilder.applySessions(sessions);
-
-      const projectIds = new Set<string>();
-      for (const session of sessions) {
-        const pid = session.projectID?.trim();
-        if (pid) projectIds.add(pid);
-      }
-
-      state.stateBuilder.applyStatuses(asStatusMap(rawStatuses));
-      for (const projectId of projectIds) {
-        emitProjectUpdated(state, projectId);
-      }
-    }).catch(() => {});
+    void loadKnownDirectories(state, [directory]).catch(() => {});
     return;
   }
 

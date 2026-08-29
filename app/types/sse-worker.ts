@@ -6,6 +6,8 @@ export type TabToWorkerMessage =
       type: 'connect';
       baseUrl: string;
       authorization?: string;
+      directories?: string[];
+      sessionIds?: string[];
     }
   | {
       type: 'disconnect';

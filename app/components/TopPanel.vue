@@ -227,9 +227,6 @@
                               <span class="session-title">{{
                                 formatSessionTitle(session.title, session.slug, session.id)
                               }}</span>
-                              <span v-if="session.archivedAt" class="session-badge-archived"
-                                >archived</span
-                              >
                             </div>
                             <span
                               v-if="session.timeCreated || session.timeUpdated"
@@ -240,7 +237,7 @@
                           </div>
                         </div>
                         <button
-                          v-if="isShiftPressed && !session.archivedAt"
+                          v-if="isShiftPressed"
                           type="button"
                           class="tree-action-button session-del danger"
                           title="Delete session permanently"
@@ -257,12 +254,35 @@
                           <Icon icon="lucide:trash-2" :width="16" :height="16" />
                         </button>
                         <button
-                          v-else-if="!session.archivedAt"
+                          v-else-if="session.archivedAt"
+                          type="button"
+                          class="tree-action-button session-del archive is-filled"
+                          title="Unarchive"
+                          @mousedown.prevent.stop
+                          @click.prevent.stop="
+                            handleSessionUnarchive(
+                              session.id,
+                              sandbox.directory,
+                              worktree.projectId,
+                            )
+                          "
+                        >
+                          <Icon icon="lucide:archive" :width="16" :height="16" />
+                        </button>
+                        <button
+                          v-else
                           type="button"
                           class="tree-action-button session-del archive"
                           title="Archive"
                           @mousedown.prevent.stop
-                          @click.prevent.stop="handleSessionArchive(session.id, close)"
+                          @click.prevent.stop="
+                            handleSessionArchive(
+                              session.id,
+                              sandbox.directory,
+                              worktree.projectId,
+                              close,
+                            )
+                          "
                         >
                           <Icon icon="lucide:archive" :width="16" :height="16" />
                         </button>
@@ -403,7 +423,8 @@ const emit = defineEmits<{
   (event: 'new-session-in', payload: { worktree: string; directory: string }): void;
   (event: 'delete-active-directory', value: string): void;
   (event: 'delete-session', payload: { sessionId: string; directory: string; projectId?: string }): void;
-  (event: 'archive-session', value: string): void;
+  (event: 'archive-session', payload: { sessionId: string; directory: string; projectId?: string }): void;
+  (event: 'unarchive-session', payload: { sessionId: string; directory: string; projectId?: string }): void;
   (event: 'open-directory'): void;
   (event: 'open-shell'): void;
   (event: 'toggle-side-panel'): void;
@@ -674,9 +695,22 @@ function handleSessionDelete(
   close?.();
 }
 
-function handleSessionArchive(sessionId: string, close?: () => void) {
-  emit('archive-session', sessionId);
+function handleSessionArchive(
+  sessionId: string,
+  directory: string,
+  projectId: string | undefined,
+  close?: () => void,
+) {
+  emit('archive-session', { sessionId, directory, projectId });
   close?.();
+}
+
+function handleSessionUnarchive(
+  sessionId: string,
+  directory: string,
+  projectId: string | undefined,
+) {
+  emit('unarchive-session', { sessionId, directory, projectId });
 }
 
 function handleGlobalKeydown(event: KeyboardEvent) {
@@ -1025,6 +1059,11 @@ function handleOpenDirectory(close: () => void) {
   color: #c4b5fd;
 }
 
+.tree-action-button.archive.is-filled :deep(svg),
+.tree-action-button.archive.is-filled :deep(path) {
+  fill: currentColor;
+}
+
 /* Session rows: wrapper provides indentation via :deep() */
 .tree-session-row :deep(.ui-dropdown-item) {
   padding-left: 40px;
@@ -1168,18 +1207,6 @@ function handleOpenDirectory(close: () => void) {
   color: #9d9d9d;
   white-space: nowrap;
   flex-basis: 100%;
-}
-
-.session-badge-archived {
-  flex: 0 0 auto;
-  margin-left: auto;
-  font-size: 10px;
-  line-height: 1;
-  color: #c4b5fd;
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  border-radius: 999px;
-  padding: 2px 6px;
 }
 
 .session-del {

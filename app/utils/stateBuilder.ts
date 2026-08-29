@@ -419,7 +419,11 @@ export function createStateBuilder() {
       directory: sandbox.directory,
       timeCreated: info.time?.created ?? previous?.timeCreated,
       timeUpdated: info.time?.updated ?? previous?.timeUpdated,
-      timeArchived: info.time ? info.time.archived : previous?.timeArchived,
+      timeArchived: info.time
+        ? info.time.archived && info.time.archived > 0
+          ? info.time.archived
+          : undefined
+        : previous?.timeArchived,
       revert,
     };
 

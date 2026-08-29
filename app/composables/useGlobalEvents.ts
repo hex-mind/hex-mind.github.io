@@ -3,6 +3,7 @@ import type { GlobalEventMap, SsePacket } from '../types/sse';
 import type { TabToWorkerMessage, WorkerToTabMessage } from '../types/sse-worker';
 import { createSseConnection } from '../utils/sseConnection';
 import { TypedEmitter } from '../utils/eventEmitter';
+import { readInstanceDirectories } from '../utils/instanceDirectories';
 import SseSharedWorker from '../workers/sse-shared-worker?sharedworker';
 
 type EventKey = keyof GlobalEventMap;
@@ -212,6 +213,14 @@ function createDirectTransport(callbacks: TransportCallbacks): Transport {
   };
 }
 
+function connectSessionIds() {
+  if (typeof window === 'undefined') return [];
+  const sessionId = new URLSearchParams(window.location.search).get('session')?.trim();
+  return sessionId ? [sessionId] : [];
+}
+
+const bootSessionIds = connectSessionIds();
+
 function createSharedWorkerTransport(callbacks: TransportCallbacks): Transport {
   let worker: SharedWorker | null = null;
   let connected = false;
@@ -295,6 +304,8 @@ function createSharedWorkerTransport(callbacks: TransportCallbacks): Transport {
         type: 'connect',
         baseUrl: normalized,
         authorization,
+        directories: readInstanceDirectories(),
+        sessionIds: Array.from(new Set([...bootSessionIds, ...connectSessionIds()])),
       };
       ensureWorker().port.postMessage(message);
       if (options.failFast) {

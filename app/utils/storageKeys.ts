@@ -11,6 +11,7 @@ export const StorageKeys = {
     inputPanelCollapsed: 'state.inputPanelCollapsed.v1',
     sidePanelTab: 'state.sidePanelTab.v1',
     lastAuthError: 'state.lastAuthError.v1',
+    instanceDirectories: 'state.instanceDirectories.v1',
   },
   drafts: {
     composer: 'drafts.composer.v1',

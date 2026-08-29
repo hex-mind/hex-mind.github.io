@@ -26,6 +26,7 @@
           @delete-active-directory="deleteWorktree"
           @delete-session="deleteSession"
           @archive-session="archiveSession"
+          @unarchive-session="unarchiveSession"
           @select-session="handleTopPanelSessionSelect"
           @open-directory="openProjectPicker"
           @toggle-side-panel="toggleSidePanelCollapsed"
@@ -346,6 +347,7 @@ import { opencodeTheme, resolveTheme, resolveAgentColor } from './utils/theme';
 import { splitFileContentDirectoryAndPath } from './utils/path';
 import { formatSessionTitle } from './utils/formatters';
 import { pickLocalDirectory } from './utils/pickLocalDirectory';
+import { rememberInstanceDirectories } from './utils/instanceDirectories';
 import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
 import { useBookmarkedSessions } from './composables/useBookmarkedSessions';
@@ -2291,6 +2293,7 @@ async function fetchHomePath() {
 }
 
 async function createSessionInDirectory(directory: string) {
+  rememberInstanceDirectories([directory]);
   const session = await openCodeApi.createSession(directory);
   if (!session?.id) return undefined;
   await switchSessionSelection(session.projectID, session.id);
@@ -2439,19 +2442,45 @@ async function deleteSession(
   }
 }
 
-async function archiveSession(sessionId: string) {
+async function archiveSession(payload: {
+  sessionId: string;
+  directory?: string;
+  projectId?: string;
+}) {
   if (!ensureConnectionReady('Archiving session')) return;
   sessionError.value = '';
+  const sessionId = payload.sessionId.trim();
   if (!sessionId) return;
   try {
-    const directory = activeDirectory.value.trim();
+    const directory = (payload.directory || activeDirectory.value).trim();
     await openCodeApi.archiveSession({
       sessionId,
-      projectId: selectedProjectId.value,
+      projectId: payload.projectId || selectedProjectId.value,
       directory: directory || undefined,
     });
   } catch (error) {
     sessionError.value = `Session archive failed: ${toErrorMessage(error)}`;
+  }
+}
+
+async function unarchiveSession(payload: {
+  sessionId: string;
+  directory?: string;
+  projectId?: string;
+}) {
+  if (!ensureConnectionReady('Unarchiving session')) return;
+  sessionError.value = '';
+  const sessionId = payload.sessionId.trim();
+  if (!sessionId) return;
+  try {
+    const directory = (payload.directory || activeDirectory.value).trim();
+    await openCodeApi.unarchiveSession({
+      sessionId,
+      projectId: payload.projectId || selectedProjectId.value,
+      directory: directory || undefined,
+    });
+  } catch (error) {
+    sessionError.value = `Session unarchive failed: ${toErrorMessage(error)}`;
   }
 }
 
@@ -2495,6 +2524,7 @@ async function handleProjectDirectorySelect(directory: string) {
   closeProjectPicker();
   if (!directory) return;
 
+  rememberInstanceDirectories([directory]);
   const { projectId, sessionId } = await openCodeApi.openProject(directory);
   ge.sendToWorker({
     type: 'load-sessions',
@@ -4072,9 +4102,7 @@ watch(
   ([projectId, sessionId]) => {
     if (projectId && sessionId) {
       replaceQuerySelection(projectId, sessionId);
-      return;
     }
-    replaceQuerySelection('', '');
   },
   { immediate: true },
 );
@@ -4108,6 +4136,7 @@ watch(selectedModel, () => {
 });
 
 watch(activeDirectory, (directory) => {
+  rememberInstanceDirectories([directory]);
   if (isBootstrapping.value) return;
   const activePath = directory || undefined;
   if (!activePath) {
@@ -4120,6 +4149,22 @@ watch(activeDirectory, (directory) => {
   void fetchCommands(activePath);
   void reloadTodosForAllowedSessions();
 });
+
+watch(
+  () => {
+    const directories: string[] = [];
+    for (const project of Object.values(serverState.projects)) {
+      for (const sandbox of Object.values(project.sandboxes)) {
+        if (sandbox.directory) directories.push(sandbox.directory);
+      }
+    }
+    return directories.sort().join('\n');
+  },
+  (joined) => {
+    if (!joined) return;
+    rememberInstanceDirectories(joined.split('\n'));
+  },
+);
 
 watch(sidePanelCollapsed, () => {
   persistSidePanelCollapsed(sidePanelCollapsed.value);
@@ -5336,6 +5381,24 @@ async function startInitialization() {
   try {
     connectionState.value = 'connecting';
     initLoadingMessage.value = 'Connecting to SSE stream...';
+    opencodeApi.setBaseUrl(credentials.baseUrl.value);
+    opencodeApi.setAuthorization(credentials.authHeader.value);
+    rememberInstanceDirectories(
+      bookmarkedSessions.value.flatMap((entry) => [entry.directory, entry.worktree]),
+    );
+    const querySessionId = initialQuery.sessionId.trim();
+    if (querySessionId) {
+      try {
+        const info = (await opencodeApi.getSession(querySessionId)) as {
+          directory?: string;
+        } | null;
+        if (info && typeof info.directory === 'string') {
+          rememberInstanceDirectories([info.directory]);
+        }
+      } catch {
+        // Bootstrap can still proceed from remembered directories and GET /project.
+      }
+    }
     await ge.connect({ failFast: true, timeoutMs: 10000 });
     connectionState.value = 'bootstrapping';
     initLoadingMessage.value = 'Loading server path...';

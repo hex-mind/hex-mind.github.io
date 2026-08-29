@@ -909,12 +909,6 @@ html[data-theme='light']
   border-color: #d1d5db !important;
 }
 
-html[data-theme='light'] .session-badge-archived {
-  background: #f3e8ff !important;
-  border-color: #ddd6fe !important;
-  color: #7c3aed !important;
-}
-
 html[data-theme='light'] .tree-action-button.archive {
   color: #7c3aed !important;
 }
