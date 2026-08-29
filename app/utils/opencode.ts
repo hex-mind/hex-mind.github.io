@@ -76,6 +76,20 @@ function buildHeaders(options?: RequestOptions, contentType?: string) {
   return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
+function formatHttpError(path: string, status: number, body: unknown) {
+  const record = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  const data =
+    record?.data && typeof record.data === 'object' && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : null;
+  const detail =
+    (typeof data?.message === 'string' && data.message.trim()) ||
+    (typeof record?.message === 'string' && record.message.trim()) ||
+    (typeof body === 'string' && body.trim()) ||
+    '';
+  return detail ? `${path} request failed (${status}): ${detail}` : `${path} request failed (${status})`;
+}
+
 async function getJson(
   path: string,
   params?: Record<string, QueryValue>,
@@ -88,8 +102,9 @@ async function getJson(
       signal: options?.signal,
     }),
   );
-  if (!response.ok) throw new Error(`${path} request failed (${response.status})`);
-  return parseJson(response);
+  const body = await parseJson(response);
+  if (!response.ok) throw new Error(formatHttpError(path, response.status, body));
+  return body;
 }
 
 async function sendJson(
@@ -105,8 +120,9 @@ async function sendJson(
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     }),
   );
-  if (!response.ok) throw new Error(`${path} request failed (${response.status})`);
-  return parseJson(response);
+  const parsed = await parseJson(response);
+  if (!response.ok) throw new Error(formatHttpError(path, response.status, parsed));
+  return parsed;
 }
 
 export function createWsUrl(

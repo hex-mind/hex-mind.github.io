@@ -17,7 +17,7 @@
       <Dropdown
         v-model:open="tipsMenuOpen"
         placement="top"
-        :popup-style="{ width: '280px', marginLeft: '44px' }"
+        :popup-style="{ width: '300px', marginLeft: '44px' }"
       >
         <template #trigger>
           <button
@@ -31,11 +31,47 @@
           </button>
         </template>
         <div class="activity-tips" @click.stop>
-          <p>Hold <kbd>Shift</kbd> to show delete for a worktree, branch, or session.</p>
-          <p>
-            Feedback? Discord:
-            <span class="activity-tips-handle">dreamingasfish</span>
+          <p class="activity-tips-note">
+            Hold <kbd>Shift</kbd> on a worktree or path, then click archive to show archived
+            sessions. Shift also reveals delete.
           </p>
+          <p class="activity-tips-note">
+            Todo only appears on complex tasks, when the agent breaks work into steps.
+          </p>
+          <div class="activity-tips-section">
+            <div class="activity-tips-title">Shortcuts</div>
+            <dl class="activity-tips-shortcuts">
+              <div>
+                <dt>
+                  <kbd>{{ modKey }}</kbd>
+                  <kbd>J</kbd>
+                </dt>
+                <dd>New session</dd>
+              </div>
+              <div>
+                <dt>
+                  <kbd>{{ altKey }}</kbd>
+                  <kbd>↑</kbd>
+                  <kbd>↓</kbd>
+                </dt>
+                <dd>Switch session</dd>
+              </div>
+              <div>
+                <dt>
+                  <kbd>Esc</kbd>
+                  <kbd>Esc</kbd>
+                </dt>
+                <dd>Stop</dd>
+              </div>
+            </dl>
+          </div>
+          <div class="activity-tips-footer">
+            <span class="activity-tips-feedback">Feedback?</span>
+            <span>
+              Discord
+              <span class="activity-tips-handle">dreamingasfish</span>
+            </span>
+          </div>
         </div>
       </Dropdown>
       <a
@@ -112,13 +148,10 @@
         @archive-session="(session) => emit('archive-session', session)"
         @delete-session="(session) => emit('delete-session', session)"
       />
-      <div v-else-if="activeTab === 'search'" class="search-panel">
-        <label class="search-field">
-          <span class="sr-only">Search</span>
-          <input type="search" placeholder="Search" aria-label="Search" />
-          <Icon icon="lucide:search" :width="15" :height="15" />
-        </label>
-      </div>
+      <SessionSearch
+        v-else-if="activeTab === 'search'"
+        @select-hit="(hit) => emit('select-search-hit', hit)"
+      />
       <TreeView
         v-else
         :panel-mode="activeTab === 'git' ? 'git' : 'files'"
@@ -153,6 +186,8 @@ import DropdownItem from './Dropdown/Item.vue';
 import TodoList from './TodoList.vue';
 import BookmarksList, { type BookmarkedSessionView } from './BookmarksList.vue';
 import type { BranchEntry } from '../composables/useFileTree';
+import SessionSearch from './SessionSearch.vue';
+import type { SessionSearchHit } from '../utils/sessionSearch';
 import TreeView, {
   type GitBranchInfo,
   type GitDiffStats,
@@ -212,6 +247,7 @@ const emit = defineEmits<{
   (event: 'reload'): void;
   (event: 'open-settings'): void;
   (event: 'logout'): void;
+  (event: 'select-search-hit', hit: SessionSearchHit): void;
 }>();
 
 export type SidePanelTab = 'recent' | 'files' | 'git' | 'search' | 'todo' | 'bookmarks';
@@ -230,6 +266,11 @@ const activeTabLabel = computed(
 );
 const settingsMenuOpen = ref(false);
 const tipsMenuOpen = ref(false);
+const isMac =
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const modKey = isMac ? '⌘' : 'Ctrl';
+const altKey = isMac ? '⌥' : 'Alt';
 
 function onSettingsMenuSelect(value: unknown) {
   if (value === 'settings') emit('open-settings');
@@ -326,8 +367,8 @@ const {
 .activity-tips {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 12px;
+  padding: 10px 12px 8px;
   color: #cccccc;
   font-size: 12px;
   line-height: 1.45;
@@ -337,15 +378,82 @@ const {
   margin: 0;
 }
 
+.activity-tips-note {
+  color: #b4b4b4;
+  line-height: 1.5;
+}
+
+.activity-tips-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.activity-tips-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
+.activity-tips-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.activity-tips-shortcuts > div {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.activity-tips-shortcuts dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+
+.activity-tips-shortcuts dd {
+  margin: 0;
+  color: #d0d0d0;
+}
+
 .activity-tips kbd {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  height: 20px;
   padding: 0 5px;
   border: 1px solid #3c3c3c;
   border-radius: 4px;
   background: #2b2b2b;
   font-size: 11px;
   font-family: inherit;
+  font-weight: 500;
+  line-height: 1;
   color: #e6e6e6;
+}
+
+.activity-tips-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: #8a8a8a;
+}
+
+.activity-tips-feedback {
+  font-weight: 600;
+  color: #b4b4b4;
 }
 
 .activity-tips-handle {
@@ -369,15 +477,6 @@ const {
 .activity-button.is-active {
   background: rgba(255, 255, 255, 0.13);
   color: #d7d7d7;
-}
-
-.activity-button.is-active::before {
-  content: '';
-  position: absolute;
-  inset: 8px auto 8px 0;
-  width: 2px;
-  border-radius: 999px;
-  background: #0078d4;
 }
 
 .side-body {
@@ -430,54 +529,6 @@ const {
 }
 
 .side-panel.is-collapsed .activity-bar {
-  border: 0;
-}
-
-.search-panel {
-  min-height: 0;
-  padding: 6px 12px;
-}
-
-.search-field {
-  height: 27px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 7px;
-  border: 1px solid #2b2b2b;
-  border-radius: 8px;
-  background: #181818;
-  color: #9d9d9d;
-}
-
-.search-field:focus-within {
-  border-color: #0078d4;
-}
-
-.search-field input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: #e2e8f0;
-  font: inherit;
-  font-size: 13px;
-}
-
-.search-field input::placeholder {
-  color: #64748b;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
   border: 0;
 }
 

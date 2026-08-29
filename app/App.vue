@@ -9,23 +9,23 @@
     <template v-if="uiInitState === 'ready'">
       <header class="app-header">
         <TopPanel
-          ref="topPanelRef"
           :tree-data="topPanelTreeData"
           :notification-sessions="notificationSessions"
           :active-directory="activeDirectory"
+          :focused-directory="focusedDirectory"
           :selected-session-id="selectedSessionId"
           :home-path="homePath"
           :side-panel-collapsed="sidePanelCollapsed"
           :input-panel-collapsed="inputPanelCollapsed"
           @select-notification="handleNotificationSessionSelect"
           @new-session="createNewSession"
-          @new-session-in="handleNewSessionInSandbox"
           @open-shell="openShellFromInput('')"
           @delete-active-directory="deleteWorktree"
           @delete-session="deleteSession"
           @archive-session="archiveSession"
           @unarchive-session="unarchiveSession"
           @select-session="handleTopPanelSessionSelect"
+          @select-directory="handleTopPanelDirectorySelect"
           @open-directory="openProjectPicker"
           @toggle-side-panel="toggleSidePanelCollapsed"
           @toggle-input-panel="toggleInputPanelCollapsed"
@@ -41,7 +41,7 @@
         <div ref="sidePanelAreaEl" class="side-panel-area">
           <SidePanel
             class="todo-panel"
-            :class="{ 'is-disabled': !hasSession }"
+            :class="{ 'is-disabled': !canCompose }"
             :collapsed="sidePanelCollapsed"
             :active-tab="sidePanelActiveTab"
             :todo-sessions="todoPanelSessions"
@@ -74,6 +74,7 @@
               (payload: { mode: WorktreeSnapshotMode }) => openAllGitDiff(payload.mode)
             "
             @open-file="openFileViewer"
+            @select-search-hit="handleSearchHit"
             @reload="reloadTree().then(() => refreshGitStatus())"
             @open-settings="isSettingsOpen = true"
             @logout="handleLogout"
@@ -92,7 +93,7 @@
                 <div class="output-split">
                   <OutputPanel
                     ref="outputPanelRef"
-                    :key="selectedSessionId"
+                    :key="outputPanelKey"
                     class="output-panel"
                     :project-name="currentProjectName"
                     :is-following="isFollowing"
@@ -137,7 +138,7 @@
             v-if="!inputPanelCollapsed"
             ref="inputEl"
             class="app-input"
-            :class="{ 'is-disabled': !hasSession }"
+            :class="{ 'is-disabled': !canCompose }"
           >
             <InputPanel
               ref="inputPanelRef"
@@ -628,11 +629,9 @@ watch(suppressAutoWindows, (suppressed) => {
 
 const inputEl = ref<HTMLElement | null>(null);
 const toolWindowCanvasEl = ref<HTMLDivElement | null>(null);
-const outputPanelRef = ref<{ panelEl: HTMLDivElement | null } | null>(null);
-const topPanelRef = ref<{
-  openSessionDropdown: () => void;
-  closeSessionDropdown: () => void;
-  toggleSessionDropdown: () => void;
+const outputPanelRef = ref<{
+  panelEl: HTMLDivElement | null;
+  scrollToThread: (threadId: string) => void;
 } | null>(null);
 const inputPanelRef = ref<{ focus: () => void; reset: () => void } | null>(null);
 const outputPanelContainerEl = computed(() => outputPanelRef.value?.panelEl ?? undefined);
@@ -644,6 +643,8 @@ const {
   resumeFollow,
   scrollToBottom: scrollOutputPanelToBottom,
   notifyContentChange,
+  pauseTracking,
+  resumeTracking,
 } = useAutoScroller(outputPanelContainerEl, outputPanelScrollMode, {
   bottomThresholdPx: FOLLOW_THRESHOLD_PX,
   observeDelayMs: 0,
@@ -844,6 +845,24 @@ const {
   switchSession: switchSessionSelection,
   initialize: initializeSessionSelection,
 } = sessionSelection;
+
+const focusedDirectory = ref('');
+const workingDirectory = computed(
+  () => focusedDirectory.value.trim() || activeDirectory.value.trim(),
+);
+const canCompose = computed(() => Boolean(workingDirectory.value));
+const outputPanelKey = computed(
+  () => `${workingDirectory.value}::${selectedSessionId.value}`,
+);
+watch(
+  selectedSessionId,
+  (sessionId) => {
+    if (!sessionId) return;
+    const next = activeDirectory.value.trim();
+    if (next) focusedDirectory.value = next;
+  },
+  { immediate: true },
+);
 
 function toSessionInfo(
   directory: string,
@@ -1151,10 +1170,10 @@ const {
   branchEntries,
   branchListLoading,
   refreshBranchEntries,
-} = useFileTree({ activeDirectory });
+} = useFileTree({ activeDirectory: workingDirectory });
 
 const treeDirectoryName = computed(() => {
-  const raw = activeDirectory.value.trim();
+  const raw = workingDirectory.value.trim();
   if (!raw) return '';
   const trimmed = raw.replace(/\/+$/, '');
   if (!trimmed) return '/';
@@ -1162,7 +1181,7 @@ const treeDirectoryName = computed(() => {
   return segments.at(-1) ?? '/';
 });
 
-const { runOneShotPtyCommand } = usePtyOneshot({ activeDirectory });
+const { runOneShotPtyCommand } = usePtyOneshot({ activeDirectory: workingDirectory });
 
 const sessionRevert = computed<SessionInfo['revert'] | null>(() => {
   const projectId = selectedProjectId.value.trim();
@@ -1229,8 +1248,6 @@ const todoPanelSessions = computed(() => {
   });
   return visible;
 });
-
-const hasSession = computed(() => Boolean(selectedSessionId.value));
 
 const {
   bookmarks: bookmarkedSessions,
@@ -1349,10 +1366,10 @@ function toggleCurrentSessionBookmark() {
 const canSend = computed(() =>
   Boolean(
     uiInitState.value === 'ready' &&
-    connectionState.value === 'ready' &&
-    selectedSessionId.value &&
-    !isSending.value &&
-    (messageInput.value.trim().length > 0 || attachments.value.length > 0),
+      connectionState.value === 'ready' &&
+      workingDirectory.value &&
+      !isSending.value &&
+      (messageInput.value.trim().length > 0 || attachments.value.length > 0),
   ),
 );
 
@@ -1433,7 +1450,7 @@ function sessionLabel(session: SessionInfo) {
 }
 
 function getSelectedWorktreeDirectory() {
-  return activeDirectory.value.trim();
+  return workingDirectory.value.trim();
 }
 
 function resolveWorktreeRelativePath(path?: string) {
@@ -1488,14 +1505,9 @@ function validateSelectedSession() {
   const projectId = selectedProjectId.value.trim();
   const allSessions = projectId ? (sessionsByProject.value[projectId] ?? []) : [];
   const current = allSessions.find((session) => session.id === sessionId);
-  if (current && !current.parentID) {
-    return;
-  }
+  if (current && !current.parentID) return;
 
-  const nextSessionId = pickPreferredSessionId(
-    allSessions.filter((session) => session.id !== sessionId),
-  );
-  selectedSessionId.value = nextSessionId;
+  selectedSessionId.value = '';
 }
 
 function toErrorMessage(error: unknown) {
@@ -1768,6 +1780,14 @@ function selectSidePanelTab(value: SidePanelTab) {
   sidePanelActiveTab.value = value;
   persistSidePanelTab(value);
   if (sidePanelCollapsed.value) toggleSidePanelCollapsed();
+}
+
+function handleSearchHit(hit: { threadId: string }) {
+  pauseTracking();
+  outputPanelRef.value?.scrollToThread(hit.threadId);
+  requestAnimationFrame(() => {
+    resumeTracking();
+  });
 }
 
 function resolveProjectIdForSession(sessionId: string) {
@@ -2305,12 +2325,20 @@ async function deleteWorktree(directory: string) {
     const sandboxes = project.sandboxes ?? {};
     return Object.keys(sandboxes).some((path) => path.replace(/\/+$/, '') === targetDir);
   });
-  const baseDir = (owner?.worktree || projectDirectory.value || '').replace(/\/+$/, '');
+  // OpenCode's project.worktree can be a different folder than the git repo that
+  // actually owns the sandbox. Prefer the currently opened directory for DELETE.
+  const baseDir = [
+    projectDirectory.value,
+    activeDirectory.value,
+    owner?.worktree,
+    ...Object.keys(owner?.sandboxes ?? {}),
+  ]
+    .map((value) => (value || '').replace(/\/+$/, ''))
+    .find((value) => value && value !== targetDir);
   if (!baseDir) {
     worktreeError.value = 'Worktree base directory not set.';
     return;
   }
-  if (targetDir === baseDir) return;
   try {
     await openCodeApi.deleteWorktree({
       directory: baseDir,
@@ -2357,7 +2385,7 @@ async function createNewSession(): Promise<SessionInfo | undefined> {
   if (!ensureConnectionReady('Creating session')) return undefined;
   sessionError.value = '';
   try {
-    const directory = activeDirectory.value.trim();
+    const directory = focusedDirectory.value.trim() || activeDirectory.value.trim();
     if (!directory) {
       throw new Error('Session create failed: active directory is empty.');
     }
@@ -2373,8 +2401,33 @@ async function createNewSession(): Promise<SessionInfo | undefined> {
   }
 }
 
-async function handleNewSessionInSandbox(payload: { worktree: string; directory: string }) {
-  await createSessionInDirectory(payload.directory);
+function focusWorkingDirectory(directory: string, projectId?: string) {
+  const nextDirectory = normalizeDirectory(directory.trim()) || directory.trim();
+  if (!nextDirectory) return;
+  const nextProjectId = (
+    projectId?.trim() ||
+    resolveProjectIdForDirectory(nextDirectory) ||
+    selectedProjectId.value
+  ).trim();
+  if (nextProjectId) selectedProjectId.value = nextProjectId;
+
+  const currentId = selectedSessionId.value.trim();
+  const onPath =
+    Boolean(currentId) &&
+    (sessionsByProject.value[nextProjectId] ?? []).some((session) => {
+      if (session.id !== currentId || session.parentID) return false;
+      return normalizeDirectory(session.directory) === nextDirectory;
+    });
+  if (currentId && !onPath) selectedSessionId.value = '';
+  focusedDirectory.value = nextDirectory;
+}
+
+function handleTopPanelDirectorySelect(payload: {
+  projectId?: string;
+  worktree: string;
+  directory: string;
+}) {
+  focusWorkingDirectory(payload.directory, payload.projectId);
 }
 
 function handleTopPanelSessionSelect(payload: {
@@ -2501,12 +2554,11 @@ async function handleProjectDirectorySelect(directory: string) {
   if (!directory) return;
 
   rememberInstanceDirectories([directory]);
-  const { projectId, sessionId } = await openCodeApi.openProject(directory);
   ge.sendToWorker({
     type: 'load-sessions',
     directory,
   });
-  await switchSessionSelection(projectId, sessionId);
+  focusWorkingDirectory(directory);
 }
 async function bootstrapSelections() {
   if (isBootstrapping.value) return;
@@ -2529,7 +2581,12 @@ async function bootstrapSelections() {
     const initialProjectId = initialQuery.projectId.trim();
     const initialSessionId = initialQuery.sessionId.trim();
     if (initialProjectId && initialSessionId) {
-      await switchSessionSelection(initialProjectId, initialSessionId);
+      try {
+        await switchSessionSelection(initialProjectId, initialSessionId, 8000);
+      } catch {
+        replaceQuerySelection('', '');
+        await initializeSessionSelection();
+      }
     } else {
       await initializeSessionSelection();
     }
@@ -2875,7 +2932,7 @@ async function fetchPtyList(directory?: string) {
 }
 
 async function createPtySession(command?: string, args?: string[]) {
-  const directory = activeDirectory.value || undefined;
+  const directory = workingDirectory.value || undefined;
   const data = await opencodeApi.createPty({
     directory,
     command,
@@ -3218,7 +3275,7 @@ function disposeShellWindows() {
 let shellDirectory = '';
 
 async function restoreShellSessions() {
-  const directory = activeDirectory.value || '';
+  const directory = workingDirectory.value || '';
   const sandboxChanged = directory !== shellDirectory;
   shellDirectory = directory;
   if (sandboxChanged) {
@@ -3669,19 +3726,20 @@ async function sendMessage() {
   const text = messageInput.value.trim();
   const hasText = text.length > 0;
   const hasAttachments = attachments.value.length > 0;
+  if (!hasText && !hasAttachments) return;
   let sessionId = selectedSessionId.value;
-  if ((!hasText && !hasAttachments) || !sessionId) return;
-  if (!filteredSessions.value.some((session) => session.id === sessionId)) {
-    const fallbackId = pickPreferredSessionId(filteredSessions.value);
-    const fallback = fallbackId
-      ? filteredSessions.value.find((session) => session.id === fallbackId)
-      : filteredSessions.value[0];
-    if (!fallback) {
-      sendStatus.value = 'No session selected.';
+  if (!sessionId) {
+    const directory = workingDirectory.value.trim();
+    if (!directory) {
+      sendStatus.value = 'No path selected.';
       return;
     }
-    selectedSessionId.value = fallback.id;
-    sessionId = fallback.id;
+    const created = await createSessionInDirectory(directory);
+    if (!created?.id) {
+      sendStatus.value = 'Session create failed.';
+      return;
+    }
+    sessionId = created.id;
   }
   const slash = hasText ? parseSlashCommand(text) : null;
   const commandMatch = slash ? findCommandByName(slash.name) : null;
@@ -3750,10 +3808,6 @@ async function sendMessage() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Alt-Arrow session / project navigation helpers
-// ---------------------------------------------------------------------------
-
 function switchSessionByDirection(delta: number) {
   const tree = navigableTree.value;
   const currentProjectId = selectedProjectId.value;
@@ -3778,28 +3832,8 @@ function switchSessionByDirection(delta: number) {
   }
 }
 
-function switchProjectByDirection(delta: number) {
-  const tree = navigableTree.value;
-  if (tree.length === 0) return;
-
-  const currentIndex = tree.findIndex((w) => w.projectId === selectedProjectId.value);
-  const baseIndex = currentIndex < 0 ? 0 : currentIndex;
-  const nextIndex = (baseIndex + delta + tree.length) % tree.length;
-  const target = tree[nextIndex];
-  if (!target?.projectId) return;
-
-  // Pick the most recently updated session in the target project
-  const allSessions = target.sandboxes.flatMap((s) => s.sessions);
-  if (allSessions.length === 0) return;
-
-  const best = allSessions.reduce((a, b) => ((a.timeUpdated ?? 0) >= (b.timeUpdated ?? 0) ? a : b));
-  void switchSessionSelection(target.projectId, best.id);
-}
-
 let lastEscTime = 0;
-let lastCtrlGTime = 0;
 const DOUBLE_ESC_THRESHOLD = 500;
-const DOUBLE_CTRL_G_THRESHOLD = 500;
 
 function handleGlobalKeydown(event: KeyboardEvent) {
   // Ctrl-A: select all content in focused div (floating window body)
@@ -3831,51 +3865,14 @@ function handleGlobalKeydown(event: KeyboardEvent) {
     return;
   }
 
-  // Ctrl-G: single = open session dropdown, double = select notification
-  if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'g') {
-    event.preventDefault();
-    const now = Date.now();
-    if (now - lastCtrlGTime < DOUBLE_CTRL_G_THRESHOLD) {
-      lastCtrlGTime = 0;
-      topPanelRef.value?.closeSessionDropdown();
-      if (notificationSessions.value.length > 0) {
-        handleNotificationSessionSelect();
-      }
-      focusInput();
-    } else {
-      lastCtrlGTime = now;
-      topPanelRef.value?.toggleSessionDropdown();
-    }
-    return;
-  }
-
-  // Alt-N: new session
-  if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'n') {
+  // Alt-N: new session (use code: Option+N types ˜ on macOS)
+  if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyN') {
     event.preventDefault();
     createNewSession();
     return;
   }
 
-  // Alt-O: open shell
-  if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'o') {
-    event.preventDefault();
-    openShellFromInput('');
-    return;
-  }
-
-  // Alt-Left/Right: switch session within the same project
-  if (
-    event.altKey &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-  ) {
-    event.preventDefault();
-    switchSessionByDirection(event.key === 'ArrowLeft' ? 1 : -1);
-    return;
-  }
-
-  // Alt-Up/Down: switch to a different project
+  // Alt-Up/Down: switch session
   if (
     event.altKey &&
     !event.ctrlKey &&
@@ -3883,7 +3880,7 @@ function handleGlobalKeydown(event: KeyboardEvent) {
     (event.key === 'ArrowUp' || event.key === 'ArrowDown')
   ) {
     event.preventDefault();
-    switchProjectByDirection(event.key === 'ArrowUp' ? -1 : 1);
+    switchSessionByDirection(event.key === 'ArrowUp' ? -1 : 1);
     return;
   }
 
@@ -3992,13 +3989,7 @@ watch(
   () => {
     if (!bootstrapReady.value && !isBootstrapping.value) return;
     if (isBootstrapping.value) return;
-    if (!selectedSessionId.value) {
-      const preferredId = pickPreferredSessionId(filteredSessions.value);
-      if (preferredId) {
-        selectedSessionId.value = preferredId;
-      }
-      return;
-    }
+    if (!selectedSessionId.value) return;
     validateSelectedSession();
   },
   { immediate: true },
@@ -4110,19 +4101,19 @@ watch(selectedModel, () => {
   }
 });
 
-watch(activeDirectory, (directory) => {
+watch(workingDirectory, (directory) => {
   rememberInstanceDirectories([directory]);
   if (isBootstrapping.value) return;
   const activePath = directory || undefined;
-  if (!activePath) {
-    treeNodes.value = [];
-    expandedTreePathSet.value = new Set();
-    selectedTreePath.value = '';
-    return;
-  }
-  if (activeDirectory.value && activePath !== activeDirectory.value) return;
+  if (!activePath) return;
   void fetchCommands(activePath);
   void reloadTodosForAllowedSessions();
+  if (!selectedSessionId.value && uiInitState.value === 'ready') {
+    fw.closeAll({ exclude: (key) => key.startsWith('shell:') });
+    msg.reset();
+    resetFollow();
+    void restoreShellSessions();
+  }
 });
 
 watch(

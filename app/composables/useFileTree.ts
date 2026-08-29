@@ -731,6 +731,7 @@ async function rebuildFileCache() {
   const queue: string[] = ['.'];
   const visited = new Set<string>();
   const collected: string[] = [];
+  let didSetRoot = false;
 
   try {
     while (queue.length > 0) {
@@ -746,6 +747,7 @@ async function rebuildFileCache() {
       const children = buildTreeNodes(list, directory, path);
       if (path === '.') {
         treeNodes.value = children;
+        didSetRoot = true;
       } else {
         treeNodes.value = updateTreeNodeChildren(treeNodes.value, path, children);
       }
@@ -770,9 +772,11 @@ async function rebuildFileCache() {
   } catch {
     if (buildId !== fileCacheBuildId) return;
     if (options.activeDirectory.value.trim() !== directory) return;
-    treeNodes.value = [];
-    files.value = [];
-    fileCacheVersion.value += 1;
+    if (!didSetRoot) {
+      treeNodes.value = [];
+      files.value = [];
+      fileCacheVersion.value += 1;
+    }
     treeError.value = '';
   } finally {
     if (buildId === fileCacheBuildId && options.activeDirectory.value.trim() === directory) {
@@ -785,13 +789,26 @@ async function reloadTree() {
   await rebuildFileCache();
 }
 
+let fileTreeWatchBound = false;
+
 function initializeFileTree(options: UseFileTreeOptions) {
-  if (boundOptions) return;
   boundOptions = options;
+  if (fileTreeWatchBound) return;
+  fileTreeWatchBound = true;
   usePtyOneshot({ activeDirectory: options.activeDirectory });
   watch(
-    () => options.activeDirectory.value,
-    (directory) => {
+    () => getOptions().activeDirectory.value,
+    (directory, previous) => {
+      const activePath = directory.trim();
+      const previousPath = (previous ?? '').trim();
+      if (
+        activePath &&
+        previousPath &&
+        normalizeDirectory(activePath) === normalizeDirectory(previousPath)
+      ) {
+        return;
+      }
+
       clearScheduledDirectoryReloads();
 
       treeNodes.value = [];
@@ -803,7 +820,6 @@ function initializeFileTree(options: UseFileTreeOptions) {
       setGitStatus(null);
       branchEntries.value = [];
 
-      const activePath = directory.trim();
       if (!activePath) {
         treeLoading.value = false;
         return;

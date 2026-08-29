@@ -21,7 +21,7 @@
           :class="{ 'has-notifications': notifications.length > 0 }"
           :title="
             notifications.length > 0
-              ? `${totalNotificationCount} pending notifications (Ctrl-G x2)`
+              ? `${totalNotificationCount} pending notifications`
               : 'No notifications'
           "
           :disabled="notifications.length === 0"
@@ -40,8 +40,8 @@
           v-model:open="treeDropdownOpen"
           class="tree-dropdown-root"
           :label="dropdownLabel"
-          placeholder="Select session"
-          title="Select session (Ctrl-G)"
+          placeholder="Select path"
+          title="Select path"
           auto-close
           :auto-highlight="false"
           :popup-style="{ minWidth: '420px', width: 'min(680px, 90vw)', maxWidth: '90vw' }"
@@ -50,16 +50,13 @@
         >
           <template #label>
             <span v-if="selectedDisplay" class="selected-label">
-              <span class="selected-status-icon">{{
-                sessionStatusIcon(selectedDisplay.status)
-              }}</span>
-              <span class="selected-title">{{ selectedDisplay.title }}</span>
-              <span class="selected-branch-badge">
+              <span class="selected-title">{{ selectedDisplay.pathName }}</span>
+              <span v-if="selectedDisplay.branch" class="selected-branch-badge">
                 <Icon icon="lucide:git-branch" :width="11" :height="11" />
                 {{ selectedDisplay.branch }}
               </span>
             </span>
-            <span v-else class="selected-title">Select session</span>
+            <span v-else class="selected-title">Select path</span>
           </template>
           <template #default="{ close }">
             <div class="tree-menu">
@@ -85,7 +82,7 @@
 
               <div class="tree-content">
                 <div v-if="displayedTree.length === 0" class="tree-empty">
-                  {{ searchQuery ? 'No matching sessions' : 'No worktrees' }}
+                  {{ searchQuery ? 'No matching paths' : 'No worktrees' }}
                 </div>
 
                 <div
@@ -101,11 +98,8 @@
                       />
                       <div class="tree-label">
                         <span class="tree-label-name" :title="worktree.directory">{{
-                          worktree.name || directoryBasename(worktree.directory)
+                          worktreeGroupLabel(worktree)
                         }}</span>
-                        <small class="tree-label-type" :title="worktree.directory">{{
-                          shortenPath(worktree.directory)
-                        }}</small>
                       </div>
                     </div>
                   </div>
@@ -120,7 +114,7 @@
                   >
                     <div
                       class="tree-sandbox-header"
-                      @click="toggleSandbox(worktree.directory, sandbox.directory)"
+                      :class="{ 'is-current': isCurrentDirectory(sandbox.directory) }"
                     >
                       <div class="tree-header-main">
                         <button
@@ -134,31 +128,34 @@
                               ? 'Collapse sessions'
                               : 'Expand sessions'
                           "
-                          @click.stop="toggleSandbox(worktree.directory, sandbox.directory)"
+                          @mousedown.stop
+                          @click.stop.prevent="toggleSandbox(worktree.directory, sandbox.directory)"
                         >
                           <Icon icon="lucide:chevron-right" :width="14" :height="14" />
                         </button>
-                        <Icon
-                          :icon="
-                            worktree.projectId === 'global' ? 'lucide:folder' : 'lucide:git-branch'
-                          "
-                          class="tree-header-icon"
-                        />
-                        <div class="tree-label">
-                          <span class="tree-label-name" :title="sandbox.directory">{{
-                            sandbox.branch || directoryBasename(sandbox.directory)
-                          }}</span>
-                          <small class="tree-label-type" :title="sandbox.directory">{{
-                            shortenPath(sandbox.directory)
-                          }}</small>
-                        </div>
-                      </div>
-                      <div class="tree-actions" @click.stop>
                         <button
-                          v-if="
-                            isShiftPressed &&
-                            sandboxHasArchived(worktree.directory, sandbox.directory)
-                          "
+                          type="button"
+                          class="tree-path-select"
+                          :title="sandbox.directory"
+                          @click="handleSelectDirectory(sandbox.directory, worktree, close)"
+                        >
+                          <Icon
+                            :icon="sandbox.branch ? 'lucide:git-branch' : 'lucide:folder'"
+                            class="tree-header-icon"
+                          />
+                          <div class="tree-label">
+                            <span class="tree-label-name">{{
+                              formatPathLabel(sandbox.directory)
+                            }}</span>
+                            <small v-if="sandbox.branch" class="tree-label-type">{{
+                              sandbox.branch
+                            }}</small>
+                          </div>
+                        </button>
+                      </div>
+                      <div v-if="isShiftPressed" class="tree-actions" @click.stop>
+                        <button
+                          v-if="sandboxHasArchived(worktree.directory, sandbox.directory)"
                           type="button"
                           class="tree-action-button show-archived"
                           :class="{
@@ -174,7 +171,6 @@
                         </button>
                         <button
                           v-if="
-                            isShiftPressed &&
                             canDeleteSandbox(sandbox.directory, worktree.directory) &&
                             worktree.projectId !== 'global'
                           "
@@ -187,17 +183,6 @@
                           "
                         >
                           <Icon icon="lucide:trash-2" :width="16" :height="16" />
-                        </button>
-                        <button
-                          v-else-if="!isShiftPressed"
-                          type="button"
-                          class="tree-action-button new-session"
-                          title="New session"
-                          @click.stop="
-                            handleCreateSessionIn(worktree.directory, sandbox.directory, close)
-                          "
-                        >
-                          <Icon icon="lucide:notebook-pen" :width="16" :height="16" />
                         </button>
                       </div>
                     </div>
@@ -311,7 +296,7 @@
           <button
             type="button"
             class="top-icon-button new-session-button"
-            :disabled="!selectedSessionId"
+            :disabled="!canCreateSession"
             @click="$emit('new-session')"
             title="New session(cmd + J)"
           >
@@ -320,7 +305,7 @@
           <button
             type="button"
             class="top-icon-button open-shell-button"
-            :disabled="!activeDirectory"
+            :disabled="!canCreateSession"
             @click="$emit('open-shell')"
             title="Open shell"
           >
@@ -360,6 +345,7 @@ import DropdownItem from './Dropdown/Item.vue';
 import DropdownSearch from './Dropdown/Search.vue';
 import { formatSessionTitle } from '../utils/formatters';
 import { MAX_VISIBLE_SESSIONS } from '../utils/sessionTree';
+import { normalizeDirectory } from '../utils/path';
 import type { SessionTarget } from '../types/session';
 
 declare const __GIT_REVISION__: string;
@@ -406,6 +392,7 @@ const props = defineProps<{
   treeData: TopPanelWorktree[];
   notificationSessions: TopPanelNotificationSession[];
   activeDirectory: string;
+  focusedDirectory: string;
   selectedSessionId: string;
   homePath?: string;
   sidePanelCollapsed: boolean;
@@ -420,8 +407,8 @@ const totalNotificationCount = computed(() =>
 const emit = defineEmits<{
   (event: 'select-notification'): void;
   (event: 'select-session', payload: SessionSelectPayload): void;
+  (event: 'select-directory', payload: { projectId?: string; worktree: string; directory: string }): void;
   (event: 'new-session'): void;
-  (event: 'new-session-in', payload: { worktree: string; directory: string }): void;
   (event: 'delete-active-directory', value: string): void;
   (event: 'delete-session', payload: SessionTarget): void;
   (event: 'archive-session', payload: SessionTarget): void;
@@ -442,44 +429,41 @@ watch(treeDropdownOpen, (open) => {
   if (!open) emit('dropdown-closed');
 });
 
-function openSessionDropdown() {
-  treeDropdownOpen.value = true;
-}
-
-function closeSessionDropdown() {
-  treeDropdownOpen.value = false;
-}
-
-function toggleSessionDropdown() {
-  treeDropdownOpen.value = !treeDropdownOpen.value;
-}
-
-defineExpose({ openSessionDropdown, closeSessionDropdown, toggleSessionDropdown });
-
 const searchQuery = ref('');
 const isShiftPressed = ref(false);
 const expandedSandboxKeys = ref(new Set<string>());
 const showArchivedKeys = ref(new Set<string>());
 
+const currentDirectory = computed(
+  () => props.focusedDirectory.trim() || props.activeDirectory.trim(),
+);
+
+const canCreateSession = computed(() => Boolean(currentDirectory.value));
+
 const selectedDisplay = computed(() => {
-  const sid = props.selectedSessionId;
-  if (!sid) return null;
-  for (const worktree of props.treeData) {
-    for (const sandbox of worktree.sandboxes) {
-      const session = sandbox.sessions.find((candidate) => candidate.id === sid);
-      if (!session) continue;
-      const branch = sandbox.branch || directoryBasename(sandbox.directory);
-      const title = formatSessionTitle(session.title, session.slug, session.id);
-      return { branch, title, status: session.status };
-    }
-  }
-  return { branch: 'unknown', title: sid, status: 'unknown' as const };
+  const directory = currentDirectory.value;
+  if (!directory) return null;
+  const match = findDirectoryMatch(directory);
+  const pathName = formatPathLabel(
+    match?.kind === 'sandbox'
+      ? match.sandbox.directory
+      : match?.kind === 'worktree'
+        ? match.worktree.directory
+        : directory,
+  );
+  const branch =
+    match?.kind === 'sandbox'
+      ? match.sandbox.branch?.trim() || ''
+      : match?.kind === 'worktree'
+        ? match.worktree.sandboxes.find(
+            (item) =>
+              normalizeDirectory(item.directory) === normalizeDirectory(match.worktree.directory),
+          )?.branch?.trim() || ''
+        : '';
+  return { pathName, branch };
 });
 
-const dropdownLabel = computed(() => {
-  if (!selectedDisplay.value) return 'Select session';
-  return `${selectedDisplay.value.branch} / ${selectedDisplay.value.title}`;
-});
+const dropdownLabel = computed(() => selectedDisplay.value?.pathName || 'Select path');
 
 const displayedTree = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
@@ -523,10 +507,6 @@ const displayedTree = computed(() => {
         return { ...worktree, sandboxes };
       })
       .filter((worktree): worktree is TopPanelWorktree => worktree !== null);
-  } else {
-    worktrees = worktrees.filter((worktree) =>
-      worktree.sandboxes.some((sandbox) => sandbox.sessions.length > 0),
-    );
   }
 
   return worktrees.map((worktree) => ({
@@ -613,8 +593,40 @@ function shortenPath(path: string) {
   return path;
 }
 
+function formatPathLabel(path: string) {
+  const shortened = shortenPath(path);
+  if (!shortened || shortened === '/') return '/';
+  return shortened.endsWith('/') ? shortened : `${shortened}/`;
+}
+
+function worktreeGroupLabel(worktree: TopPanelWorktree) {
+  if (worktree.projectId === 'global' || worktree.directory === '/') return 'Global';
+  return worktree.name || directoryBasename(worktree.directory);
+}
+
 function directoryBasename(path: string) {
   return path.replace(/\/+$/, '').split('/').pop() ?? '';
+}
+
+function isCurrentDirectory(directory: string) {
+  const current = normalizeDirectory(currentDirectory.value);
+  return Boolean(current) && normalizeDirectory(directory) === current;
+}
+
+function findDirectoryMatch(directory: string) {
+  const normalized = normalizeDirectory(directory);
+  if (!normalized) return null;
+  for (const worktree of props.treeData) {
+    for (const sandbox of worktree.sandboxes) {
+      if (normalizeDirectory(sandbox.directory) === normalized) {
+        return { kind: 'sandbox' as const, worktree, sandbox };
+      }
+    }
+    if (normalizeDirectory(worktree.directory) === normalized) {
+      return { kind: 'worktree' as const, worktree };
+    }
+  }
+  return null;
 }
 
 function sessionStatusIcon(status: TopPanelSession['status']) {
@@ -651,6 +663,19 @@ function canDeleteSandbox(directory: string, worktreeDirectory: string) {
   return normalizedDirectory !== normalizedWorktree;
 }
 
+function handleSelectDirectory(
+  directory: string,
+  worktree: TopPanelWorktree,
+  close: () => void,
+) {
+  emit('select-directory', {
+    projectId: worktree.projectId,
+    worktree: worktree.directory,
+    directory,
+  });
+  close();
+}
+
 function onTreeSelect(payload: unknown) {
   if (!payload || typeof payload !== 'object') return;
   const value = payload as Partial<SessionSelectPayload>;
@@ -661,11 +686,6 @@ function onTreeSelect(payload: unknown) {
     directory: value.directory,
     sessionId: value.sessionId,
   });
-}
-
-function handleCreateSessionIn(worktree: string, directory: string, close: () => void) {
-  emit('new-session-in', { worktree, directory });
-  close();
 }
 
 function handleSandboxDelete(directory: string, _worktree: string, close?: () => void) {
@@ -929,10 +949,9 @@ function handleOpenDirectory(close: () => void) {
 
 .tree-header-main {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   column-gap: 4px;
-  row-gap: 0;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -945,17 +964,22 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-worktree-header {
-  padding: 6px 8px;
-}
-
-.tree-sandbox-header {
-  padding: 5px 8px 5px 16px;
-  cursor: pointer;
+  padding: 6px 8px 2px;
+  cursor: default;
   border-radius: 6px;
 }
 
 .tree-sandbox-header:hover {
   background: rgba(255, 255, 255, 0.04);
+}
+
+.tree-sandbox-header.is-current {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tree-sandbox-header {
+  padding: 5px 8px 5px 16px;
+  border-radius: 6px;
 }
 
 .tree-expand-button {
@@ -983,8 +1007,32 @@ function handleOpenDirectory(close: () => void) {
   transform: rotate(90deg);
 }
 
+.tree-path-select {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-path-select:hover .tree-label-name {
+  color: #e6e6e6;
+}
+
 .tree-label {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 1px;
 }
 
 .tree-label-name {
@@ -993,14 +1041,11 @@ function handleOpenDirectory(close: () => void) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
-  flex: 1 1 auto;
 }
 
 .tree-label-type {
   font-size: 10px;
   color: #9d9d9d;
-  flex-basis: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1012,10 +1057,6 @@ function handleOpenDirectory(close: () => void) {
   justify-content: flex-start;
   gap: 6px;
   min-width: 24px;
-}
-
-.tree-action-button.new-session {
-  color: #5ba3f5;
 }
 
 .tree-action-button {

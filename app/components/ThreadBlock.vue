@@ -1,5 +1,9 @@
 <template>
-  <div class="thread-block" :class="{ 'is-reverted-preview': isRevertedPreview }">
+  <div
+    class="thread-block"
+    :class="{ 'is-reverted-preview': isRevertedPreview }"
+    :data-thread-id="root.id"
+  >
     <button
       v-if="isRevertedPreview"
       type="button"
@@ -698,6 +702,12 @@ function getThreadUserRenderKey(root: MessageInfo): string {
   width: 100%;
   box-sizing: border-box;
   margin: 0;
+}
+
+.thread-block.is-search-target {
+  background: rgba(0, 120, 212, 0.12);
+  outline: 1px solid rgba(0, 120, 212, 0.35);
+  outline-offset: -1px;
 }
 
 .thread-block.is-reverted-preview > .thread-user {

@@ -57,10 +57,9 @@
           <Dropdown
             :open="menuOpenId === session.sessionId"
             class="bookmark-item-menu"
-            align="end"
+            align="start"
             auto-close
             :auto-highlight="false"
-            :popup-style="{ width: '196px' }"
             @update:open="(open) => setMenuOpen(session.sessionId, open)"
             @select="(value) => onMenuSelect(session, value)"
           >
@@ -390,16 +389,17 @@ function focusRenameInput() {
 }
 
 .bookmark-item-menu :deep(.ui-dropdown-menu) {
-  width: 196px;
-  min-width: 196px;
+  width: max-content;
+  min-width: 132px;
 }
 
 .session-menu-item {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: #cccccc;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .session-menu-item.is-danger {

@@ -20,14 +20,6 @@ type SessionInfo = {
   };
 };
 
-type ListSessionsOptions = {
-  directory?: string;
-  instanceDirectory?: string;
-  roots?: boolean;
-  search?: string;
-  limit?: number;
-};
-
 function normalizeId(value: string | undefined): string {
   return value?.trim() ?? '';
 }
@@ -243,40 +235,6 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     });
   }
 
-  async function listSessions(options: ListSessionsOptions = {}): Promise<SessionInfo[]> {
-    const data = (await opencodeApi.listSessions(options)) as SessionInfo[];
-    return Array.isArray(data) ? data : [];
-  }
-
-  async function openProject(directory: string): Promise<{ projectId: string; sessionId: string }> {
-    return withPending(async () => {
-      const sessions = await listSessions({ directory, roots: true });
-      const roots = sessions
-        .filter((session) => !session.parentID && !session.time?.archived)
-        .slice()
-        .sort(
-          (a, b) =>
-            (b.time?.updated ?? b.time?.created ?? 0) - (a.time?.updated ?? a.time?.created ?? 0),
-        );
-      const preferred = roots[0];
-      if (preferred) {
-        return {
-          projectId: preferred.projectID,
-          sessionId: preferred.id,
-        };
-      }
-
-      const created = (await opencodeApi.createSession(directory)) as SessionInfo;
-      if (!created?.id) {
-        throw new Error('Session create failed: invalid response.');
-      }
-      return {
-        projectId: created.projectID,
-        sessionId: created.id,
-      };
-    });
-  }
-
   return {
     pending,
     createSession,
@@ -287,6 +245,5 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     revertSession,
     unrevertSession,
     deleteWorktree,
-    openProject,
   };
 }

@@ -274,6 +274,26 @@ function handlePopupOpenFile(path: string, lines?: string) {
   emit('open-file', path, lines);
 }
 
+let searchTargetTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scrollToThread(threadId: string) {
+  const id = threadId.trim();
+  if (!id) return;
+  const selector = `[data-thread-id="${CSS.escape(id)}"]`;
+  const target = contentEl.value?.querySelector(selector);
+  if (!(target instanceof HTMLElement)) return;
+  contentEl.value?.querySelectorAll('.is-search-target').forEach((el) => {
+    el.classList.remove('is-search-target');
+  });
+  target.classList.add('is-search-target');
+  target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+  if (searchTargetTimer) clearTimeout(searchTargetTimer);
+  searchTargetTimer = setTimeout(() => {
+    target.classList.remove('is-search-target');
+    searchTargetTimer = null;
+  }, 1600);
+}
+
 function setupContentResizeObserver() {
   contentResizeObserver?.disconnect();
   contentResizeObserver = undefined;
@@ -302,6 +322,7 @@ onBeforeUnmount(() => {
   contentResizeObserver?.disconnect();
   contentResizeObserver = undefined;
   fileRefPopupRef.value?.closeFilePopup();
+  if (searchTargetTimer) clearTimeout(searchTargetTimer);
 });
 
 const theme = computed(() => props.theme);
@@ -314,7 +335,7 @@ const isStatusError = computed(() => props.isStatusError);
 const isRetryStatus = computed(() => props.isRetryStatus);
 const isFollowing = computed(() => props.isFollowing);
 
-defineExpose({ panelEl });
+defineExpose({ panelEl, scrollToThread });
 </script>
 
 <style scoped>

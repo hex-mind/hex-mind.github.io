@@ -97,7 +97,7 @@ export function useSessionSelection(
     return createdSessionId;
   }
 
-  async function switchSession(projectId: string, sessionId: string) {
+  async function switchSession(projectId: string, sessionId: string, timeoutMs = 30_000) {
     const nextProjectId = projectId.trim();
     const nextSessionId = sessionId.trim();
     if (!nextProjectId || !nextSessionId) {
@@ -114,6 +114,7 @@ export function useSessionSelection(
           Boolean(sandbox.sessions[nextSessionId]),
         );
       },
+      timeoutMs,
     );
 
     selectedProjectId.value = nextProjectId;
