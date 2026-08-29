@@ -220,35 +220,37 @@ const {
   min-height: 0;
   display: flex;
   flex-direction: row;
-  border: 1px solid #334155;
-  border-radius: 0 var(--card-radius, 6px) var(--card-radius, 6px) 0;
-  background-clip: padding-box;
-  background: rgba(15, 23, 42, 0.92);
-  overflow: hidden;
+  gap: var(--workbench-inset, 4px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .activity-bar {
-  flex: 0 0 45px;
-  width: 45px;
+  flex: 0 0 44px;
+  width: 44px;
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  background: #0b1320;
-  border-right: 1px solid #334155;
+  padding: 4px 0 8px 8px;
+  box-sizing: border-box;
+  background: transparent;
+  border: 0;
 }
 
 .activity-button {
   position: relative;
-  width: 37px;
-  height: 37px;
-  flex: 0 0 37px;
-  margin: 4px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  margin: 2px 0;
   padding: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #64748b;
+  color: #868686;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -262,7 +264,7 @@ const {
 }
 
 .activity-utility-button {
-  color: #94a3b8;
+  color: #9d9d9d;
 }
 
 .activity-bar :deep(.ui-dropdown) {
@@ -277,22 +279,22 @@ const {
 }
 
 .activity-button:hover {
-  background: rgba(51, 65, 85, 0.45);
-  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.08);
+  color: #d7d7d7;
 }
 
 .activity-button.is-active {
-  background: rgba(51, 65, 85, 0.6);
-  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.13);
+  color: #d7d7d7;
 }
 
 .activity-button.is-active::before {
   content: '';
   position: absolute;
-  inset: 7px auto 7px -4px;
+  inset: 8px auto 8px 0;
   width: 2px;
   border-radius: 999px;
-  background: #60a5fa;
+  background: #0078d4;
 }
 
 .side-body {
@@ -301,7 +303,11 @@ const {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(15, 23, 42, 0.92);
+  margin: var(--workbench-inset, 4px) 0;
+  background: #1f1f1f;
+  border: 1px solid #2b2b2b;
+  border-radius: var(--card-radius, 6px);
+  overflow: hidden;
 }
 
 .side-header {
@@ -311,7 +317,7 @@ const {
   align-items: center;
   justify-content: space-between;
   padding: 0 8px 0 18px;
-  color: #cbd5e1;
+  color: #cccccc;
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.04em;
@@ -337,11 +343,11 @@ const {
 }
 
 .side-panel.is-collapsed {
-  border-color: #334155;
+  gap: 0;
 }
 
 .side-panel.is-collapsed .activity-bar {
-  border-right: 0;
+  border: 0;
 }
 
 .search-panel {
@@ -394,14 +400,15 @@ const {
 
 @media (max-width: 768px) {
   .activity-bar {
-    flex-basis: 41px;
-    width: 41px;
+    flex-basis: 40px;
+    width: 40px;
+    padding: 4px 0 8px 6px;
   }
 
   .activity-button {
-    width: 33px;
-    height: 35px;
-    flex-basis: 35px;
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
   }
 }
 </style>

@@ -20,6 +20,46 @@
   display: none;
 }
 
+html:not([data-theme='light']) {
+  color-scheme: dark;
+  background: #181818;
+  color: #cccccc;
+}
+
+html:not([data-theme='light']) body,
+html:not([data-theme='light']) #app,
+html:not([data-theme='light']) .app {
+  background: #181818;
+  color: #cccccc;
+}
+
+html:not([data-theme='light'])
+  :is(
+    .output-panel-shell,
+    .input-message,
+    .side-body,
+    .thread-block,
+    .app-loading-card,
+    .modal,
+    .project-picker-dialog,
+    .ui-dropdown-menu,
+    .file-ref-popup,
+    .floating-window
+  ) {
+  background-color: #1f1f1f;
+  border-color: #2b2b2b;
+  color: #cccccc;
+}
+
+html:not([data-theme='light'])
+  :is(
+    .activity-button:hover,
+    .layout-button:hover,
+    .top-icon-button:hover:not(:disabled)
+  ) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* ── Unified scrollbar ── */
 *,
 *::before,
@@ -83,9 +123,9 @@ html[data-theme='light'] .app {
 
 html[data-theme='light']
   :is(
-    .top-panel,
     .output-panel-shell,
     .input-message,
+    .side-body,
     .thread-block,
     .app-loading-card,
     .modal,
@@ -99,11 +139,21 @@ html[data-theme='light']
   box-shadow: none !important;
 }
 
-html[data-theme='light'] :is(.side-panel, .side-body) {
-  background-color: #f7f7f8 !important;
-  color: #2f2f2f !important;
-  border-color: #e5e5e5 !important;
+html[data-theme='light'] .top-panel {
+  background: transparent !important;
+  border: 0 !important;
   box-shadow: none !important;
+}
+
+html[data-theme='light'] .side-panel {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='light'] .activity-bar {
+  background: transparent !important;
+  border: 0 !important;
 }
 
 html[data-theme='light'] .input-message {
@@ -118,7 +168,6 @@ html[data-theme='light'] .attachment-list {
 
 html[data-theme='light']
   :is(
-    .activity-bar,
     .tree-footer,
     .tree-search,
     .setting-row,
@@ -761,15 +810,17 @@ html[data-theme='light'],
 html[data-theme='light'] body,
 html[data-theme='light'] #app,
 html[data-theme='light'] .app {
-  background: #ffffff !important;
-}
-
-html[data-theme='light'] :is(.side-panel, .side-body, .activity-bar) {
   background: #f7f7f8 !important;
 }
 
-html[data-theme='light'] .activity-bar {
-  border-color: #ececf1 !important;
+html[data-theme='light'] .side-body {
+  background: #ffffff !important;
+}
+
+html[data-theme='light'] .activity-bar,
+html[data-theme='light'] .side-panel {
+  background: transparent !important;
+  border: 0 !important;
 }
 
 html[data-theme='light'] :is(.tree-search, .ui-dropdown-search) {

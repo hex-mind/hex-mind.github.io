@@ -1,9 +1,17 @@
 <template>
   <div class="top-panel">
     <div class="top-row">
-      <div class="top-left flex items-center gap-2" :title="gitRevision">
-        <img src="/hex-logo.png" alt="HEX" class="brand-logo brand-logo-dark" />
-        <img src="/hex-logo-light.png" alt="HEX" class="brand-logo brand-logo-light" />
+      <div class="top-left" :title="gitRevision">
+        <span class="brand-mark">
+          <span class="brand-hex" aria-hidden="true">
+            <img src="/hex-logo.png" alt="" class="brand-logo-dark" />
+            <img src="/hex-logo-light.png" alt="" class="brand-logo-light" />
+          </span>
+          <span class="brand-word">
+            <img src="/hex-logo.png" alt="HEX" class="brand-logo-dark" />
+            <img src="/hex-logo-light.png" alt="" class="brand-logo-light" />
+          </span>
+        </span>
         <div class="brand-tagline hidden lg:block">for opencode</div>
       </div>
       <div class="top-center">
@@ -602,10 +610,10 @@ function handleOpenDirectory(close: () => void) {
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 4px 4px 4px 10px;
+  padding: 8px 12px 6px;
   box-sizing: border-box;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid #334155;
+  background: transparent;
+  border: 0;
   border-radius: 0;
 }
 
@@ -619,20 +627,64 @@ function handleOpenDirectory(close: () => void) {
 
 .top-left {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #f1f5f9;
 }
 
-.brand-logo {
-  width: 72px;
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   height: 32px;
-  object-fit: contain;
+}
+
+.brand-hex,
+.brand-word {
+  display: block;
+  height: 32px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.brand-hex {
+  width: 30px;
+}
+
+.brand-word {
+  width: 40px;
+}
+
+.brand-hex img,
+.brand-word img {
+  height: 32px;
+  width: 72px;
+  max-width: none;
+  object-fit: fill;
+}
+
+.brand-word img {
+  margin-left: -32.5px;
+}
+
+.brand-logo-dark {
+  display: block;
 }
 
 .brand-logo-light {
   display: none;
+}
+
+:global(html[data-theme='light']) .brand-logo-dark {
+  display: none;
+}
+
+:global(html[data-theme='light']) .brand-logo-light {
+  display: block;
 }
 
 .brand-tagline {
@@ -1174,16 +1226,16 @@ function handleOpenDirectory(close: () => void) {
   width: 28px;
   height: 28px;
   flex-shrink: 0;
-  color: #94a3b8;
+  color: #9d9d9d;
 }
 
 .layout-button.is-active {
-  color: #cbd5e1;
+  color: #cccccc;
 }
 
 .layout-button:hover {
-  background: rgba(51, 65, 85, 0.45);
-  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .layout-glyph {
@@ -1241,7 +1293,7 @@ function handleOpenDirectory(close: () => void) {
 
 @media (max-width: 768px) {
   .top-panel {
-    padding: 4px 4px 4px 8px;
+    padding: 6px 8px;
   }
 
   .top-row,
@@ -1249,9 +1301,32 @@ function handleOpenDirectory(close: () => void) {
     gap: 4px;
   }
 
-  .brand-logo {
-    width: 58px;
+  .brand-mark {
     height: 28px;
+    gap: 8px;
+  }
+
+  .brand-hex,
+  .brand-word {
+    height: 28px;
+  }
+
+  .brand-hex {
+    width: 26px;
+  }
+
+  .brand-word {
+    width: 35px;
+  }
+
+  .brand-hex img,
+  .brand-word img {
+    height: 28px;
+    width: 63px;
+  }
+
+  .brand-word img {
+    margin-left: -29px;
   }
 
   .tree-dropdown-root {

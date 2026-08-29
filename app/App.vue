@@ -5560,11 +5560,13 @@ onBeforeUnmount(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: var(--panel-sash-size);
+  gap: 0;
   padding: 0;
   box-sizing: border-box;
-  color: #e2e8f0;
+  color: #cccccc;
   --panel-sash-size: 4px;
+  --workbench-inset: 8px;
+  --chrome-inset: 8px;
   --card-radius: 6px;
 }
 
@@ -5786,13 +5788,13 @@ onBeforeUnmount(() => {
   gap: 0;
   --todo-panel-gap: var(--panel-sash-size);
   --todo-panel-open-width: clamp(250px, 23vw, 340px);
-  --todo-panel-collapsed-width: 46px;
+  --todo-panel-collapsed-width: 44px;
   --todo-panel-width: var(--todo-panel-open-width);
 }
 
 .app-body.todo-collapsed {
   --todo-panel-width: var(--todo-panel-collapsed-width);
-  gap: var(--panel-sash-size);
+  gap: var(--workbench-inset);
 }
 
 .app-main-column {
@@ -5802,6 +5804,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0;
+  margin: var(--workbench-inset) var(--workbench-inset) var(--workbench-inset) 0;
 }
 
 .side-panel-area {
@@ -5833,6 +5836,7 @@ onBeforeUnmount(() => {
 .panel-sash-vertical {
   width: var(--panel-sash-size);
   align-self: stretch;
+  margin: var(--workbench-inset) 0;
   cursor: ew-resize;
 }
 
@@ -5857,13 +5861,13 @@ onBeforeUnmount(() => {
 }
 
 .panel-sash.is-dragging {
-  background: #60a5fa;
+  background: #0078d4;
 }
 
 @media (max-width: 768px) {
   .app-body {
     --todo-panel-open-width: min(86vw, 320px);
-    --todo-panel-collapsed-width: 42px;
+    --todo-panel-collapsed-width: 40px;
     padding-left: var(--todo-panel-collapsed-width);
   }
 

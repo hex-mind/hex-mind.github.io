@@ -910,9 +910,9 @@ defineExpose({ focus, reset });
   flex-direction: column;
   align-items: stretch;
   overflow: visible;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid #334155;
-  border-radius: var(--card-radius, 6px) 0 0 var(--card-radius, 6px);
+  background: #1f1f1f;
+  border: 1px solid #2b2b2b;
+  border-radius: var(--card-radius, 6px);
   box-sizing: border-box;
   box-shadow: none;
 }

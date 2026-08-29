@@ -327,16 +327,16 @@ defineExpose({ panelEl });
   min-height: 0;
   overflow: hidden;
   position: relative;
-  background-color: rgba(15, 23, 42, 0.92);
+  background-color: #1f1f1f;
   background-image: linear-gradient(
     color-mix(in srgb, var(--project-tint, transparent) 9%, transparent),
     color-mix(in srgb, var(--project-tint, transparent) 9%, transparent)
   );
-  color: #e2e8f0;
-  border: 1px solid #334155;
-  border-radius: var(--card-radius, 6px) 0 0 var(--card-radius, 6px);
+  color: #cccccc;
+  border: 1px solid #2b2b2b;
+  border-radius: var(--card-radius, 6px);
   background-clip: padding-box;
-  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.24);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
