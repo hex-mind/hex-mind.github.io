@@ -1,6 +1,7 @@
 <template>
   <div class="statusbar" role="status" aria-live="polite">
     <div class="statusbar-section statusbar-left">
+      <StatusDot :status="isRetryStatus ? 'retry' : thinkingStatus" />
       <span class="statusbar-text">{{ thinkingDisplayText }}</span>
     </div>
     <div
@@ -13,31 +14,37 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
-  thinkingDisplayText: string;
-  statusText: string;
-  isStatusError: boolean;
-  isRetryStatus: boolean;
-}>();
+import StatusDot from './StatusDot.vue';
+
+withDefaults(
+  defineProps<{
+    thinkingDisplayText: string;
+    thinkingStatus?: string;
+    statusText: string;
+    isStatusError: boolean;
+    isRetryStatus: boolean;
+  }>(),
+  { thinkingStatus: 'idle' },
+);
 </script>
 
 <style scoped>
 .statusbar {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 12px 12px;
+  width: 100%;
+  min-height: 20px;
+  margin-top: 8px;
+  padding: 4px 4px 8px;
   border-top: none;
   background: transparent;
   color: #94a3b8;
   font-size: 8pt;
   line-height: 1.2;
-  margin: 0;
   border-radius: 0;
   box-sizing: border-box;
-  z-index: 2;
 }
 
 .statusbar-section {

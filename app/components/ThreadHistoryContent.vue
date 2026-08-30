@@ -318,12 +318,12 @@ function formatMessageTime(value?: number) {
 
 /* Question entry */
 .history-item-question {
-  border-color: color-mix(in srgb, #34d399 40%, #1e293b);
+  border-color: color-mix(in srgb, #4b7cec 40%, #1e293b);
 }
 
 .history-meta-question {
-  background: color-mix(in srgb, #34d399 18%, rgba(15, 23, 42, 0.82));
-  border-bottom-color: color-mix(in srgb, #34d399 25%, #1e293b);
+  background: color-mix(in srgb, #4b7cec 18%, rgba(15, 23, 42, 0.82));
+  border-bottom-color: color-mix(in srgb, #4b7cec 25%, #1e293b);
 }
 
 .history-question-badge {
@@ -332,8 +332,8 @@ function formatMessageTime(value?: number) {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  background: rgba(6, 78, 59, 0.6);
-  color: #6ee7b7;
+  background: rgba(30, 41, 88, 0.7);
+  color: #93b4ff;
 }
 
 .history-question-status {
@@ -400,7 +400,7 @@ function formatMessageTime(value?: number) {
 
 .history-question-option.is-selected {
   color: #e2e8f0;
-  background: rgba(52, 211, 153, 0.1);
+  background: rgba(75, 124, 236, 0.14);
 }
 
 .option-check {
@@ -423,8 +423,8 @@ function formatMessageTime(value?: number) {
 .history-question-custom {
   margin-top: 4px;
   padding: 4px 8px;
-  background: rgba(52, 211, 153, 0.08);
-  border-left: 2px solid #34d399;
+  background: rgba(75, 124, 236, 0.1);
+  border-left: 2px solid #4b7cec;
   border-radius: 2px;
   font-size: 12px;
   line-height: 1.4;

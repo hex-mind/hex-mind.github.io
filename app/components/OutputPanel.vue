@@ -52,6 +52,15 @@
               <button type="button" @click="emit('undo-revert')">Undo</button>
             </div>
 
+            <StatusBar
+              v-show="!initialRenderTrackingActive && showStatusBar"
+              :thinking-display-text="thinkingDisplayText"
+              :thinking-status="thinkingStatus"
+              :status-text="statusText"
+              :is-status-error="isStatusError"
+              :is-retry-status="!!isRetryStatus"
+            />
+
             <FileRefPopup ref="fileRefPopupRef" :files="files" @open-file="handlePopupOpenFile" />
           </div>
         </div>
@@ -66,13 +75,6 @@
           <Icon icon="lucide:arrow-down" :width="14" :height="14" />
         </button>
       </div>
-
-      <StatusBar
-        :thinking-display-text="thinkingDisplayText"
-        :status-text="statusText"
-        :is-status-error="isStatusError"
-        :is-retry-status="!!isRetryStatus"
-      />
     </div>
   </div>
 </template>
@@ -237,9 +239,19 @@ const { getAssistantHtml, getDeferredTransitionKey } = useAssistantPreRenderer({
   onRendered: handleMessageRendered,
 });
 
-const { thinkingDisplayText } = useThinkingAnimation(
+const { thinkingDisplayText, thinkingStatus } = useThinkingAnimation(
   computed(() => props.isThinking),
   computed(() => props.busyDescendantCount ?? 0),
+);
+const statusText = computed(() => props.statusText);
+const isStatusError = computed(() => props.isStatusError);
+const isRetryStatus = computed(() => props.isRetryStatus);
+const showStatusBar = computed(
+  () =>
+    renderedRoots.value.length > 0 ||
+    props.isThinking ||
+    Boolean(props.isRetryStatus) ||
+    props.isStatusError,
 );
 
 function isRevertedPreview(_root: MessageInfo): boolean {
@@ -329,9 +341,6 @@ const resolveAgentColor = computed(() => props.resolveAgentColor);
 const resolveModelMeta = computed(() => props.resolveModelMeta);
 const computeContextPercent = computed(() => props.computeContextPercent);
 const sessionRevert = computed(() => props.sessionRevert);
-const statusText = computed(() => props.statusText);
-const isStatusError = computed(() => props.isStatusError);
-const isRetryStatus = computed(() => props.isRetryStatus);
 const isFollowing = computed(() => props.isFollowing);
 
 defineExpose({ panelEl, scrollToThread });
@@ -341,7 +350,7 @@ defineExpose({ panelEl, scrollToThread });
 .output-panel-root {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -352,15 +361,10 @@ defineExpose({ panelEl, scrollToThread });
   min-height: 0;
   overflow: hidden;
   position: relative;
-  background-color: #1f1f1f;
-  background-image: linear-gradient(
-    color-mix(in srgb, var(--project-tint, transparent) 9%, transparent),
-    color-mix(in srgb, var(--project-tint, transparent) 9%, transparent)
-  );
+  background: transparent;
   color: #cccccc;
-  border: 1px solid #2b2b2b;
-  border-radius: var(--card-radius, 6px);
-  background-clip: padding-box;
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
   display: flex;
   flex-direction: column;
@@ -371,19 +375,15 @@ defineExpose({ panelEl, scrollToThread });
 .output-panel-scroll {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   padding: 0;
   min-height: 0;
   flex: 1 1 auto;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  mask-image: linear-gradient(
-    to bottom,
-    transparent,
-    black 12px,
-    black calc(100% - 12px),
-    transparent
-  );
+  scrollbar-gutter: auto;
+  mask-image: linear-gradient(to bottom, transparent, black 12px, black 100%);
 }
 
 .output-panel-main {
@@ -394,11 +394,27 @@ defineExpose({ panelEl, scrollToThread });
   flex: 1 1 auto;
 }
 
+.output-panel-main::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 12px;
+  bottom: 0;
+  height: var(--composer-dock-height, 10rem);
+  background: linear-gradient(to bottom, transparent, #181818 72%);
+  pointer-events: none;
+  z-index: 2;
+}
+
 .output-panel-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 12px 12px;
+  gap: 2px;
+  width: 100%;
+  max-width: var(--thread-max-width);
+  margin-inline: auto;
+  padding: 4px 16px var(--composer-dock-height, 10rem);
+  box-sizing: border-box;
 }
 
 .output-panel-content :deep(.markdown-host code.file-ref) {
@@ -442,34 +458,38 @@ defineExpose({ panelEl, scrollToThread });
 
 .project-name-bar {
   flex: 0 0 auto;
+  width: 100%;
+  max-width: var(--thread-max-width);
+  margin-inline: auto;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.03em;
   color: color-mix(in srgb, var(--project-tint, #94a3b8) 60%, #94a3b8);
-  padding: 12px 12px 0;
+  padding: 8px 16px 0;
+  box-sizing: border-box;
   user-select: none;
 }
 
 .follow-button {
   position: absolute;
   left: 50%;
-  bottom: 10px;
+  bottom: calc(var(--composer-dock-height, 10rem) + 8px);
+  z-index: 3;
   transform: translateX(-50%);
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   aspect-ratio: 1 / 1;
   box-sizing: border-box;
   border-radius: 999px;
-  border: 1px solid #2b2b2b;
-  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #222226;
   color: #cccccc;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
   display: grid;
   place-items: center;
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.45);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
   cursor: pointer;
-  z-index: 3;
 }
 
 .follow-button:hover {

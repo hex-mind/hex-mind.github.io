@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import type { ComputedRef, Ref } from 'vue';
 import QuestionContent from '../components/ToolWindow/Question.vue';
+import { WINDOW_COLOR } from '../components/ToolWindow/utils';
 import * as opencodeApi from '../utils/opencode';
 import type { useFloatingWindows } from './useFloatingWindows';
 
@@ -132,7 +133,7 @@ export function useQuestions(options: {
       closable: false,
       resizable: true,
       scroll: 'follow',
-      color: '#34d399',
+      color: WINDOW_COLOR.blue,
       title: `Question: ${request.questions?.[0]?.header || 'request'}`,
       width: QUESTION_WINDOW_WIDTH,
       height: QUESTION_WINDOW_HEIGHT,
@@ -146,6 +147,7 @@ export function useQuestions(options: {
     if (!entry) return;
     const request = entry.props?.request as QuestionRequest | undefined;
     options.fw.updateOptions(key, {
+      color: WINDOW_COLOR.blue,
       props: {
         ...entry.props,
         contextText: request ? getQuestionContextText(request) : '',
@@ -288,6 +290,12 @@ export function useQuestions(options: {
         });
     } catch (error) {
       log('Question list failed', error);
+    }
+  }
+
+  for (const entry of options.fw.entries.value) {
+    if (entry.key.startsWith('question:') && entry.color !== WINDOW_COLOR.blue) {
+      options.fw.updateOptions(entry.key, { color: WINDOW_COLOR.blue });
     }
   }
 

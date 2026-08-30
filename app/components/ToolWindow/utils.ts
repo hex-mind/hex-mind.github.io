@@ -84,6 +84,7 @@ export function toolColor(tool: string): string {
     case 'list':
       return WINDOW_COLOR.cyan;
     case 'bash':
+    case 'question':
       return WINDOW_COLOR.blue;
     case 'task':
     case 'batch':

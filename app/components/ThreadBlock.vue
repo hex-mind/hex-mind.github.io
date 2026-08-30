@@ -186,6 +186,7 @@ import type {
 } from '../types/message';
 import type { MessageInfo, QuestionInfo, ToolPart } from '../types/sse';
 import { formatElapsedTime, formatMessageError, formatMessageTime } from '../utils/formatters';
+import { confirmAction } from '../composables/useConfirm';
 
 const HISTORY_TOOL_NAMES = new Set(['bash', 'write', 'edit', 'multiedit', 'apply_patch']);
 
@@ -487,9 +488,15 @@ async function copyAnswer(root: MessageInfo) {
   }, 1500);
 }
 
-function confirmRevert(root: MessageInfo) {
+async function confirmRevert(root: MessageInfo) {
   if (root.role !== 'user' || !root.sessionID || !root.id) return;
-  if (!window.confirm('Revert to this message?')) return;
+  const confirmed = await confirmAction({
+    title: 'Revert to this message?',
+    message: 'Later messages in this chat will be hidden until you undo.',
+    confirmLabel: 'Revert',
+    danger: true,
+  });
+  if (!confirmed) return;
   emit('revert-message', { sessionId: root.sessionID, messageId: root.id });
 }
 
@@ -594,9 +601,14 @@ async function copyQuestion(root: MessageInfo) {
   }, 1500);
 }
 
-function confirmUndoRevert() {
+async function confirmUndoRevert() {
   if (!props.sessionRevert) return;
-  if (!window.confirm('Undo revert?')) return;
+  const confirmed = await confirmAction({
+    title: 'Undo revert?',
+    message: 'Hidden messages after this point will show again.',
+    confirmLabel: 'Undo',
+  });
+  if (!confirmed) return;
   emit('undo-revert');
 }
 
@@ -660,9 +672,8 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 .thread-block {
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: 0;
-  padding: 14px 10px;
+  padding: 16px 4px;
   width: 100%;
   box-sizing: border-box;
   margin: 0;

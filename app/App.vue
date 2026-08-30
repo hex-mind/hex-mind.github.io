@@ -10,14 +10,12 @@
       <header class="app-header">
         <TopPanel
           :tree-data="topPanelTreeData"
-          :notification-sessions="notificationSessions"
           :active-directory="activeDirectory"
           :focused-directory="focusedDirectory"
           :selected-session-id="selectedSessionId"
           :home-path="homePath"
           :side-panel-collapsed="sidePanelCollapsed"
           :input-panel-collapsed="inputPanelCollapsed"
-          @select-notification="handleNotificationSessionSelect"
           @new-session="createNewSession"
           @open-shell="openShellFromInput('')"
           @delete-active-directory="deleteWorktree"
@@ -47,6 +45,7 @@
             :todo-sessions="todoPanelSessions"
             :bookmarked-sessions="bookmarkedSessionItems"
             :recent-sessions="recentSessionItems"
+            :notification-count="notificationCount"
             :tree-nodes="treeNodes"
             :expanded-tree-paths="expandedTreePaths"
             :selected-tree-path="selectedTreePath"
@@ -88,7 +87,11 @@
           :class="{ 'is-dragging': !!sidePanelResizeState }"
           @pointerdown="startSidePanelResize"
         ></div>
-        <div ref="appMainColumnEl" class="app-main-column">
+        <div
+          ref="appMainColumnEl"
+          class="app-main-column"
+          :class="{ 'is-composer-hidden': inputPanelCollapsed }"
+        >
           <main class="app-output">
             <div class="output-workspace">
               <div class="tool-window-layer">
@@ -278,6 +281,7 @@
       @select="handleProjectDirectorySelect"
     />
     <SettingsModal :open="isSettingsOpen" @close="isSettingsOpen = false" />
+    <ConfirmDialog />
   </div>
 </template>
 
@@ -310,6 +314,7 @@ import TopPanel, {
   type TopPanelWorktree,
 } from './components/TopPanel.vue';
 import SettingsModal from './components/SettingsModal.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
 import ContentViewer from './components/viewers/ContentViewer.vue';
 import DiffViewer from './components/viewers/DiffViewer.vue';
 import ShellContent from './components/ToolWindow/Shell.vue';
@@ -701,6 +706,7 @@ const sidePanelWidth = ref<number | null>(null);
 const inputPanelHeight = ref<number | null>(null);
 const appMainColumnEl = ref<HTMLDivElement | null>(null);
 const PANEL_SASH_SIZE_PX = 4;
+const INPUT_PANEL_MIN_PX = 112;
 
 const bodyPanelStyle = computed(() => {
   const style: Record<string, string> = {};
@@ -1217,6 +1223,18 @@ const notificationSessions = computed<TopPanelNotificationSession[]>(() =>
     .filter((item) => item.count > 0),
 );
 
+const notifiedSessionIds = computed(() => {
+  const ids = new Set<string>();
+  for (const item of notificationSessions.value) {
+    ids.add(item.sessionId);
+  }
+  return ids;
+});
+
+const notificationCount = computed(() =>
+  notificationSessions.value.reduce((sum, item) => sum + item.count, 0),
+);
+
 watch(
   () => serverState.notifications,
   (notifications) => {
@@ -1321,6 +1339,7 @@ const recentSessionItems = computed(() => {
     isSelected: boolean;
     timeUpdated: number;
     pinned?: boolean;
+    hasNotification?: boolean;
   }> = [];
   for (const worktree of topPanelTreeData.value) {
     for (const sandbox of worktree.sandboxes) {
@@ -1337,6 +1356,7 @@ const recentSessionItems = computed(() => {
           available: true,
           isSelected: session.id === selectedSessionId.value,
           pinned: isPinned(session.id),
+          hasNotification: notifiedSessionIds.value.has(session.id),
           timeUpdated: session.timeUpdated ?? session.timeCreated ?? 0,
         });
       }
@@ -2245,7 +2265,7 @@ function startInputPanelResize(event: PointerEvent) {
   if (!column || !input) return;
   const columnRect = column.getBoundingClientRect();
   const inputRect = input.getBoundingClientRect();
-  const minH = 200;
+  const minH = INPUT_PANEL_MIN_PX;
   const outputMin = 120;
   const maxH = Math.max(minH, columnRect.height - outputMin - PANEL_SASH_SIZE_PX);
   inputPanelResizeState.value = {
@@ -2265,10 +2285,10 @@ function clampInputPanelHeightToBounds() {
   if (!column) return;
   const outputMin = 120;
   const maxH = Math.max(
-    200,
+    INPUT_PANEL_MIN_PX,
     column.getBoundingClientRect().height - outputMin - PANEL_SASH_SIZE_PX,
   );
-  inputPanelHeight.value = clamp(inputPanelHeight.value, 200, maxH);
+  inputPanelHeight.value = clamp(inputPanelHeight.value, INPUT_PANEL_MIN_PX, maxH);
 }
 
 function handlePointerMove(event: PointerEvent) {
@@ -3599,10 +3619,10 @@ function formatNotificationDump(): string {
   lines.push(`  allowedSessionIds: [${allowedSessionIds.value.size}]`);
   lines.push('');
 
-  // Computed notificationSessions (what TopPanel sees)
+  // Computed notificationSessions (what Recents badge sees)
   const computed = notificationSessions.value;
   lines.push(
-    `Computed notificationSessions (TopPanel badge): ${computed.length} entry(s), total count = ${computed.reduce((s, e) => s + e.count, 0)}`,
+    `Computed notificationSessions (Recents badge): ${computed.length} entry(s), total count = ${computed.reduce((s, e) => s + e.count, 0)}`,
   );
   for (const entry of computed) {
     const session = sessions.value.find((s) => s.id === entry.sessionId);
@@ -4029,6 +4049,7 @@ async function reloadSelectedSessionState() {
   reasoning.reset();
   subagentWindows.reset();
   retryStatus.value = null;
+  sendStatus.value = 'Ready';
   todosBySessionId.value = {};
   todoLoadingBySessionId.value = {};
   todoErrorBySessionId.value = {};
@@ -5602,6 +5623,9 @@ onBeforeUnmount(() => {
   --workbench-inset: 8px;
   --chrome-inset: 8px;
   --card-radius: 6px;
+  --thread-max-width: 48rem;
+  --input-panel-default: 128px;
+  --composer-radius: 16px;
 }
 
 .app.is-side-resizing,
@@ -5775,14 +5799,18 @@ onBeforeUnmount(() => {
 }
 
 .app-input {
-  flex: 0 0 var(--input-panel-height, auto);
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  margin-inline: auto;
   z-index: 30;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  height: var(--input-panel-height, auto);
-  min-height: 200px;
+  width: min(var(--thread-max-width), calc(100% - 32px));
+  height: var(--input-panel-height, var(--input-panel-default));
+  min-height: 112px;
   max-height: calc(100% - 120px);
 }
 
@@ -5832,13 +5860,41 @@ onBeforeUnmount(() => {
 }
 
 .app-main-column {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 0;
-  margin: var(--workbench-inset) var(--workbench-inset) var(--workbench-inset) 0;
+  margin: var(--workbench-inset) 0 0;
+  --composer-dock-height: calc(
+    16px + var(--panel-sash-size) + var(--input-panel-height, var(--input-panel-default))
+  );
+}
+
+.app-main-column.is-composer-hidden {
+  --composer-dock-height: 16px;
+}
+
+.app-output {
+  flex: 1 1 auto;
+  align-self: stretch;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.app-main-column > .panel-sash-horizontal {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(16px + var(--input-panel-height, var(--input-panel-default)));
+  margin-inline: auto;
+  z-index: 31;
+  width: min(var(--thread-max-width), calc(100% - 32px));
+  min-width: 0;
 }
 
 .side-panel-area {
@@ -5883,7 +5939,6 @@ onBeforeUnmount(() => {
 
 .panel-sash-horizontal {
   height: var(--panel-sash-size);
-  align-self: stretch;
   cursor: ns-resize;
 }
 
@@ -5944,7 +5999,7 @@ onBeforeUnmount(() => {
 
 .output-panel {
   flex: 1 1 auto;
-  width: auto;
+  width: 100%;
   min-width: 0;
   height: 100%;
   min-height: 0;

@@ -7,11 +7,16 @@
         type="button"
         class="activity-button"
         :class="{ 'is-active': activeTab === tab.id && !collapsed }"
-        :aria-label="tab.label"
-        :title="tab.label"
+        :aria-label="tabTitle(tab)"
+        :title="tabTitle(tab)"
         @click="emit('select-tab', tab.id)"
       >
         <Icon :icon="tab.icon" :width="21" :height="21" />
+        <span
+          v-if="tab.id === 'recent' && notificationCount > 0"
+          class="activity-notification-mark"
+          aria-hidden="true"
+        ></span>
       </button>
       <div class="activity-spacer"></div>
       <Dropdown
@@ -219,6 +224,7 @@ const props = defineProps<{
   todoSessions: TodoSession[];
   bookmarkedSessions: BookmarkedSessionView[];
   recentSessions: BookmarkedSessionView[];
+  notificationCount?: number;
   treeNodes: TreeNode[];
   expandedTreePaths: string[];
   selectedTreePath?: string;
@@ -266,9 +272,19 @@ const tabs: { id: SidePanelTab; label: string; icon: string }[] = [
   { id: 'bookmarks', label: 'Bookmarks', icon: 'lucide:bookmark' },
 ];
 
+const notificationCount = computed(() => props.notificationCount ?? 0);
+
 const activeTabLabel = computed(
   () => tabs.find((tab) => tab.id === props.activeTab)?.label.toUpperCase() ?? '',
 );
+
+function tabTitle(tab: { id: SidePanelTab; label: string }) {
+  if (tab.id === 'recent' && notificationCount.value > 0) {
+    const count = notificationCount.value;
+    return `Recents · ${count} pending message${count === 1 ? '' : 's'}`;
+  }
+  return tab.label;
+}
 const settingsMenuOpen = ref(false);
 const tipsMenuOpen = ref(false);
 const isMac =
@@ -483,6 +499,16 @@ const {
 .activity-button.is-active {
   background: rgba(255, 255, 255, 0.13);
   color: #d7d7d7;
+}
+
+.activity-notification-mark {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c084fc;
 }
 
 .side-body {

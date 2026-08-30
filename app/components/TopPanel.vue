@@ -15,27 +15,6 @@
         <div class="brand-tagline hidden lg:block">for opencode</div>
       </div>
       <div class="top-center">
-        <button
-          type="button"
-          class="top-icon-button notification-button"
-          :class="{ 'has-notifications': notifications.length > 0 }"
-          :title="
-            notifications.length > 0
-              ? `${totalNotificationCount} pending notifications`
-              : 'No notifications'
-          "
-          :disabled="notifications.length === 0"
-          @click="$emit('select-notification')"
-        >
-          <Icon
-            :icon="notifications.length > 0 ? 'lucide:bell-ring' : 'lucide:bell'"
-            :width="16"
-            :height="16"
-          />
-          <span v-if="notifications.length > 0" class="notification-badge">{{
-            totalNotificationCount
-          }}</span>
-        </button>
         <Dropdown
           v-model:open="treeDropdownOpen"
           class="tree-dropdown-root"
@@ -204,9 +183,7 @@
                           :active="session.id === selectedSessionId"
                         >
                           <div class="tree-session-main">
-                            <span class="session-status-icon" :title="session.status">{{
-                              sessionStatusIcon(session.status)
-                            }}</span>
+                            <StatusDot class="session-status-icon" :status="session.status" />
                             <div class="session-info">
                               <div class="session-info-top">
                                 <span class="session-title">{{
@@ -340,10 +317,12 @@
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, onMounted } from 'vue';
 import { Icon } from '@iconify/vue';
+import StatusDot from './StatusDot.vue';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
 import DropdownSearch from './Dropdown/Search.vue';
 import { formatSessionTitle } from '../utils/formatters';
+import { confirmAction } from '../composables/useConfirm';
 import { MAX_VISIBLE_SESSIONS } from '../utils/sessionTree';
 import { normalizeDirectory } from '../utils/path';
 import type { SessionTarget } from '../types/session';
@@ -390,7 +369,6 @@ type SessionSelectPayload = {
 
 const props = defineProps<{
   treeData: TopPanelWorktree[];
-  notificationSessions: TopPanelNotificationSession[];
   activeDirectory: string;
   focusedDirectory: string;
   selectedSessionId: string;
@@ -399,13 +377,7 @@ const props = defineProps<{
   inputPanelCollapsed: boolean;
 }>();
 
-const notifications = computed(() => props.notificationSessions ?? []);
-const totalNotificationCount = computed(() =>
-  notifications.value.reduce((sum, item) => sum + item.count, 0),
-);
-
 const emit = defineEmits<{
-  (event: 'select-notification'): void;
   (event: 'select-session', payload: SessionSelectPayload): void;
   (event: 'select-directory', payload: { projectId?: string; worktree: string; directory: string }): void;
   (event: 'new-session'): void;
@@ -629,13 +601,6 @@ function findDirectoryMatch(directory: string) {
   return null;
 }
 
-function sessionStatusIcon(status: TopPanelSession['status']) {
-  if (status === 'busy') return '🧐';
-  if (status === 'retry') return '🔴';
-  if (status === 'idle') return '🟢';
-  return '⚪';
-}
-
 function formatSessionTime(timestamp: number) {
   const d = new Date(timestamp);
   const Y = d.getFullYear();
@@ -688,25 +653,31 @@ function onTreeSelect(payload: unknown) {
   });
 }
 
-function handleSandboxDelete(directory: string, _worktree: string, close?: () => void) {
-  if (typeof window !== 'undefined') {
-    const confirmed = window.confirm(`Delete worktree "${directory}"?`);
-    if (!confirmed) return;
-  }
+async function handleSandboxDelete(directory: string, _worktree: string, close?: () => void) {
+  const confirmed = await confirmAction({
+    title: 'Delete this path?',
+    message: 'Removes it from HEX. Files on disk and existing chats stay as they are.',
+    confirmLabel: 'Delete',
+    danger: true,
+  });
+  if (!confirmed) return;
   emit('delete-active-directory', directory);
   close?.();
 }
 
-function handleSessionDelete(
+async function handleSessionDelete(
   sessionId: string,
   directory: string,
   projectId: string | undefined,
   close?: () => void,
 ) {
-  if (typeof window !== 'undefined') {
-    const confirmed = window.confirm('Delete session?');
-    if (!confirmed) return;
-  }
+  const confirmed = await confirmAction({
+    title: 'Delete session?',
+    message: 'This chat will be removed. Files on disk are not deleted.',
+    confirmLabel: 'Delete',
+    danger: true,
+  });
+  if (!confirmed) return;
   emit('delete-session', { sessionId, directory, projectId });
   close?.();
 }
@@ -1213,9 +1184,11 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .session-status-icon {
-  flex: 0 0 auto;
-  width: 14px;
-  text-align: center;
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  min-width: 6px;
+  min-height: 6px;
 }
 
 .session-title {
@@ -1313,44 +1286,9 @@ function handleOpenDirectory(close: () => void) {
   color: #c4b5fd;
 }
 
-.notification-button {
-  position: relative;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  padding: 0;
-  justify-content: center;
-  color: #9d9d9d;
-}
-
-.notification-button.has-notifications {
-  color: #fbbf24;
-}
-
-.notification-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #cccccc;
-}
-
 .top-icon-button:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.notification-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 16px;
-  text-align: center;
 }
 
 .tree-dropdown-root :deep(.ui-dropdown-button) {
@@ -1542,7 +1480,6 @@ function handleOpenDirectory(close: () => void) {
 }
 
 @media (max-width: 560px) {
-  .notification-button,
   .open-shell-button {
     display: none;
   }

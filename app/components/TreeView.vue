@@ -345,6 +345,7 @@
 import { computed, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
 import type { BranchEntry } from '../composables/useFileTree';
+import { confirmAction } from '../composables/useConfirm';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
 import DropdownLabel from './Dropdown/Label.vue';
@@ -907,23 +908,28 @@ function onBranchFork(entry: BranchEntry) {
   );
 }
 
-function onBranchMerge(entry: BranchEntry) {
+async function onBranchMerge(entry: BranchEntry) {
   if (!canMergeBranch(entry)) return;
   const target = branchMergeTarget(entry);
-  if (typeof window !== 'undefined') {
-    const confirmed = window.confirm(`Merge "${target}" into current branch?`);
-    if (!confirmed) return;
-  }
+  const confirmed = await confirmAction({
+    title: `Merge “${target}”?`,
+    message: 'This merges into the current branch.',
+    confirmLabel: 'Merge',
+  });
+  if (!confirmed) return;
   branchMenuOpen.value = false;
   void props.runShellCommand?.(`git merge ${shellQuote(target)}`);
 }
 
-function onBranchDelete(entry: BranchEntry) {
+async function onBranchDelete(entry: BranchEntry) {
   if (!canDeleteLocalBranch(entry)) return;
-  if (typeof window !== 'undefined') {
-    const confirmed = window.confirm(`Delete local branch "${entry.displayName}"?`);
-    if (!confirmed) return;
-  }
+  const confirmed = await confirmAction({
+    title: `Delete branch “${entry.displayName}”?`,
+    message: 'Only the local branch is removed.',
+    confirmLabel: 'Delete',
+    danger: true,
+  });
+  if (!confirmed) return;
   branchMenuOpen.value = false;
   void props.runShellCommand?.(`git branch -d ${shellQuote(entry.displayName)}`);
 }
@@ -933,12 +939,14 @@ function onRemoteFetch(remote: string) {
   void props.runShellCommand?.(`git fetch ${shellQuote(remote)}`);
 }
 
-function onBranchCommandSelect(value: unknown) {
+async function onBranchCommandSelect(value: unknown) {
   if (typeof value !== 'string') return;
-  if (typeof window !== 'undefined') {
-    const confirmed = window.confirm(`Run "${value}"?`);
-    if (!confirmed) return;
-  }
+  const confirmed = await confirmAction({
+    title: 'Run this command?',
+    message: value,
+    confirmLabel: 'Run',
+  });
+  if (!confirmed) return;
   void props.runShellCommand?.(value);
 }
 

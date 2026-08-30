@@ -197,8 +197,8 @@ watch(isActive, (active) => {
       void updateMenuPosition();
       if (props.autoFocus !== false) {
         const autoFocusEl = menu.value?.querySelector('[autofocus]');
-        if (autoFocusEl instanceof HTMLElement) autoFocusEl.focus();
-        else menu.value?.focus();
+        if (autoFocusEl instanceof HTMLElement) autoFocusEl.focus({ preventScroll: true });
+        else menu.value?.focus({ preventScroll: true });
       }
       highlightSelected();
     });
@@ -233,7 +233,12 @@ function highlightItem(el: HTMLElement | undefined) {
   clearHighlight();
   if (!el) return;
   el.setAttribute('aria-selected', 'true');
-  el.scrollIntoView({ block: 'nearest' });
+  const container = menu.value;
+  if (!container) return;
+  const itemRect = el.getBoundingClientRect();
+  const box = container.getBoundingClientRect();
+  if (itemRect.top < box.top) container.scrollTop -= box.top - itemRect.top;
+  else if (itemRect.bottom > box.bottom) container.scrollTop += itemRect.bottom - box.bottom;
 }
 
 function highlightSelected() {

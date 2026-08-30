@@ -526,7 +526,7 @@ function openModelPicker() {
   if (!root) return false;
   const button = root.querySelector('button');
   if (!(button instanceof HTMLButtonElement)) return false;
-  button.focus();
+  button.focus({ preventScroll: true });
   button.click();
   return true;
 }
@@ -534,7 +534,7 @@ function openModelPicker() {
 function handleModelDropdownOpenChange(open: boolean) {
   if (!open) {
     nextTick(() => {
-      textareaRef.value?.focus();
+      textareaRef.value?.focus({ preventScroll: true });
     });
   }
 }
@@ -756,11 +756,11 @@ defineExpose({ focus, reset });
   flex-direction: column;
   align-items: stretch;
   overflow: visible;
-  background: #1f1f1f;
-  border: 1px solid #2b2b2b;
-  border-radius: var(--card-radius, 6px);
+  background: #222226;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--composer-radius, 16px);
   box-sizing: border-box;
-  box-shadow: none;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.32);
 }
 
 .input-message:has(.input-textarea:disabled) {
@@ -772,8 +772,8 @@ defineExpose({ focus, reset });
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px 8px;
-  border-top: 1px solid #2b2b2b;
+  padding: 0 8px 8px;
+  border-top: 0;
   flex: 0 0 auto;
 }
 
@@ -880,7 +880,7 @@ defineExpose({ focus, reset });
   background: transparent;
   color: #e2e8f0;
   outline: none;
-  padding: 12px 16px;
+  padding: 12px 16px 6px;
   box-sizing: border-box;
   font-family: inherit;
 }

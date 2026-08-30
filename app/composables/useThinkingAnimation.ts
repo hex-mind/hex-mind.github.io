@@ -8,12 +8,13 @@ export function useThinkingAnimation(isThinking: Ref<boolean>, busyDescendantCou
   const thinkingSuffix = ref('');
   let thinkingTimer: number | undefined;
 
+  const thinkingStatus = computed(() => (isThinking.value ? 'busy' : 'idle'));
+
   const thinkingDisplayText = computed(() => {
-    if (!isThinking.value) return '🟢 Idle';
+    if (!isThinking.value) return 'Idle';
     const descendants = busyDescendantCount.value;
-    const total = Math.max(1, 1 + descendants);
-    const heads = '🧐'.repeat(Math.min(total, 8));
-    return `${heads} Thinking${thinkingSuffix.value}`;
+    if (descendants > 0) return `Thinking (${descendants + 1})${thinkingSuffix.value}`;
+    return `Thinking${thinkingSuffix.value}`;
   });
 
   watch(
@@ -48,5 +49,6 @@ export function useThinkingAnimation(isThinking: Ref<boolean>, busyDescendantCou
 
   return {
     thinkingDisplayText,
+    thinkingStatus,
   };
 }

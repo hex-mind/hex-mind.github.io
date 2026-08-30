@@ -43,7 +43,14 @@
                   @keydown.esc.prevent="cancelRename"
                   @blur="commitRename(session)"
                 />
-                <span v-else class="bookmark-item-title">{{ session.title }}</span>
+                <span v-else class="bookmark-item-title-row">
+                  <span class="bookmark-item-title">{{ session.title }}</span>
+                  <span
+                    v-if="session.hasNotification"
+                    class="bookmark-item-mark"
+                    title="Pending message"
+                  ></span>
+                </span>
                 <span v-if="sessionMeta(session)" class="bookmark-item-meta">{{
                   sessionMeta(session)
                 }}</span>
@@ -124,6 +131,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import { Icon } from '@iconify/vue';
+import { confirmAction } from '../composables/useConfirm';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
 
@@ -139,6 +147,7 @@ export type BookmarkedSessionView = {
   isSelected: boolean;
   pinned?: boolean;
   timeUpdated?: number;
+  hasNotification?: boolean;
 };
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -262,8 +271,14 @@ function onMenuSelect(session: BookmarkedSessionView, value: unknown) {
     return;
   }
   if (value === 'delete') {
-    if (typeof window !== 'undefined' && !window.confirm('Delete session?')) return;
-    emit('delete-session', session);
+    void confirmAction({
+      title: 'Delete session?',
+      message: 'This chat will be removed. Files on disk are not deleted.',
+      confirmLabel: 'Delete',
+      danger: true,
+    }).then((confirmed) => {
+      if (confirmed) emit('delete-session', session);
+    });
   }
 }
 
@@ -394,13 +409,30 @@ function focusRenameInput() {
   flex: 1;
 }
 
+.bookmark-item-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .bookmark-item-title {
+  min-width: 0;
+  flex: 1;
   font-size: 12px;
   font-weight: 600;
   color: #cccccc;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.bookmark-item-mark {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c084fc;
 }
 
 .bookmark-item-rename {

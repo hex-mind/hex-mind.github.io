@@ -27,10 +27,7 @@ html:not([data-theme='light']) .app {
 
 html:not([data-theme='light'])
   :is(
-    .output-panel-shell,
-    .input-message,
     .side-body,
-    .thread-block,
     .app-loading-card,
     .modal,
     .project-picker-dialog,
@@ -137,10 +134,7 @@ html[data-theme='light'] .app {
 
 html[data-theme='light']
   :is(
-    .output-panel-shell,
-    .input-message,
     .side-body,
-    .thread-block,
     .app-loading-card,
     .modal,
     .project-picker-dialog,
@@ -173,6 +167,11 @@ html[data-theme='light'] .activity-bar {
 html[data-theme='light'] .input-message {
   background: #ffffff !important;
   border-color: #e5e5e5 !important;
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme='light'] .output-panel-main::after {
+  background: linear-gradient(to bottom, transparent, #f7f7f8 72%);
 }
 
 html[data-theme='light'] .input-toolbar,
@@ -226,9 +225,14 @@ html[data-theme='light']
   color: #2f2f2f !important;
 }
 
-html[data-theme='light'] :is(.thread-block, .todo-group) {
+html[data-theme='light'] .todo-group {
   background: #ffffff !important;
   border-color: #ececec !important;
+}
+
+html[data-theme='light'] .thread-block {
+  background: transparent !important;
+  border-color: transparent !important;
 }
 
 html[data-theme='light'] .ib-msg-user {
@@ -559,6 +563,16 @@ html[data-theme='light'] .ib-action-danger:hover {
   color: #b91c1c !important;
 }
 
+html[data-theme='light'] .ib-error-bar {
+  background: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #9f1239 !important;
+}
+
+html[data-theme='light'] .ib-error-icon {
+  color: #e11d48 !important;
+}
+
 html[data-theme='light'] .ib-footer-actions .ib-action {
   background: transparent !important;
   border: 0 !important;
@@ -801,10 +815,16 @@ html[data-theme='light'] :is(.question-button, .permission-button) {
   color: #374151 !important;
 }
 
-html[data-theme='light'] :is(.question-button.is-reply, .permission-button.is-always) {
+html[data-theme='light'] .permission-button.is-always {
   background: #f0fdf4 !important;
   border-color: #bbf7d0 !important;
   color: #166534 !important;
+}
+
+html[data-theme='light'] .question-button.is-reply {
+  background: #eef2ff !important;
+  border-color: #c7d2fe !important;
+  color: #3730a3 !important;
 }
 
 html[data-theme='light'] .permission-button.is-once {
@@ -819,11 +839,16 @@ html[data-theme='light'] :is(.question-button.is-reject, .permission-button.is-r
   color: #b91c1c !important;
 }
 
-html[data-theme='light']
-  :is(.question-button.is-reply, .permission-button.is-always):not(:disabled):hover {
+html[data-theme='light'] .permission-button.is-always:not(:disabled):hover {
   background: #dcfce7 !important;
   border-color: #86efac !important;
   color: #166534 !important;
+}
+
+html[data-theme='light'] .question-button.is-reply:not(:disabled):hover {
+  background: #e0e7ff !important;
+  border-color: #a5b4fc !important;
+  color: #3730a3 !important;
 }
 
 html[data-theme='light'] .permission-button.is-once:not(:disabled):hover {
@@ -1090,7 +1115,12 @@ html[data-theme='light'] .notification-button {
 }
 
 html[data-theme='light'] .notification-button.has-notifications {
-  color: #d5a30f !important;
+  color: #404040 !important;
+}
+
+html[data-theme='light'] .notification-mark {
+  background: #9622f5;
+  box-shadow: 0 0 0 2px #f7f7f8;
 }
 
 html[data-theme='light'] .notification-button:hover:not(:disabled) {
@@ -1240,7 +1270,7 @@ html[data-theme='light'] .history-item-reasoning:hover {
 }
 
 html[data-theme='light'] .history-item-question {
-  border-color: #a7f3d0 !important;
+  border-color: #c7d2fe !important;
 }
 
 html[data-theme='light'] .history-item-tool:hover {
