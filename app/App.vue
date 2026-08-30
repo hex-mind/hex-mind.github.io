@@ -4,7 +4,9 @@
     :class="{
       'is-side-resizing': !!sidePanelResizeState,
       'is-input-resizing': !!inputPanelResizeState,
+      'todo-collapsed': sidePanelCollapsed,
     }"
+    :style="bodyPanelStyle"
   >
     <template v-if="uiInitState === 'ready'">
       <header class="app-header">
@@ -17,7 +19,6 @@
           :side-panel-collapsed="sidePanelCollapsed"
           :input-panel-collapsed="inputPanelCollapsed"
           @new-session="createNewSession"
-          @open-shell="openShellFromInput('')"
           @delete-active-directory="deleteWorktree"
           @delete-session="deleteSession"
           @archive-session="archiveSession"
@@ -34,7 +35,6 @@
         ref="appBodyEl"
         class="app-body"
         :class="{ 'todo-collapsed': sidePanelCollapsed }"
-        :style="bodyPanelStyle"
       >
         <div ref="sidePanelAreaEl" class="side-panel-area">
           <SidePanel
@@ -77,8 +77,8 @@
             @select-search-hit="handleSearchHit"
             @reload="handleTreeReload"
             @load-branches="refreshBranchEntries"
+            @open-shell="openShellFromInput('')"
             @open-settings="isSettingsOpen = true"
-            @logout="handleLogout"
           />
         </div>
         <div
@@ -90,7 +90,10 @@
         <div
           ref="appMainColumnEl"
           class="app-main-column"
-          :class="{ 'is-composer-hidden': inputPanelCollapsed }"
+          :class="{
+            'is-composer-hidden': inputPanelCollapsed,
+            'is-welcome': isWelcomeComposer,
+          }"
         >
           <main class="app-output">
             <div class="output-workspace">
@@ -133,17 +136,28 @@
             </div>
           </main>
           <div
-            v-if="!inputPanelCollapsed"
+            v-if="!inputPanelCollapsed && !isWelcomeComposer"
             class="panel-sash panel-sash-horizontal"
             :class="{ 'is-dragging': !!inputPanelResizeState }"
             @pointerdown="startInputPanelResize"
           ></div>
-          <footer
+          <div
             v-if="!inputPanelCollapsed"
-            ref="inputEl"
-            class="app-input"
-            :class="{ 'is-disabled': !canCompose }"
+            class="app-input-dock"
+            :class="{ 'is-welcome': isWelcomeComposer }"
           >
+            <div v-if="isWelcomeComposer" class="welcome-hero">
+              <span class="welcome-mark" aria-hidden="true">
+                <img src="/hex-logo.png" alt="" class="brand-logo-dark" />
+                <img src="/hex-logo-light.png" alt="" class="brand-logo-light" />
+              </span>
+              <h1 class="welcome-title">Ready to dive in?</h1>
+            </div>
+            <footer
+              ref="inputEl"
+              class="app-input"
+              :class="{ 'is-disabled': !canCompose }"
+            >
             <InputPanel
               ref="inputPanelRef"
               :disabled="connectionState !== 'ready'"
@@ -178,7 +192,8 @@
               @remove-attachment="removeAttachment"
               @open-image="handleOpenImage"
             />
-          </footer>
+            </footer>
+          </div>
         </div>
         <div ref="toolWindowCanvasEl" class="tool-window-canvas">
           <TransitionGroup appear name="scale">
@@ -279,7 +294,11 @@
       @close="closeProjectPicker"
       @select="handleProjectDirectorySelect"
     />
-    <SettingsModal :open="isSettingsOpen" @close="isSettingsOpen = false" />
+    <SettingsModal
+      :open="isSettingsOpen"
+      @close="isSettingsOpen = false"
+      @logout="handleLogout"
+    />
     <ConfirmDialog />
   </div>
 </template>
@@ -860,6 +879,7 @@ const workingDirectory = computed(
   () => focusedDirectory.value.trim() || activeDirectory.value.trim(),
 );
 const canCompose = computed(() => Boolean(workingDirectory.value));
+const isWelcomeComposer = computed(() => !selectedSessionId.value.trim());
 const outputPanelKey = computed(
   () => `${workingDirectory.value}::${selectedSessionId.value}`,
 );
@@ -2095,7 +2115,10 @@ function syncFloatingExtent() {
   if (!canvas || !header) return;
   const headerRect = header.getBoundingClientRect();
   const headerBottom = headerRect.bottom;
-  const inputTop = input?.getBoundingClientRect().top ?? window.innerHeight;
+  const inputTop =
+    isWelcomeComposer.value || !input
+      ? window.innerHeight
+      : input.getBoundingClientRect().top;
   const topOffset = Math.max(0, headerBottom);
   const availableHeight = Math.max(0, inputTop - headerBottom);
   canvas.style.setProperty('--canvas-top', `${topOffset}px`);
@@ -4067,6 +4090,7 @@ watch(
     clearComposerInputState();
     nextTick(() => {
       inputPanelRef.value?.reset();
+      syncFloatingExtent();
     });
     if (!contextKey) return;
     const hadDraft = restoreComposerDraftForContext(contextKey);
@@ -5615,6 +5639,15 @@ onBeforeUnmount(() => {
   --thread-max-width: 48rem;
   --input-panel-default: 128px;
   --composer-radius: 16px;
+  --todo-panel-open-width: clamp(250px, 23vw, 340px);
+  --todo-panel-collapsed-width: 44px;
+  --todo-panel-width: var(--todo-panel-open-width);
+  --main-column-left: calc(var(--todo-panel-width) + var(--panel-sash-size));
+}
+
+.app.todo-collapsed {
+  --todo-panel-width: var(--todo-panel-collapsed-width);
+  --main-column-left: calc(var(--todo-panel-width) + var(--workbench-inset));
 }
 
 .app.is-side-resizing,
@@ -5787,7 +5820,7 @@ onBeforeUnmount(() => {
   isolation: isolate;
 }
 
-.app-input {
+.app-input-dock {
   position: absolute;
   left: 0;
   right: 0;
@@ -5798,6 +5831,56 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: stretch;
   width: min(var(--thread-max-width), calc(100% - 32px));
+}
+
+.app-input-dock.is-welcome {
+  top: 0;
+  bottom: 0;
+  height: max-content;
+  max-height: calc(100% - 48px);
+  margin-block: auto;
+  justify-content: center;
+}
+
+.welcome-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.welcome-mark {
+  display: block;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.welcome-mark img {
+  height: 36px;
+  width: 81px;
+  max-width: none;
+  object-fit: fill;
+}
+
+.welcome-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: #f1f5f9;
+  line-height: 1.1;
+}
+
+.app-input {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
   height: var(--input-panel-height, var(--input-panel-default));
   min-height: 112px;
   max-height: calc(100% - 120px);
@@ -5837,14 +5920,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: stretch;
   gap: 0;
-  --todo-panel-gap: var(--panel-sash-size);
-  --todo-panel-open-width: clamp(250px, 23vw, 340px);
-  --todo-panel-collapsed-width: 44px;
-  --todo-panel-width: var(--todo-panel-open-width);
 }
 
 .app-body.todo-collapsed {
-  --todo-panel-width: var(--todo-panel-collapsed-width);
   gap: var(--workbench-inset);
 }
 
@@ -5863,7 +5941,8 @@ onBeforeUnmount(() => {
   );
 }
 
-.app-main-column.is-composer-hidden {
+.app-main-column.is-composer-hidden,
+.app-main-column.is-welcome {
   --composer-dock-height: 16px;
 }
 
@@ -5943,9 +6022,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .app-body {
+  .app {
     --todo-panel-open-width: min(86vw, 320px);
     --todo-panel-collapsed-width: 40px;
+  }
+
+  .app-body {
     padding-left: var(--todo-panel-collapsed-width);
   }
 

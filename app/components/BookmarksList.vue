@@ -198,12 +198,17 @@ function startOfLocalDay(ms: number) {
   return date.getTime();
 }
 
-function recencyBucket(timeUpdated: number | undefined, now: number): 'today' | 'week' | 'older' {
+function recencyBucket(
+  timeUpdated: number | undefined,
+  now: number,
+): 'today' | 'week' | 'month' | 'older' {
   const today = startOfLocalDay(now);
   const weekAgo = today - 7 * MS_DAY;
+  const monthAgo = today - 30 * MS_DAY;
   const time = typeof timeUpdated === 'number' && timeUpdated > 0 ? timeUpdated : 0;
   if (time >= today) return 'today';
   if (time >= weekAgo) return 'week';
+  if (time >= monthAgo) return 'month';
   return 'older';
 }
 
@@ -214,14 +219,16 @@ const sessionGroups = computed((): SessionGroup[] => {
   const now = Date.now();
   const groups: SessionGroup[] = [
     { id: 'today', label: 'Today', sessions: [] },
-    { id: 'week', label: 'Previous 7 days', sessions: [] },
+    { id: 'week', label: '7 days', sessions: [] },
+    { id: 'month', label: '30 days', sessions: [] },
     { id: 'older', label: 'Older', sessions: [] },
   ];
   for (const session of props.sessions) {
     const bucket = recencyBucket(session.timeUpdated, now);
     if (bucket === 'today') groups[0].sessions.push(session);
     else if (bucket === 'week') groups[1].sessions.push(session);
-    else groups[2].sessions.push(session);
+    else if (bucket === 'month') groups[2].sessions.push(session);
+    else groups[3].sessions.push(session);
   }
   return groups.filter((group) => group.sessions.length > 0);
 });

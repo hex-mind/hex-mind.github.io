@@ -19,6 +19,15 @@
         ></span>
       </button>
       <div class="activity-spacer"></div>
+      <button
+        type="button"
+        class="activity-button activity-utility-button"
+        aria-label="Open shell"
+        title="Open shell"
+        @click="emit('open-shell')"
+      >
+        <Icon icon="lucide:terminal" :width="21" :height="21" />
+      </button>
       <Dropdown
         v-model:open="tipsMenuOpen"
         placement="top"
@@ -70,60 +79,17 @@
               </div>
             </dl>
           </div>
-          <div class="activity-tips-footer">
-            <span class="activity-tips-feedback">Feedback?</span>
-            <span>
-              Discord
-              <span class="activity-tips-handle">dreamingasfish</span>
-            </span>
-            <span>
-              Email
-              <a class="activity-tips-handle" href="mailto:rve@foxmail.com">rve@foxmail.com</a>
-            </span>
-          </div>
         </div>
       </Dropdown>
-      <a
-        href="https://github.com/hex-mind/hex-mind.github.io"
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
         class="activity-button activity-utility-button"
-        aria-label="GitHub"
-        title="GitHub"
+        aria-label="Settings"
+        title="Settings"
+        @click="emit('open-settings')"
       >
-        <Icon icon="lucide:github" :width="21" :height="21" />
-      </a>
-      <Dropdown
-        v-model:open="settingsMenuOpen"
-        placement="top"
-        :popup-style="{ width: '160px', marginLeft: '44px' }"
-        auto-close
-        @select="onSettingsMenuSelect"
-      >
-        <template #trigger>
-          <button
-            type="button"
-            class="activity-button activity-utility-button"
-            aria-label="Settings"
-            title="Settings"
-            @click.stop="settingsMenuOpen = !settingsMenuOpen"
-          >
-            <Icon icon="lucide:settings" :width="21" :height="21" />
-          </button>
-        </template>
-        <DropdownItem value="settings">
-          <span class="activity-menu-item">
-            <Icon icon="lucide:settings" :width="14" :height="14" />
-            Settings
-          </span>
-        </DropdownItem>
-        <DropdownItem value="logout">
-          <span class="activity-menu-item">
-            <Icon icon="lucide:log-out" :width="14" :height="14" />
-            Logout
-          </span>
-        </DropdownItem>
-      </Dropdown>
+        <Icon icon="lucide:settings" :width="21" :height="21" />
+      </button>
     </nav>
     <div v-if="!collapsed" class="side-body">
       <header class="side-header">
@@ -194,7 +160,6 @@
 import { computed, ref, toRefs } from 'vue';
 import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
-import DropdownItem from './Dropdown/Item.vue';
 import TodoList from './TodoList.vue';
 import BookmarksList, { type BookmarkedSessionView } from './BookmarksList.vue';
 import type { BranchEntry } from '../composables/useFileTree';
@@ -260,8 +225,8 @@ const emit = defineEmits<{
   (event: 'open-file', path: string): void;
   (event: 'reload'): void;
   (event: 'load-branches'): void;
+  (event: 'open-shell'): void;
   (event: 'open-settings'): void;
-  (event: 'logout'): void;
   (event: 'select-search-hit', hit: SessionSearchHit): void;
 }>();
 
@@ -289,18 +254,12 @@ function tabTitle(tab: { id: SidePanelTab; label: string }) {
   }
   return tab.label;
 }
-const settingsMenuOpen = ref(false);
 const tipsMenuOpen = ref(false);
 const isMac =
   typeof navigator !== 'undefined' &&
   /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const modKey = isMac ? '⌘' : 'Ctrl';
 const altKey = isMac ? '⌥' : 'Alt';
-
-function onSettingsMenuSelect(value: unknown) {
-  if (value === 'settings') emit('open-settings');
-  if (value === 'logout') emit('logout');
-}
 
 const {
   collapsed,
@@ -383,13 +342,6 @@ const {
   flex: 0 0 auto;
 }
 
-.activity-menu-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #cccccc;
-}
-
 .activity-tips {
   display: flex;
   flex-direction: column;
@@ -464,29 +416,6 @@ const {
   font-weight: 500;
   line-height: 1;
   color: #e6e6e6;
-}
-
-.activity-tips-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 11px;
-  color: #8a8a8a;
-}
-
-.activity-tips-feedback {
-  font-weight: 600;
-  color: #b4b4b4;
-}
-
-.activity-tips-handle {
-  color: #5ba3f5;
-  font-weight: 600;
-  user-select: all;
-  text-decoration: none;
 }
 
 .activity-button:hover,

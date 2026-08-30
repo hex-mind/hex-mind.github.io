@@ -379,7 +379,6 @@ defineExpose({ panelEl, scrollToThread });
   overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: auto;
-  mask-image: linear-gradient(to bottom, transparent, black 12px, black 100%);
 }
 
 .output-panel-main {

@@ -14,19 +14,27 @@
         </span>
         <div class="brand-tagline hidden lg:block">for opencode</div>
       </div>
-      <div class="top-center">
-        <Dropdown
-          v-model:open="treeDropdownOpen"
-          class="tree-dropdown-root"
-          :label="dropdownLabel"
-          placeholder="Select path"
-          title="Select path"
-          auto-close
-          :auto-highlight="false"
-          :popup-style="{ minWidth: '420px', width: 'min(680px, 90vw)', maxWidth: '90vw' }"
-          popup-class="max-lg:left-0! max-lg:w-screen! max-lg:min-w-0! max-lg:max-w-none!"
-          @select="onTreeSelect"
-        >
+      <div class="top-path-slot">
+        <div class="top-path-module">
+          <button
+            type="button"
+            class="top-icon-button new-session-button"
+            :disabled="!canCreateSession"
+            @click="$emit('new-session')"
+            title="New session"
+          >
+            <Icon icon="lucide:notebook-pen" :width="16" :height="16" />
+          </button>
+          <Dropdown
+            v-model:open="treeDropdownOpen"
+            class="tree-dropdown-root"
+            :label="dropdownLabel"
+            placeholder="Select path"
+            title="Select path"
+            auto-close
+            :auto-highlight="false"
+            @select="onTreeSelect"
+          >
           <template #label>
             <span v-if="selectedDisplay" class="selected-label">
               <span class="selected-title">{{ selectedDisplay.pathName }}</span>
@@ -267,27 +275,7 @@
               </div>
             </div>
           </template>
-        </Dropdown>
-
-        <div class="top-session-actions">
-          <button
-            type="button"
-            class="top-icon-button new-session-button"
-            :disabled="!canCreateSession"
-            @click="$emit('new-session')"
-            title="New session"
-          >
-            <Icon icon="lucide:notebook-pen" :width="16" :height="16" />
-          </button>
-          <button
-            type="button"
-            class="top-icon-button open-shell-button"
-            :disabled="!canCreateSession"
-            @click="$emit('open-shell')"
-            title="Open shell"
-          >
-            <Icon icon="lucide:terminal" :width="16" :height="16" />
-          </button>
+          </Dropdown>
         </div>
       </div>
       <div class="top-right">
@@ -386,7 +374,6 @@ const emit = defineEmits<{
   (event: 'archive-session', payload: SessionTarget): void;
   (event: 'unarchive-session', payload: SessionTarget): void;
   (event: 'open-directory'): void;
-  (event: 'open-shell'): void;
   (event: 'toggle-side-panel'): void;
   (event: 'toggle-input-panel'): void;
   (event: 'dropdown-closed'): void;
@@ -752,6 +739,8 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .top-left {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -820,22 +809,30 @@ function handleOpenDirectory(close: () => void) {
   white-space: nowrap;
 }
 
-.top-center {
-  flex: 1 1 auto;
-  min-width: 0;
+.top-path-slot {
+  position: absolute;
+  inset: 0 0 0 var(--main-column-left, var(--todo-panel-collapsed-width, 44px));
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  padding: 0 16px;
+  box-sizing: border-box;
+  pointer-events: none;
+  min-width: 0;
+  z-index: 0;
 }
 
-.top-session-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
+.top-path-module {
+  position: relative;
+  pointer-events: auto;
+  width: 100%;
+  max-width: var(--thread-max-width, 48rem);
+  min-width: 0;
 }
 
 .top-right {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
@@ -843,9 +840,9 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .tree-dropdown-root {
-  flex: 0 1 680px;
-  width: min(680px, 70vw);
-  min-width: 260px;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 
 .tree-menu {
@@ -1264,6 +1261,9 @@ function handleOpenDirectory(close: () => void) {
 }
 
 .new-session-button {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 0;
   width: 32px;
   height: 32px;
   flex-shrink: 0;
@@ -1272,18 +1272,8 @@ function handleOpenDirectory(close: () => void) {
   color: #5ba3f5;
 }
 
-.new-session-button:hover,
-.open-shell-button:hover {
+.new-session-button:hover {
   background: rgba(255, 255, 255, 0.08);
-}
-
-.open-shell-button {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  padding: 0;
-  justify-content: center;
-  color: #c4b5fd;
 }
 
 .top-icon-button:disabled {
@@ -1440,7 +1430,7 @@ function handleOpenDirectory(close: () => void) {
   }
 
   .top-row,
-  .top-center {
+  .top-path-module {
     gap: 4px;
   }
 
@@ -1479,9 +1469,32 @@ function handleOpenDirectory(close: () => void) {
   }
 }
 
-@media (max-width: 560px) {
-  .open-shell-button {
-    display: none;
+@media (max-width: 960px) {
+  .top-path-slot {
+    position: static;
+    inset: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    pointer-events: auto;
+  }
+
+  .top-path-module {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: none;
+    width: 100%;
+  }
+
+  .new-session-button {
+    position: static;
+    right: auto;
+  }
+
+  .tree-dropdown-root {
+    flex: 1 1 auto;
+    width: auto;
   }
 }
 </style>

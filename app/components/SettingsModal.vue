@@ -48,6 +48,38 @@
             <span class="toggle-track" />
           </label>
         </div>
+        <div class="setting-row">
+          <div class="setting-label">GitHub</div>
+          <a
+            class="setting-link"
+            href="https://github.com/hex-mind/hex-mind.github.io"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Icon icon="lucide:github" :width="14" :height="14" />
+            hex-mind
+          </a>
+        </div>
+        <div class="setting-row setting-row-stack">
+          <div class="setting-label">Feedback</div>
+          <div class="setting-feedback">
+            <span>
+              Discord
+              <span class="setting-handle">dreamingasfish</span>
+            </span>
+            <span>
+              Email
+              <a class="setting-handle" href="mailto:rve@foxmail.com">rve@foxmail.com</a>
+            </span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Account</div>
+          <button type="button" class="setting-link setting-logout" @click="$emit('logout')">
+            <Icon icon="lucide:log-out" :width="14" :height="14" />
+            Logout
+          </button>
+        </div>
       </div>
     </div>
   </dialog>
@@ -64,6 +96,7 @@ const props = defineProps<{
 
 defineEmits<{
   (event: 'close'): void;
+  (event: 'logout'): void;
 }>();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
@@ -170,16 +203,53 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 12px;
-  border: 1px solid #2b2b2b;
-  border-radius: 8px;
-  background: #252526;
+  padding: 8px 0;
 }
 
 .setting-label {
   font-size: 13px;
   font-weight: 500;
   color: #cccccc;
+}
+
+.setting-row-stack {
+  align-items: flex-start;
+}
+
+.setting-link,
+.setting-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: #5ba3f5;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.setting-link:hover,
+.setting-logout:hover {
+  color: #7eb6f7;
+}
+
+.setting-feedback {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 12px;
+  color: #9d9d9d;
+}
+
+.setting-handle {
+  color: #5ba3f5;
+  font-weight: 600;
+  user-select: all;
+  text-decoration: none;
 }
 
 .theme-options {
@@ -266,6 +336,10 @@ watch(
   .setting-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .setting-feedback {
+    align-items: flex-start;
   }
 }
 </style>

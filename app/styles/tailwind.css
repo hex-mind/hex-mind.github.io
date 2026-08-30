@@ -183,7 +183,6 @@ html[data-theme='light']
   :is(
     .tree-footer,
     .tree-search,
-    .setting-row,
     .theme-options,
     .ui-dropdown-button:not(.chrome-select-button),
     .tree-dropdown-root .ui-dropdown-button,
@@ -211,6 +210,7 @@ html[data-theme='light']
     .todo-text,
     .setting-label,
     .modal-title,
+    .welcome-title,
     .input-panel,
     .input-textarea,
     .input-control,
@@ -410,6 +410,21 @@ html[data-theme='light'] .theme-option.is-active {
   background: #ffffff;
   color: #2f2f2f;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+html[data-theme='light'] .setting-link,
+html[data-theme='light'] .setting-logout,
+html[data-theme='light'] .setting-handle {
+  color: #2b7de9;
+}
+
+html[data-theme='light'] .setting-link:hover,
+html[data-theme='light'] .setting-logout:hover {
+  color: #1d6fd1;
+}
+
+html[data-theme='light'] .setting-feedback {
+  color: #6b7280;
 }
 
 html[data-theme='light'] .modal-backdrop::backdrop {
@@ -868,10 +883,6 @@ html[data-theme='light'] .ui-dropdown-item {
   color: #374151;
 }
 
-html[data-theme='light'] .activity-menu-item {
-  color: #374151 !important;
-}
-
 html[data-theme='light'] .activity-tips {
   color: #2f2f2f !important;
 }
@@ -881,27 +892,14 @@ html[data-theme='light'] .activity-tips-title {
 }
 
 html[data-theme='light'] .activity-tips-note,
-html[data-theme='light'] .activity-tips-shortcuts dd,
-html[data-theme='light'] .activity-tips-footer {
+html[data-theme='light'] .activity-tips-shortcuts dd {
   color: #4b5563 !important;
-}
-
-html[data-theme='light'] .activity-tips-footer {
-  border-color: #ececec !important;
-}
-
-html[data-theme='light'] .activity-tips-feedback {
-  color: #6b7280 !important;
 }
 
 html[data-theme='light'] .activity-tips kbd {
   background: #f4f4f5 !important;
   border-color: #e5e5e5 !important;
   color: #2f2f2f !important;
-}
-
-html[data-theme='light'] .activity-tips-handle {
-  color: #2b7de9 !important;
 }
 
 html[data-theme='light'] .menu-item-content {
@@ -1081,19 +1079,6 @@ html[data-theme='light'] .new-session-button:hover:not(:disabled) {
   background: #e8f1fc !important;
   border-color: transparent !important;
   color: #1d6fd1 !important;
-  filter: none;
-}
-
-html[data-theme='light'] .open-shell-button {
-  background: transparent !important;
-  border: 0 !important;
-  color: #7c3aed !important;
-}
-
-html[data-theme='light'] .open-shell-button:hover:not(:disabled) {
-  background: #f1eafe !important;
-  border-color: transparent !important;
-  color: #6d28d9 !important;
   filter: none;
 }
 
