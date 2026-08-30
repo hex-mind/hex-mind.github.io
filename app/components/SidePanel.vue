@@ -76,6 +76,10 @@
               Discord
               <span class="activity-tips-handle">dreamingasfish</span>
             </span>
+            <span>
+              Email
+              <a class="activity-tips-handle" href="mailto:rve@foxmail.com">rve@foxmail.com</a>
+            </span>
           </div>
         </div>
       </Dropdown>
@@ -482,6 +486,7 @@ const {
   color: #5ba3f5;
   font-weight: 600;
   user-select: all;
+  text-decoration: none;
 }
 
 .activity-button:hover,

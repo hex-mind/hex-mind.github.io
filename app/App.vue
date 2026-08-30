@@ -356,7 +356,6 @@ import {
   stripTrailingSlashes as normalizeDirectory,
 } from './utils/path';
 import { formatSessionTitle } from './utils/formatters';
-import { toNavigableSessionTree } from './utils/sessionTree';
 import type { SessionTarget } from './types/session';
 import { pickLocalDirectory } from './utils/pickLocalDirectory';
 import { rememberInstanceDirectories } from './utils/instanceDirectories';
@@ -1114,8 +1113,6 @@ const topPanelTreeData = computed<TopPanelWorktree[]>(() => {
     });
   return entries;
 });
-
-const navigableTree = computed(() => toNavigableSessionTree(topPanelTreeData.value));
 
 const allowedSessionIds = computed(() => {
   const rootId = selectedSessionId.value;
@@ -3841,26 +3838,19 @@ async function sendMessage() {
 }
 
 function switchSessionByDirection(delta: number) {
-  const tree = navigableTree.value;
-  const currentProjectId = selectedProjectId.value;
-  const worktree = tree.find((w) => w.projectId === currentProjectId);
-  if (!worktree) return;
+  const items = recentSessionItems.value;
+  if (items.length === 0) return;
 
-  // Flatten sessions across all sandboxes in display order
-  const flatSessions = worktree.sandboxes.flatMap((s) => s.sessions);
-  if (flatSessions.length === 0) return;
-
-  const currentIndex = flatSessions.findIndex((s) => s.id === selectedSessionId.value);
+  const currentIndex = items.findIndex((item) => item.sessionId === selectedSessionId.value);
   if (currentIndex < 0) {
-    // Current session not in navigable list — jump to first
-    void switchSessionSelection(currentProjectId, flatSessions[0].id);
+    const first = items[0];
+    if (first) void switchSessionSelection(first.projectId, first.sessionId);
     return;
   }
 
-  const nextIndex = (currentIndex + delta + flatSessions.length) % flatSessions.length;
-  const target = flatSessions[nextIndex];
-  if (target.id !== selectedSessionId.value) {
-    void switchSessionSelection(currentProjectId, target.id);
+  const next = items[(currentIndex + delta + items.length) % items.length];
+  if (next && next.sessionId !== selectedSessionId.value) {
+    void switchSessionSelection(next.projectId, next.sessionId);
   }
 }
 

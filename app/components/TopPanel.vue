@@ -275,7 +275,7 @@
             class="top-icon-button new-session-button"
             :disabled="!canCreateSession"
             @click="$emit('new-session')"
-            title="New session(cmd + J)"
+            title="New session"
           >
             <Icon icon="lucide:notebook-pen" :width="16" :height="16" />
           </button>
