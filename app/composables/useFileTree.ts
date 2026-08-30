@@ -303,8 +303,15 @@ function scheduleDirectoryReload(path: string) {
 const GIT_STATUS_SCRIPT = [
   'export GIT_PAGER=cat',
   'export GIT_TERMINAL_PROMPT=0',
-  'printf "##BRANCH\\n"',
-  'git -c core.quotepath=false rev-parse --abbrev-ref HEAD 2>/dev/null || printf "(detached)\\n"',
+  'printf "##GIT\\n"',
+  'if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then',
+  '  printf "1\\n"',
+  '  printf "##BRANCH\\n"',
+  '  git -c core.quotepath=false symbolic-ref --short -q HEAD || printf "(detached)\\n"',
+  'else',
+  '  printf "0\\n"',
+  '  printf "##BRANCH\\n"',
+  'fi',
   'printf "##STATUS\\n"',
   'git --no-pager -c core.quotepath=false status --porcelain=v1 2>/dev/null',
   'printf "##UNSTAGED\\n"',
@@ -369,7 +376,14 @@ function parseNumstatSection(text: string): { additions: number; deletions: numb
   return { additions, deletions };
 }
 
+function normalizeGitBranchName(raw: string): string {
+  const name = raw.trim();
+  if (!name || name === 'HEAD') return '(detached)';
+  return name;
+}
+
 function parseGitStatusOutput(output: string): {
+  inside: boolean;
   branch: string;
   files: GitFileStatus[];
   diffStats: GitDiffStats;
@@ -382,13 +396,16 @@ function parseGitStatusOutput(output: string): {
     const next = normalized.indexOf('\n##', from);
     return (next < 0 ? normalized.slice(from) : normalized.slice(from, next)).replace(/\n+$/, '');
   };
-  const branch = take('BRANCH').split('\n')[0]?.trim() || '(detached)';
+  const gitMark = take('GIT').split('\n')[0]?.trim();
+  const inside = gitMark ? gitMark === '1' : Boolean(take('BRANCH') || take('STATUS'));
+  const branch = normalizeGitBranchName(take('BRANCH').split('\n')[0] ?? '');
   const files = take('STATUS')
     .split('\n')
     .map((line) => parsePorcelainLine(line))
     .filter((entry): entry is GitFileStatus => Boolean(entry))
     .sort((a, b) => a.path.localeCompare(b.path));
   return {
+    inside,
     branch,
     files,
     diffStats: {
@@ -427,9 +444,20 @@ async function refreshGitStatusOnly() {
     if (getOptions().activeDirectory.value.trim() !== directory) return;
 
     const parsed = parseGitStatusOutput(output);
+    if (!parsed.inside) {
+      setGitStatus({
+        branch: { branch: '', ahead: 0, behind: 0 },
+        files: [],
+        diffStats: {
+          staged: { additions: 0, deletions: 0 },
+          unstaged: { additions: 0, deletions: 0 },
+        },
+      });
+      return;
+    }
     setGitStatus({
       branch: {
-        branch: parsed.branch || '(detached)',
+        branch: parsed.branch,
         ahead: 0,
         behind: 0,
       },
@@ -438,14 +466,7 @@ async function refreshGitStatusOnly() {
     });
   } catch {
     if (generation !== gitStatusGeneration) return;
-    setGitStatus({
-      branch: { branch: '(detached)', ahead: 0, behind: 0 },
-      files: [],
-      diffStats: {
-        staged: { additions: 0, deletions: 0 },
-        unstaged: { additions: 0, deletions: 0 },
-      },
-    });
+    setGitStatus(null);
   }
 }
 

@@ -485,12 +485,14 @@ watch(
   },
 );
 const expanded = computed(() => new Set(props.expandedPaths));
-const branchIcon = computed(() => (props.branchInfo ? 'lucide:git-branch' : 'lucide:folder'));
-const branchName = computed(() => props.branchInfo?.branch ?? props.directoryName ?? 'no git');
+const branchIcon = computed(() =>
+  props.branchInfo?.branch ? 'lucide:git-branch' : 'lucide:folder',
+);
+const branchName = computed(() => props.branchInfo?.branch || props.directoryName || 'no git');
 
 const branchTitle = computed(() => {
   const info = props.branchInfo;
-  if (!info) {
+  if (!info?.branch) {
     if (props.directoryName) return `Directory: ${props.directoryName}`;
     return 'Git status unavailable';
   }
