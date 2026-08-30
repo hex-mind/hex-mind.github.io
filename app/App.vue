@@ -100,7 +100,6 @@
                     ref="outputPanelRef"
                     :key="outputPanelKey"
                     class="output-panel"
-                    :project-name="currentProjectName"
                     :is-following="isFollowing"
                     :status-text="statusText"
                     :is-status-error="isStatusError"

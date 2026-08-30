@@ -1,9 +1,6 @@
 <template>
   <div class="output-panel-root">
     <div class="output-panel-shell">
-      <div v-if="projectName" class="project-name-bar">
-        {{ projectName }}
-      </div>
       <div class="output-panel-main">
         <div
           ref="panelEl"
@@ -125,7 +122,6 @@ const props = defineProps<{
     providerId?: string,
     modelId?: string,
   ) => number | null;
-  projectName?: string;
   sessionRevert?: {
     messageID: string;
     partID?: string;
@@ -454,20 +450,6 @@ defineExpose({ panelEl, scrollToThread });
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 2px;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.5);
-}
-
-.project-name-bar {
-  flex: 0 0 auto;
-  width: 100%;
-  max-width: var(--thread-max-width);
-  margin-inline: auto;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  color: color-mix(in srgb, var(--project-tint, #94a3b8) 60%, #94a3b8);
-  padding: 8px 16px 0;
-  box-sizing: border-box;
-  user-select: none;
 }
 
 .follow-button {
