@@ -364,8 +364,9 @@ defineExpose({ panelEl, scrollToThread });
   box-shadow: none;
   display: flex;
   flex-direction: column;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.65;
 }
 
 .output-panel-scroll {

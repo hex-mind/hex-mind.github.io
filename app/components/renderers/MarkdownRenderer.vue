@@ -201,7 +201,7 @@ onBeforeUnmount(() => {
 
 .message-content :deep(.markdown-host) {
   position: relative;
-  line-height: 1.2;
+  line-height: inherit;
   color: inherit;
   overflow-wrap: anywhere;
   white-space: normal;
@@ -372,7 +372,7 @@ onBeforeUnmount(() => {
 .message-content :deep(.markdown-host code:not(pre code)) {
   display: inline;
   white-space: pre-wrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.95em;
   color: #79b8ff;
 }

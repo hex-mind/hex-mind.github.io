@@ -42,12 +42,19 @@
             :key="option.label"
             type="button"
             class="option-item"
-            :class="{ selected: isSelected(index, option.label) }"
+            :class="{
+              selected: isSelected(index, option.label),
+              'is-multi': Boolean(item.multiple),
+            }"
+            :aria-pressed="isSelected(index, option.label)"
             :disabled="isSubmitting"
             @click="toggleOption(index, option.label, !!item.multiple)"
           >
-            <span class="option-label">{{ option.label }}</span>
-            <span class="option-description">{{ option.description }}</span>
+            <span class="option-check" aria-hidden="true"></span>
+            <span class="option-text">
+              <span class="option-label">{{ option.label }}</span>
+              <span class="option-description">{{ option.description }}</span>
+            </span>
           </button>
         </div>
 
@@ -218,22 +225,17 @@ function isSelected(index: number, label: string) {
 
 function toggleOption(index: number, label: string, multiple: boolean) {
   const current = selectedAnswers.value[index] ?? [];
+  let nextRow: string[];
   if (multiple) {
-    if (current.includes(label)) {
-      selectedAnswers.value[index] = current.filter((value) => value !== label);
-      scheduleDraftSave();
-      return;
-    }
-    selectedAnswers.value[index] = [...current, label];
-    scheduleDraftSave();
-    return;
+    nextRow = current.includes(label)
+      ? current.filter((value) => value !== label)
+      : [...current, label];
+  } else {
+    nextRow = current.includes(label) ? [] : [label];
   }
-  if (current.includes(label)) {
-    selectedAnswers.value[index] = [];
-    scheduleDraftSave();
-    return;
-  }
-  selectedAnswers.value[index] = [label];
+  selectedAnswers.value = selectedAnswers.value.map((row, rowIndex) =>
+    rowIndex === index ? nextRow : row,
+  );
   scheduleDraftSave();
 }
 
@@ -397,26 +399,102 @@ function emitReject() {
 }
 
 .option-item {
+  appearance: none;
+  width: 100%;
+  box-sizing: border-box;
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--q-accent) 30%, transparent);
   background: color-mix(in srgb, var(--q-accent) 8%, rgba(20, 22, 28, 0.4));
   color: #e2e8f0;
-  padding: 6px 8px;
+  padding: 7px 8px;
   text-align: left;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 8px;
   cursor: pointer;
+  font: inherit;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.option-item:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--q-accent) 62%, transparent);
+  background: color-mix(in srgb, var(--q-accent) 18%, rgba(20, 22, 28, 0.55));
+}
+
+.option-item:not(:disabled):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--q-accent) 70%, transparent);
+  outline-offset: 1px;
 }
 
 .option-item.selected {
-  border-color: color-mix(in srgb, var(--q-accent) 80%, transparent);
-  background: color-mix(in srgb, var(--q-accent) 22%, rgba(20, 22, 28, 0.55));
+  border-color: var(--q-accent);
+  background: color-mix(in srgb, var(--q-accent) 30%, rgba(20, 22, 28, 0.7));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--q-accent) 55%, transparent);
+}
+
+.option-item.selected:not(:disabled):hover {
+  background: color-mix(in srgb, var(--q-accent) 38%, rgba(20, 22, 28, 0.78));
 }
 
 .option-item:disabled {
   opacity: 0.65;
   cursor: wait;
+}
+
+.option-check {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border: 1.5px solid color-mix(in srgb, var(--q-accent) 45%, #94a3b8);
+  border-radius: 50%;
+  background: transparent;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.option-item.is-multi .option-check {
+  border-radius: 4px;
+}
+
+.option-item:not(:disabled):hover .option-check {
+  border-color: color-mix(in srgb, var(--q-accent) 80%, #e2e8f0);
+}
+
+.option-item.selected .option-check {
+  border-color: var(--q-accent);
+  background: var(--q-accent);
+}
+
+.option-item.selected .option-check::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: inherit;
+  background: #e2e8f0;
+}
+
+.option-item.is-multi.selected .option-check::after {
+  inset: auto;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border-radius: 0;
+  background: transparent;
+  border-right: 1.5px solid #e2e8f0;
+  border-bottom: 1.5px solid #e2e8f0;
+  transform: rotate(40deg);
+}
+
+.option-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .option-label {
@@ -524,9 +602,32 @@ html[data-theme='light'] .option-item {
   color: #2f2f2f;
 }
 
+html[data-theme='light'] .option-item:not(:disabled):hover {
+  background: color-mix(in srgb, var(--q-accent) 8%, #ffffff);
+  border-color: color-mix(in srgb, var(--q-accent) 40%, #c7d2fe);
+}
+
 html[data-theme='light'] .option-item.selected {
-  background: color-mix(in srgb, var(--q-accent) 10%, #ffffff);
-  border-color: color-mix(in srgb, var(--q-accent) 50%, #c7d2fe);
+  background: color-mix(in srgb, var(--q-accent) 14%, #ffffff);
+  border-color: var(--q-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--q-accent) 35%, transparent);
+}
+
+html[data-theme='light'] .option-item.selected:not(:disabled):hover {
+  background: color-mix(in srgb, var(--q-accent) 20%, #ffffff);
+}
+
+html[data-theme='light'] .option-check {
+  border-color: color-mix(in srgb, var(--q-accent) 35%, #9ca3af);
+}
+
+html[data-theme='light'] .option-item.selected .option-check::after {
+  background: #ffffff;
+}
+
+html[data-theme='light'] .option-item.is-multi.selected .option-check::after {
+  background: transparent;
+  border-color: #ffffff;
 }
 
 html[data-theme='light'] .option-description {

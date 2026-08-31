@@ -218,17 +218,22 @@ const sessionGroups = computed((): SessionGroup[] => {
   }
   const now = Date.now();
   const groups: SessionGroup[] = [
+    { id: 'pinned', label: 'Pinned', sessions: [] },
     { id: 'today', label: 'Today', sessions: [] },
     { id: 'week', label: '7 days', sessions: [] },
     { id: 'month', label: '30 days', sessions: [] },
     { id: 'older', label: 'Older', sessions: [] },
   ];
   for (const session of props.sessions) {
+    if (session.pinned) {
+      groups[0].sessions.push(session);
+      continue;
+    }
     const bucket = recencyBucket(session.timeUpdated, now);
-    if (bucket === 'today') groups[0].sessions.push(session);
-    else if (bucket === 'week') groups[1].sessions.push(session);
-    else if (bucket === 'month') groups[2].sessions.push(session);
-    else groups[3].sessions.push(session);
+    if (bucket === 'today') groups[1].sessions.push(session);
+    else if (bucket === 'week') groups[2].sessions.push(session);
+    else if (bucket === 'month') groups[3].sessions.push(session);
+    else groups[4].sessions.push(session);
   }
   return groups.filter((group) => group.sessions.length > 0);
 });

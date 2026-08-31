@@ -851,20 +851,7 @@ const commandsLoading = ref(false);
 const serverState = useServerState();
 const openCodeApi = useOpenCodeApi(serverState.projects);
 const bootstrapReady = serverState.bootstrapped;
-const sessionSelection = useSessionSelection(
-  computed(() => serverState.projects),
-  async (projectId) => {
-    const directory = serverState.projects[projectId]?.worktree?.trim();
-    if (!directory) {
-      throw new Error('Session create failed: project worktree is empty.');
-    }
-    const created = await openCodeApi.createSession(directory);
-    if (!created?.id) {
-      throw new Error('Session create failed: invalid response.');
-    }
-    return { id: created.id, projectId: projectId };
-  },
-);
+const sessionSelection = useSessionSelection(computed(() => serverState.projects));
 const {
   selectedProjectId,
   selectedSessionId,
@@ -1378,15 +1365,14 @@ const recentSessionItems = computed(() => {
       }
     }
   }
-  items.sort((a, b) => {
-    const pinnedA = pinnedSessionIds.value.indexOf(a.sessionId);
-    const pinnedB = pinnedSessionIds.value.indexOf(b.sessionId);
-    if (pinnedA >= 0 && pinnedB >= 0) return pinnedA - pinnedB;
-    if (pinnedA >= 0) return -1;
-    if (pinnedB >= 0) return 1;
-    return b.timeUpdated - a.timeUpdated;
-  });
-  return items.slice(0, 40);
+  const pinOrder = pinnedSessionIds.value;
+  const pinned = items
+    .filter((item) => item.pinned)
+    .sort((a, b) => pinOrder.indexOf(a.sessionId) - pinOrder.indexOf(b.sessionId));
+  const unpinned = items
+    .filter((item) => !item.pinned)
+    .sort((a, b) => b.timeUpdated - a.timeUpdated);
+  return [...pinned, ...unpinned.slice(0, 40)];
 });
 
 function toggleCurrentSessionBookmark() {
@@ -2410,7 +2396,8 @@ async function deleteWorktree(directory: string) {
         selectedProjectId.value = projectId;
         selectedSessionId.value = nextSessionId;
       } else {
-        await createSessionInDirectory(baseDir);
+        selectedSessionId.value = '';
+        focusedDirectory.value = baseDir;
       }
     }
   } catch (error) {
@@ -2434,24 +2421,17 @@ function closeProjectPicker() {
   projectPickerInitialPath.value = '';
 }
 
-async function createNewSession(): Promise<SessionInfo | undefined> {
-  if (!ensureConnectionReady('Creating session')) return undefined;
+function createNewSession() {
+  if (!ensureConnectionReady('Starting session')) return;
   sessionError.value = '';
-  try {
-    const directory = focusedDirectory.value.trim() || activeDirectory.value.trim();
-    if (!directory) {
-      throw new Error('Session create failed: active directory is empty.');
-    }
-    const data = await openCodeApi.createSession(directory);
-    if (data && typeof data.id === 'string') {
-      const nextProjectId = data.projectID;
-      await switchSessionSelection(nextProjectId, data.id);
-    }
-    return data;
-  } catch (error) {
-    sessionError.value = `Session create failed: ${toErrorMessage(error)}`;
-    return undefined;
+  const directory = focusedDirectory.value.trim() || activeDirectory.value.trim();
+  if (!directory) {
+    sessionError.value = 'Session create failed: active directory is empty.';
+    return;
   }
+  selectedSessionId.value = '';
+  focusedDirectory.value = directory;
+  focusInput();
 }
 
 function focusWorkingDirectory(directory: string, projectId?: string) {
@@ -3992,44 +3972,6 @@ watch(
 );
 
 watch(
-  [projectDirectory, activeDirectory, selectedSessionId],
-  ([pd, ad, sid], [prevPd, prevAd, prevSid] = ['', '', '']) => {
-    if (isBootstrapping.value) return;
-
-    const pdChanged = pd !== prevPd && typeof prevPd !== 'undefined';
-    const adChanged = ad !== prevAd && typeof prevAd !== 'undefined';
-    const sidChanged = sid !== prevSid && typeof prevSid !== 'undefined';
-
-    // pd/ad が変わっていなければ何もしない（sid だけの変更は意図的なセッション切り替え）
-    if (!pdChanged && !adChanged) return;
-
-    // pd/ad が変わったが sid も同時に変わった場合 = 意図的な一括選択 → クリアしない
-    // pd/ad だけ変わった場合 = ディレクトリ切り替え → sid をクリア
-    if (!sidChanged) {
-      const nextProjectId = (pd || selectedProjectId.value).trim();
-      const nextDirectory = ad.trim();
-      const candidates = (sessionsByProject.value[nextProjectId] ?? []).filter((session) => {
-        if (session.parentID || session.time?.archived) return false;
-        if (!nextDirectory) return true;
-        return !session.directory || session.directory === nextDirectory;
-      });
-      const nextSessionId = pickPreferredSessionId(candidates);
-      if (nextProjectId && nextSessionId) {
-        selectedProjectId.value = nextProjectId;
-        selectedSessionId.value = nextSessionId;
-      } else if (nextDirectory) {
-        void createSessionInDirectory(nextDirectory);
-      }
-    }
-
-    if (adChanged && ad) {
-      void fetchCommands(ad);
-    }
-  },
-  { immediate: true },
-);
-
-watch(
   filteredSessions,
   () => {
     if (!bootstrapReady.value && !isBootstrapping.value) return;
@@ -4111,9 +4053,7 @@ watch(
 watch(
   [selectedProjectId, selectedSessionId],
   ([projectId, sessionId]) => {
-    if (projectId && sessionId) {
-      replaceQuerySelection(projectId, sessionId);
-    }
+    if (projectId) replaceQuerySelection(projectId, sessionId);
   },
   { immediate: true },
 );
@@ -5867,6 +5807,7 @@ onBeforeUnmount(() => {
 
 .welcome-title {
   margin: 0;
+  font-family: var(--font-sans);
   font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.03em;

@@ -2,8 +2,6 @@ import { computed, ref, type Ref } from 'vue';
 import type { ProjectState } from '../types/worker-state';
 import { waitForState } from '../utils/waitForState';
 
-type CreateSessionFn = (projectId: string) => Promise<{ id: string; projectId: string }>;
-
 function getProjectSessionIds(project: ProjectState): string[] {
   const ids: string[] = [];
   Object.values(project.sandboxes).forEach((sandbox) => {
@@ -33,10 +31,7 @@ function findMostRecentSession(
   return best;
 }
 
-export function useSessionSelection(
-  projects: Ref<Record<string, ProjectState>>,
-  createSessionFn: CreateSessionFn,
-) {
+export function useSessionSelection(projects: Ref<Record<string, ProjectState>>) {
   const selectedProjectId = ref<string>('');
   const selectedSessionId = ref<string>('');
 
@@ -67,34 +62,28 @@ export function useSessionSelection(
         selectedSessionId.value = recent.sessionId;
         return recent.sessionId;
       }
-      projectId = Object.keys(map)[0] ?? 'global';
+      projectId = Object.keys(map)[0] ?? '';
     }
 
-    if (!projectId) {
-      throw new Error('No available project for selection.');
+    if (!projectId || !map[projectId]) {
+      selectedSessionId.value = '';
+      return '';
     }
 
     const targetProject = map[projectId];
     const ids = getProjectSessionIds(targetProject);
     if (ids.length > 0) {
       const sessionId = ids[0] ?? '';
-      if (!sessionId) {
-        throw new Error('Failed to resolve session id from existing session.');
+      if (sessionId) {
+        selectedProjectId.value = projectId;
+        selectedSessionId.value = sessionId;
+        return sessionId;
       }
-      selectedProjectId.value = projectId;
-      selectedSessionId.value = sessionId;
-      return sessionId;
     }
 
-    const created = await createSessionFn(projectId);
-    const createdProjectId = (created.projectId || projectId).trim();
-    const createdSessionId = created.id.trim();
-    if (!createdProjectId || !createdSessionId) {
-      throw new Error('Failed to resolve selection for created session.');
-    }
-    selectedProjectId.value = createdProjectId;
-    selectedSessionId.value = createdSessionId;
-    return createdSessionId;
+    selectedProjectId.value = projectId;
+    selectedSessionId.value = '';
+    return '';
   }
 
   async function switchSession(projectId: string, sessionId: string, timeoutMs = 30_000) {

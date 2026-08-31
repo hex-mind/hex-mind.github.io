@@ -721,7 +721,7 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 .ib-msg-user {
   width: fit-content;
   max-width: min(85%, 760px);
-  font-size: 13px;
+  font-size: 16px;
   padding: 8px 10px;
   background: #252526;
   border: 1px solid #2b2b2b;
@@ -779,7 +779,7 @@ function getThreadUserRenderKey(root: MessageInfo): string {
   background: transparent;
   color: #cccccc;
   font: inherit;
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.5;
   box-sizing: border-box;
 }
@@ -878,8 +878,8 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 .ib-msg-body {
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 13px;
-  --message-line-height: 1.2;
+  font-size: 16px;
+  --message-line-height: 1.65;
   line-height: var(--message-line-height);
   padding-top: 3px;
   padding-left: 6px;

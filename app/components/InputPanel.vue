@@ -744,7 +744,7 @@ defineExpose({ focus, reset });
   min-height: 0;
   box-sizing: border-box;
   color: #e2e8f0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-family: var(--font-sans);
 }
 
 .input-message {
@@ -867,7 +867,7 @@ defineExpose({ focus, reset });
 .input-textarea {
   resize: none;
   min-height: 1em;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
   display: block;
   width: 100%;

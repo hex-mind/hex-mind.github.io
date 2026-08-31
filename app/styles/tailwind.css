@@ -4,8 +4,17 @@
 
 @theme {
   --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial,
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  --font-mono:
     'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, Menlo, Monaco, Consolas,
     'Liberation Mono', 'Courier New', monospace;
+}
+
+html,
+body,
+#app {
+  font-family: var(--font-sans);
 }
 
 .brand-logo-light {
