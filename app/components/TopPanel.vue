@@ -292,7 +292,14 @@
           type="button"
           class="top-icon-button layout-button"
           :class="{ 'is-active': !inputPanelCollapsed }"
-          :title="inputPanelCollapsed ? 'Show input panel' : 'Hide input panel'"
+          :disabled="!selectedSessionId.trim()"
+          :title="
+            !selectedSessionId.trim()
+              ? 'Input stays open when there is no session'
+              : inputPanelCollapsed
+                ? 'Show input panel'
+                : 'Hide input panel'
+          "
           @click="$emit('toggle-input-panel')"
         >
           <span class="layout-glyph layout-glyph-bottom" aria-hidden="true"></span>

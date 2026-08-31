@@ -87,7 +87,7 @@
           ref="appMainColumnEl"
           class="app-main-column"
           :class="{
-            'is-composer-hidden': inputPanelCollapsed,
+            'is-composer-hidden': inputPanelCollapsed && !isWelcomeComposer,
             'is-welcome': isWelcomeComposer,
           }"
         >
@@ -138,7 +138,7 @@
             @pointerdown="startInputPanelResize"
           ></div>
           <div
-            v-if="!inputPanelCollapsed"
+            v-if="!inputPanelCollapsed || isWelcomeComposer"
             class="app-input-dock"
             :class="{ 'is-welcome': isWelcomeComposer }"
           >
@@ -1567,12 +1567,25 @@ function toggleSidePanelCollapsed() {
 }
 
 function toggleInputPanelCollapsed() {
+  if (isWelcomeComposer.value && !inputPanelCollapsed.value) return;
   inputPanelCollapsed.value = !inputPanelCollapsed.value;
   persistInputPanelCollapsed(inputPanelCollapsed.value);
   nextTick(() => {
     syncFloatingExtent();
     scheduleShellFitAll();
     if (!inputPanelCollapsed.value) inputPanelRef.value?.focus();
+  });
+}
+
+function revealInputPanel() {
+  if (inputPanelCollapsed.value) {
+    inputPanelCollapsed.value = false;
+    persistInputPanelCollapsed(false);
+  }
+  nextTick(() => {
+    syncFloatingExtent();
+    scheduleShellFitAll();
+    inputPanelRef.value?.focus();
   });
 }
 
@@ -2195,7 +2208,7 @@ function createNewSession() {
   }
   selectedSessionId.value = '';
   focusedDirectory.value = directory;
-  focusInput();
+  revealInputPanel();
 }
 
 function focusWorkingDirectory(directory: string, projectId?: string) {
@@ -3563,6 +3576,14 @@ watch(
 watch(sidePanelCollapsed, () => {
   persistSidePanelCollapsed(sidePanelCollapsed.value);
 });
+
+watch(
+  isWelcomeComposer,
+  (welcome) => {
+    if (welcome) revealInputPanel();
+  },
+  { immediate: true },
+);
 
 watch(sidePanelActiveTab, () => {
   persistSidePanelTab(sidePanelActiveTab.value);
