@@ -344,48 +344,22 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
-import type { BranchEntry } from '../composables/useFileTree';
+import type {
+  BranchEntry,
+  GitBranchInfo,
+  GitDiffStats,
+  GitDiffStatsEntry,
+  GitFileStatus,
+  GitStatusCode,
+  TreeNode,
+} from '../composables/useFileTree';
 import { confirmAction } from '../composables/useConfirm';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
 import DropdownLabel from './Dropdown/Label.vue';
 import DropdownSearch from './Dropdown/Search.vue';
 
-export type TreeNode = {
-  name: string;
-  path: string;
-  type: 'directory' | 'file';
-  children?: TreeNode[];
-  ignored?: boolean;
-  synthetic?: boolean;
-};
-
-export type GitStatusCode = '' | 'M' | 'A' | 'D' | 'R' | 'C' | '?';
-
-export type GitFileStatus = {
-  path: string;
-  index: GitStatusCode;
-  worktree: GitStatusCode;
-  origPath?: string;
-};
-
-export type GitBranchInfo = {
-  branch: string;
-  upstream?: string;
-  ahead: number;
-  behind: number;
-  headShort?: string;
-};
-
-export type GitDiffStatsEntry = {
-  additions: number;
-  deletions: number;
-};
-
-export type GitDiffStats = {
-  staged: GitDiffStatsEntry;
-  unstaged: GitDiffStatsEntry;
-};
+export type { GitBranchInfo, GitDiffStats, GitFileStatus, GitStatusCode, TreeNode };
 
 type TreeViewMode = 'staged' | 'changes' | 'all';
 
@@ -731,11 +705,7 @@ const visibleRows = computed(() => {
   const pushRows = (nodes: TreeNode[], depth: number) => {
     nodes.forEach((node) => {
       rows.push({ node, depth });
-      if (
-        node.type === 'directory' &&
-        node.children?.length &&
-        isExpanded(node.path)
-      ) {
+      if (node.type === 'directory' && node.children?.length && isExpanded(node.path)) {
         pushRows(node.children, depth + 1);
       }
     });

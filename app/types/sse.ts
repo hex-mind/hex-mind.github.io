@@ -540,10 +540,6 @@ type SsePacketByType<K extends keyof GlobalEventMap> = {
   };
 };
 
-export type KnownSsePacket = {
-  [K in keyof GlobalEventMap]: SsePacketByType<K>;
-}[keyof GlobalEventMap];
-
 export type WorkerStateEventMap = Pick<
   GlobalEventMap,
   | 'session.created'

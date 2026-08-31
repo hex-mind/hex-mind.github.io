@@ -1,9 +1,8 @@
 // ---------------------------------------------------------------------------
 // Worker State Type Definitions
 // ---------------------------------------------------------------------------
-// Canonical SSOT (Single Source of Truth) data model for the Worker state
-// architecture. These types define the core state structures that replace
-// the 956-line sessionGraph.ts closure store.
+// Canonical SSOT for the worker session graph (project → sandbox → sessions).
+// The tab holds a reactive copy via useServerState; mutations live in stateBuilder.
 //
 // Key design decisions:
 // - All child/descendant sessions are placed under the root session's sandbox

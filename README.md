@@ -31,6 +31,17 @@ Alternatively, configure CORS in `~/.config/opencode/opencode.json`:
 
 Restart OpenCode after changing the configuration.
 
+## Local development
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Open **http://localhost:5173**. OpenCode must already be running (`opencode serve`, default port 4096). This repo must not start or occupy 4096 unless you explicitly ask.
+
+Architecture: [docs/architecture.md](docs/architecture.md). Doc index: [docs/README.md](docs/README.md). Agent notes: [AGENTS.md](AGENTS.md).
+
 ## Browser permission
 
 Chrome may block hosted websites from accessing services on your computer. Open one of the following settings pages:

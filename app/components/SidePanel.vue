@@ -162,15 +162,16 @@ import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
 import TodoList from './TodoList.vue';
 import BookmarksList, { type BookmarkedSessionView } from './BookmarksList.vue';
-import type { BranchEntry } from '../composables/useFileTree';
+import type {
+  BranchEntry,
+  GitBranchInfo,
+  GitDiffStats,
+  GitFileStatus,
+  TreeNode,
+} from '../composables/useFileTree';
 import SessionSearch from './SessionSearch.vue';
 import type { SessionSearchHit } from '../utils/sessionSearch';
-import TreeView, {
-  type GitBranchInfo,
-  type GitDiffStats,
-  type GitFileStatus,
-  type TreeNode,
-} from './TreeView.vue';
+import TreeView from './TreeView.vue';
 
 type TodoItem = {
   content: string;

@@ -84,13 +84,29 @@ const gitStatus = ref<GitStatus | null>(null);
 const gitStatusByPath = ref<Record<string, GitFileStatus>>({});
 const gitStatusLoading = ref(false);
 const files = ref<string[]>([]);
-const fileCacheVersion = ref(0);
 const branchEntries = ref<BranchEntry[]>([]);
 const branchListLoading = ref(false);
 
 let fileCacheBuildId = 0;
 const DIRECTORY_RELOAD_DEBOUNCE_MS = 120;
 const AUTO_SCAN_FILE_LIMIT = 1000;
+const AUTO_SCAN_DIR_LIMIT = 64;
+const SKIP_BACKGROUND_DIR_NAMES = new Set([
+  '.git',
+  '.svn',
+  '.hg',
+  '.cache',
+  '.Trash',
+  'node_modules',
+  'Library',
+  'System',
+  'Applications',
+  'Volumes',
+  'private',
+  'proc',
+  'dev',
+  'sys',
+]);
 const scheduledDirectoryReloads = new Map<string, ReturnType<typeof setTimeout>>();
 let gitStatusGeneration = 0;
 let branchListGeneration = 0;
@@ -245,6 +261,16 @@ function parentDirectoryPath(relativePath: string) {
   return relativePath.slice(0, relativePath.lastIndexOf('/')) || '.';
 }
 
+function isFilesystemRoot(directory: string) {
+  const normalized = normalizeDirectory(directory.trim());
+  return !normalized || normalized === '/';
+}
+
+function shouldSkipBackgroundDirectory(node: TreeNode) {
+  if (node.type !== 'directory' || node.ignored) return true;
+  return SKIP_BACKGROUND_DIR_NAMES.has(node.name);
+}
+
 function mergeTreeNodeChildren(existing: TreeNode[], incoming: TreeNode[]) {
   if (existing.length === 0 || incoming.length === 0) return incoming;
   const existingByPath = new Map(existing.map((node) => [node.path, node]));
@@ -283,7 +309,6 @@ function replaceDirectoryFilesInCache(parentPath: string, children: TreeNode[]) 
     next.length !== files.value.length || next.some((path, index) => path !== files.value[index]);
   if (!changed) return;
   files.value = next;
-  fileCacheVersion.value += 1;
 }
 
 function scheduleDirectoryReload(path: string) {
@@ -322,7 +347,14 @@ const GIT_STATUS_SCRIPT = [
 
 function gitCodeFromPorcelain(char: string): GitStatusCode {
   if (char === ' ' || char === '') return '';
-  if (char === 'M' || char === 'A' || char === 'D' || char === 'R' || char === 'C' || char === '?') {
+  if (
+    char === 'M' ||
+    char === 'A' ||
+    char === 'D' ||
+    char === 'R' ||
+    char === 'C' ||
+    char === '?'
+  ) {
     return char;
   }
   if (char === 'T' || char === 'U') return 'M';
@@ -608,7 +640,7 @@ const expandedTreePaths = computed(() => Array.from(expandedTreePathSet.value));
 async function loadSingleDirectory(path: string) {
   const options = getOptions();
   const directory = options.activeDirectory.value.trim();
-  if (!directory) return;
+  if (!directory || isFilesystemRoot(directory)) return;
   try {
     const data = await opencodeApi.listFiles({ directory, path });
     if (options.activeDirectory.value.trim() !== directory) return;
@@ -646,7 +678,6 @@ function feed(packet: FileWatcherUpdatedPacket) {
     );
     if (next.length !== files.value.length) {
       files.value = next;
-      fileCacheVersion.value += 1;
     }
   }
 
@@ -661,10 +692,9 @@ async function rebuildFileCache() {
   const buildId = ++fileCacheBuildId;
   treeLoading.value = true;
   treeError.value = '';
-  if (!directory) {
+  if (!directory || isFilesystemRoot(directory)) {
     treeNodes.value = [];
     files.value = [];
-    fileCacheVersion.value += 1;
     treeLoading.value = false;
     return;
   }
@@ -686,28 +716,38 @@ async function rebuildFileCache() {
     if (options.activeDirectory.value.trim() !== directory) return;
     treeNodes.value = [];
     files.value = [];
-    fileCacheVersion.value += 1;
     treeError.value = opencodeApi.formatDirectoryListError(error);
     treeLoading.value = false;
   }
 }
 
 async function scanFilesInBackground(directory: string, buildId: number, rootChildren: TreeNode[]) {
+  if (isFilesystemRoot(directory)) return;
+
   const queue = rootChildren
-    .filter((child) => child.type === 'directory' && !child.ignored)
+    .filter((child) => !shouldSkipBackgroundDirectory(child))
     .map((child) => child.path);
   const visited = new Set<string>(['.']);
   const collected = files.value.slice();
+  let listed = 0;
 
   try {
     while (queue.length > 0) {
       if (buildId !== fileCacheBuildId) return;
       if (getOptions().activeDirectory.value.trim() !== directory) return;
+      if (listed >= AUTO_SCAN_DIR_LIMIT) break;
       const path = queue.shift();
       if (!path || visited.has(path)) continue;
       visited.add(path);
 
-      const data = await opencodeApi.listFiles({ directory, path });
+      let data: unknown;
+      try {
+        data = await opencodeApi.listFiles({ directory, path });
+      } catch {
+        // OpenCode returns 500 for missing/unreadable paths. Skip this folder.
+        continue;
+      }
+      listed += 1;
       if (buildId !== fileCacheBuildId) return;
       const list = Array.isArray(data) ? data : [];
       const children = buildTreeNodes(list, directory, path);
@@ -716,7 +756,8 @@ async function scanFilesInBackground(directory: string, buildId: number, rootChi
           collected.push(child.path);
           continue;
         }
-        if (!child.ignored && !visited.has(child.path)) queue.push(child.path);
+        if (shouldSkipBackgroundDirectory(child) || visited.has(child.path)) continue;
+        queue.push(child.path);
       }
       if (collected.length > AUTO_SCAN_FILE_LIMIT) break;
     }
@@ -728,7 +769,6 @@ async function scanFilesInBackground(directory: string, buildId: number, rootChi
       next.length !== files.value.length || next.some((path, index) => path !== files.value[index]);
     if (!changed) return;
     files.value = next;
-    fileCacheVersion.value += 1;
   } catch {
     // Root listing is already visible; keep it if the background scan fails.
   }
@@ -765,11 +805,10 @@ function initializeFileTree(options: UseFileTreeOptions) {
       selectedTreePath.value = '';
       treeError.value = '';
       files.value = [];
-      fileCacheVersion.value += 1;
       setGitStatus(null);
       branchEntries.value = [];
 
-      if (!activePath) {
+      if (!activePath || isFilesystemRoot(activePath)) {
         treeLoading.value = false;
         return;
       }
@@ -796,7 +835,6 @@ export function useFileTree(options?: UseFileTreeOptions) {
     gitStatusByPath,
     gitStatusLoading,
     files,
-    fileCacheVersion,
     reloadTree,
     refreshGitStatus,
     toggleTreeDirectory,

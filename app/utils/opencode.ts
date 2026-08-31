@@ -79,7 +79,10 @@ function buildHeaders(options?: RequestOptions, contentType?: string) {
 }
 
 function formatHttpError(path: string, status: number, body: unknown) {
-  const record = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  const record =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null;
   const data =
     record?.data && typeof record.data === 'object' && !Array.isArray(record.data)
       ? (record.data as Record<string, unknown>)
@@ -89,7 +92,9 @@ function formatHttpError(path: string, status: number, body: unknown) {
     (typeof record?.message === 'string' && record.message.trim()) ||
     (typeof body === 'string' && body.trim()) ||
     '';
-  return detail ? `${path} request failed (${status}): ${detail}` : `${path} request failed (${status})`;
+  return detail
+    ? `${path} request failed (${status}): ${detail}`
+    : `${path} request failed (${status})`;
 }
 
 async function getJson(
@@ -163,7 +168,9 @@ export function listFiles(payload: { directory: string; path?: string }, options
 /** OpenCode `/file` returns 500 (not 404) when the path does not exist. */
 export function isMissingPathError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /\/file request failed \(500\)/i.test(message) || /\/file request failed \(404\)/.test(message);
+  return (
+    /\/file request failed \(500\)/i.test(message) || /\/file request failed \(404\)/.test(message)
+  );
 }
 
 export function formatDirectoryListError(error: unknown): string {
@@ -172,14 +179,14 @@ export function formatDirectoryListError(error: unknown): string {
 }
 
 /** List an absolute directory via home (or `/`) so missing guesses do not spawn instances. */
-export function listFilesAt(absoluteDirectory: string, homePath?: string, options?: RequestOptions) {
+export function listFilesAt(
+  absoluteDirectory: string,
+  homePath?: string,
+  options?: RequestOptions,
+) {
   const home = homePath?.replace(/\/+$/, '') || null;
   const { directory, path } = splitFileContentDirectoryAndPath(absoluteDirectory, home);
   return listFiles({ directory, path }, options);
-}
-
-export function listFileStatus(directory?: string, options?: RequestOptions) {
-  return getJson('/file/status', { directory }, options) as Promise<unknown>;
 }
 
 export function findFiles(

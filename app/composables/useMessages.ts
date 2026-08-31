@@ -145,17 +145,6 @@ const roots = computed(() => {
   return result.sort(byTimeThenId);
 });
 
-const streaming = computed(() => {
-  const result: MessageInfo[] = [];
-  for (const messageRef of messages.value.values()) {
-    const info = messageRef.value.info;
-    if (!info) continue;
-    if (resolveStatus(info) !== 'streaming') continue;
-    result.push(info);
-  }
-  return result.sort(byTimeThenId);
-});
-
 const childrenByParent = computed(() => {
   const index = new Map<string, MessageInfo[]>();
   for (const messageRef of messages.value.values()) {
@@ -305,10 +294,6 @@ function getUsage(id: string): MessageUsage | undefined {
   return normalizeUsage(get(id));
 }
 
-function getStatus(id: string): MessageStatus {
-  return resolveStatus(get(id));
-}
-
 function getError(id: string): MessageError {
   return resolveError(get(id));
 }
@@ -454,39 +439,25 @@ function reset() {
   triggerRef(messages);
 }
 
-function dispose() {
-  for (const unsub of unsubs) unsub();
-}
-
 export function useMessages() {
   return {
     messages: readonly(messages),
     roots,
-    streaming,
-    get,
     getParts,
-    getPartsByType,
     hasTextContent,
     getTextContent,
     getImageAttachments,
     getUsage,
-    getStatus,
     getError,
     getDiffs,
     getModelPath,
-    getProviderId,
-    getModelId,
     getTime,
     getCompletedTime,
-    getChildren,
     getThread,
     getFinalAnswer,
-    updateMessage,
-    updatePart,
     loadHistory,
     removeRootsFrom,
     reset,
-    dispose,
     bindScope,
   };
 }

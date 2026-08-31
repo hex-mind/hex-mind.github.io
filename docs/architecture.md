@@ -2,13 +2,13 @@
 
 HEX is a browser client for a local OpenCode server. The UI never owns the agent runtime: OpenCode does sessions, tools, PTY, and the filesystem. HEX renders that state and sends user actions back over HTTP, SSE, and WebSocket.
 
-Related docs: [API.md](./API.md), [SSE.md](./SSE.md), [projects.md](./projects.md), [window-arch.md](./window-arch.md), [prd-git-panel.md](./prd-git-panel.md). Agent working notes: [AGENTS.md](../AGENTS.md).
+Related docs: [README.md](./README.md), [API.md](./API.md), [SSE.md](./SSE.md), [projects.md](./projects.md), [window-arch.md](./window-arch.md), [prd-git-panel.md](./prd-git-panel.md), [tools/](./tools/). Agent working notes: [AGENTS.md](../AGENTS.md). OpenCode skills: [`.opencode/skills/`](../.opencode/skills/).
 
 ## Runtime pieces
 
 ```
 Browser tab (Vue)
-  ├── App.vue                 shell, selection, send, shortcuts
+  ├── App.vue                 composition root (selection, send, shortcuts)
   ├── SharedWorker            one SSE connection per OpenCode base URL
   │     └── stateBuilder      project → sandbox → session graph
   ├── REST (opencode.ts)      /session, /file, /pty, /permission, …
@@ -67,7 +67,7 @@ OpenCode `GET /file` returns HTTP 500 for missing paths. Pickers must list an ex
 
 ## Chat rendering
 
-`useMessages` applies history plus SSE deltas. Assistant markdown is highlighted in `render-worker`. Initial thread paint is gated by `useInitialRenderTracking` (5s safety timeout). File-index updates must not force a full markdown re-render.
+`useMessages` applies history plus SSE deltas. Assistant markdown is highlighted in `render-worker`. Initial thread paint is gated by `useInitialRenderTracking` (5s safety timeout). File-index updates must not force a full markdown re-render (`useAssistantPreRenderer` does not watch `files`).
 
 Tool cards, diffs, and file viewers use floating windows (`docs/window-arch.md`).
 
@@ -84,4 +84,6 @@ If `SharedWorker` is missing, the tab falls back to a direct SSE connection. Sam
 
 ## What not to put in App.vue
 
-`App.vue` is already the composition root. New protocol calls go in `opencode.ts`. New session-graph rules go in the worker / `stateBuilder`. New files/git behavior goes in `useFileTree`. Keep splash awaits limited to the four steps above.
+`App.vue` is already the composition root. New protocol calls go in `opencode.ts`. New session-graph rules go in the worker / `stateBuilder`. New files/git listing goes in `useFileTree`. Git snapshot scripts and parsers go in `gitSnapshots.ts`. Keep splash awaits limited to the four steps above.
+
+Git diffs from the Git tab still *open* windows from `App.vue` (floating-window + PTY wiring), but the bash scripts they run live in `gitSnapshots.ts`.

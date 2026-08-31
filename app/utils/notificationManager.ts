@@ -108,30 +108,6 @@ export function createNotificationManager(
     return sessionOrder.filter((id) => state.has(id));
   }
 
-  function importState(data: Record<string, NotificationSnapshotEntry>): void {
-    const next = new Map<string, NotificationEntry>();
-    const order: string[] = [];
-    for (const [key, entry] of Object.entries(data)) {
-      const trimmedProjectId = entry.projectId.trim();
-      const trimmedSessionId = entry.sessionId.trim();
-      if (
-        !trimmedProjectId ||
-        !trimmedSessionId ||
-        !Array.isArray(entry.requestIds) ||
-        entry.requestIds.length === 0
-      )
-        continue;
-      next.set(key, {
-        projectId: trimmedProjectId,
-        sessionId: trimmedSessionId,
-        requestIds: new Set(entry.requestIds),
-      });
-      order.push(key);
-    }
-    state = next;
-    sessionOrder = order;
-  }
-
   return {
     addNotification,
     removeNotification,
@@ -139,6 +115,5 @@ export function createNotificationManager(
     getState,
     hasAny,
     getSessionKeys,
-    importState,
   };
 }

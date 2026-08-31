@@ -1,4 +1,4 @@
-import { reactive, watchEffect } from 'vue';
+import { reactive, watch, watchEffect } from 'vue';
 import type { Ref } from 'vue';
 import type { MessageInfo } from '../types/sse';
 import { renderWorkerHtml } from '../utils/workerRenderer';
@@ -23,6 +23,15 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
   const appliedSeqMap = new Map<string, number>();
   const lastSubmitted = new Map<string, { answerId: string; content: string; theme: string }>();
 
+  let filesSnapshot: string[] = options.filesWithBasenames.value;
+  watch(
+    options.filesWithBasenames,
+    (files) => {
+      filesSnapshot = files;
+    },
+    { flush: 'sync' },
+  );
+
   function submitAssistantRender(rootId: string, answerId: string, content: string) {
     const seq = (submitSeqMap.get(rootId) ?? 0) + 1;
     submitSeqMap.set(rootId, seq);
@@ -34,7 +43,7 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
       lang: 'markdown',
       theme: options.theme.value,
       gutterMode: 'none',
-      files: options.filesWithBasenames.value,
+      files: filesSnapshot,
     }).then((html) => {
       const applied = appliedSeqMap.get(rootId) ?? 0;
       if (seq <= applied) return;

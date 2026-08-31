@@ -31,11 +31,7 @@
           @dropdown-closed="focusInput"
         />
       </header>
-      <div
-        ref="appBodyEl"
-        class="app-body"
-        :class="{ 'todo-collapsed': sidePanelCollapsed }"
-      >
+      <div ref="appBodyEl" class="app-body" :class="{ 'todo-collapsed': sidePanelCollapsed }">
         <div ref="sidePanelAreaEl" class="side-panel-area">
           <SidePanel
             class="todo-panel"
@@ -153,45 +149,41 @@
               </span>
               <h1 class="welcome-title">Ready to dive in?</h1>
             </div>
-            <footer
-              ref="inputEl"
-              class="app-input"
-              :class="{ 'is-disabled': !canCompose }"
-            >
-            <InputPanel
-              ref="inputPanelRef"
-              :disabled="connectionState !== 'ready'"
-              :can-send="canSend"
-              :agent-options="agentOptions"
-              :has-agent-options="hasAgentOptions"
-              :agent-color="currentAgentColor"
-              :resolve-agent-color="resolveAgentColorForName"
-              :model-options="modelOptions"
-              :thinking-options="thinkingOptions"
-              :has-model-options="hasModelOptions"
-              :has-thinking-options="hasThinkingOptions"
-              :can-attach="canAttach"
-              :is-thinking="isThinking"
-              :can-abort="canAbort"
-              :commands="commandOptions"
-              :attachments="attachments"
-              :message-input="messageInput"
-              :selected-mode="selectedMode"
-              :selected-model="selectedModel"
-              :selected-thinking="selectedThinking"
-              :is-session-saved="isCurrentSessionBookmarked"
-              @update:message-input="handleMessageInputUpdate"
-              @update:selected-mode="handleSelectedModeUpdate"
-              @update:selected-model="handleSelectedModelUpdate"
-              @update:selected-thinking="handleSelectedThinkingUpdate"
-              @apply-history-entry="handleApplyHistoryEntry"
-              @toggle-save-session="toggleCurrentSessionBookmark"
-              @send="sendMessage"
-              @abort="abortSession"
-              @add-attachments="handleAddAttachments"
-              @remove-attachment="removeAttachment"
-              @open-image="handleOpenImage"
-            />
+            <footer ref="inputEl" class="app-input" :class="{ 'is-disabled': !canCompose }">
+              <InputPanel
+                ref="inputPanelRef"
+                :disabled="connectionState !== 'ready'"
+                :can-send="canSend"
+                :agent-options="agentOptions"
+                :has-agent-options="hasAgentOptions"
+                :agent-color="currentAgentColor"
+                :resolve-agent-color="resolveAgentColorForName"
+                :model-options="modelOptions"
+                :thinking-options="thinkingOptions"
+                :has-model-options="hasModelOptions"
+                :has-thinking-options="hasThinkingOptions"
+                :can-attach="canAttach"
+                :is-thinking="isThinking"
+                :can-abort="canAbort"
+                :commands="commandOptions"
+                :attachments="attachments"
+                :message-input="messageInput"
+                :selected-mode="selectedMode"
+                :selected-model="selectedModel"
+                :selected-thinking="selectedThinking"
+                :is-session-saved="isCurrentSessionBookmarked"
+                @update:message-input="handleMessageInputUpdate"
+                @update:selected-mode="handleSelectedModeUpdate"
+                @update:selected-model="handleSelectedModelUpdate"
+                @update:selected-thinking="handleSelectedThinkingUpdate"
+                @apply-history-entry="handleApplyHistoryEntry"
+                @toggle-save-session="toggleCurrentSessionBookmark"
+                @send="sendMessage"
+                @abort="abortSession"
+                @add-attachments="handleAddAttachments"
+                @remove-attachment="removeAttachment"
+                @open-image="handleOpenImage"
+              />
             </footer>
           </div>
         </div>
@@ -294,11 +286,7 @@
       @close="closeProjectPicker"
       @select="handleProjectDirectorySelect"
     />
-    <SettingsModal
-      :open="isSettingsOpen"
-      @close="isSettingsOpen = false"
-      @logout="handleLogout"
-    />
+    <SettingsModal :open="isSettingsOpen" @close="isSettingsOpen = false" @logout="handleLogout" />
     <ConfirmDialog />
   </div>
 </template>
@@ -370,14 +358,21 @@ import {
 } from './utils/toolRenderers';
 import * as opencodeApi from './utils/opencode';
 import { opencodeTheme, resolveTheme, resolveAgentColor } from './utils/theme';
-import {
-  splitFileContentDirectoryAndPath,
-  stripTrailingSlashes as normalizeDirectory,
-} from './utils/path';
+import { splitFileContentDirectoryAndPath, normalizeDirectory } from './utils/path';
 import { formatSessionTitle } from './utils/formatters';
 import type { SessionTarget } from './types/session';
 import { pickLocalDirectory } from './utils/pickLocalDirectory';
 import { rememberInstanceDirectories } from './utils/instanceDirectories';
+import { formatSessionGraphDump } from './utils/debugDump';
+import {
+  COMMIT_SNAPSHOT_SCRIPT,
+  FILE_SNAPSHOT_SCRIPT,
+  buildWorktreeSnapshotScript,
+  parseCommitSnapshotOutput,
+  parseFileSnapshotOutput,
+  toUint8ArrayFromBase64,
+  type WorktreeSnapshotMode,
+} from './utils/gitSnapshots';
 import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
 import { useBookmarkedSessions } from './composables/useBookmarkedSessions';
@@ -408,155 +403,6 @@ const TERM_GUTTER_WIDTH_EM = 3.2;
 const TERM_FONT_FAMILY =
   "'Iosevka Term', 'Iosevka Fixed', 'JetBrains Mono', 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace";
 const SHELL_LINGER_MS = 1000;
-const COMMIT_SNAPSHOT_SCRIPT = [
-  'stty -opost -echo 2>/dev/null',
-  'export GIT_PAGER=cat',
-  'export GIT_TERMINAL_PROMPT=0',
-  'h=$1',
-  'printf "##TITLE\\t%s\\n" "$(git --no-pager log --format="%h %s" -1 "$h" 2>/dev/null)"',
-  'git diff-tree --no-commit-id -r --name-status --find-renames --find-copies --first-parent --root "$h" 2>/dev/null | while IFS="$(printf "\\t")" read -r st p1 p2; do',
-  '  code=${st%"${st#?}"}',
-  '  old=$p1',
-  '  new=$p1',
-  '  if [ "$code" = "R" ] || [ "$code" = "C" ]; then',
-  '    old=$p1',
-  '    new=$p2',
-  '  fi',
-  '  printf "##FILE\\t%s\\t%s\\n" "$st" "$new"',
-  '  printf "##BEFORE\\n"',
-  '  if [ "$code" != "A" ]; then',
-  '    git --no-pager show "$h^:$old" 2>/dev/null | base64 -w 76',
-  '  fi',
-  '  printf "##AFTER\\n"',
-  '  if [ "$code" != "D" ]; then',
-  '    git --no-pager show "$h:$new" 2>/dev/null | base64 -w 76',
-  '  fi',
-  'done',
-].join('\n');
-const FILE_SNAPSHOT_SCRIPT = [
-  'stty -opost -echo 2>/dev/null',
-  'export GIT_PAGER=cat',
-  'export GIT_TERMINAL_PROMPT=0',
-  'mode=$1',
-  'path=$2',
-  'printf "##BEFORE\\n"',
-  'if [ "$mode" = "staged" ]; then',
-  '  git --no-pager show "HEAD:$path" 2>/dev/null | base64 -w 76',
-  'else',
-  '  git --no-pager show ":$path" 2>/dev/null | base64 -w 76',
-  'fi',
-  'printf "##AFTER\\n"',
-  'if [ "$mode" = "staged" ]; then',
-  '  git --no-pager show ":$path" 2>/dev/null | base64 -w 76',
-  'else',
-  '  if [ -f "$path" ]; then',
-  '    base64 -w 76 < "$path"',
-  '  fi',
-  'fi',
-].join('\n');
-type WorktreeSnapshotMode = 'staged' | 'changes' | 'all';
-function buildWorktreeSnapshotScript(mode: WorktreeSnapshotMode): string {
-  const title =
-    mode === 'staged'
-      ? 'Staged changes'
-      : mode === 'changes'
-        ? 'Unstaged changes'
-        : 'Working tree (staged + changes)';
-  // Filter logic: which files to include based on mode
-  // x = index status (1st column), y = worktree status (2nd column)
-  let filterLines: string[];
-  if (mode === 'staged') {
-    // Only files with index changes (x != ' ' and x != '?')
-    filterLines = ['  [ "$x" = " " ] && continue', '  [ "$x" = "?" ] && continue'];
-  } else if (mode === 'changes') {
-    // Only files with worktree changes (y != ' ' and y != '?')
-    filterLines = ['  [ "$y" = " " ] && continue'];
-  } else {
-    // All: skip untracked only
-    filterLines = ['  [ "$x" = "?" ] && [ "$y" = "?" ] && continue'];
-  }
-  // Before/after source depends on mode
-  let beforeLines: string[];
-  let afterLines: string[];
-  if (mode === 'staged') {
-    // staged: HEAD -> index
-    beforeLines = [
-      '  printf "##BEFORE\\n"',
-      '  if [ "$code" != "A" ]; then',
-      '    git --no-pager show "HEAD:$old" 2>/dev/null | base64 -w 76',
-      '  fi',
-    ];
-    afterLines = [
-      '  printf "##AFTER\\n"',
-      '  if [ "$code" != "D" ]; then',
-      '    git --no-pager show ":$new" 2>/dev/null | base64 -w 76',
-      '  fi',
-    ];
-  } else if (mode === 'changes') {
-    // changes: index -> working tree
-    beforeLines = [
-      '  printf "##BEFORE\\n"',
-      '  if [ "$code" != "A" ]; then',
-      '    git --no-pager show ":$old" 2>/dev/null | base64 -w 76',
-      '  fi',
-    ];
-    afterLines = [
-      '  printf "##AFTER\\n"',
-      '  if [ "$code" != "D" ] && [ -f "$new" ]; then',
-      '    base64 -w 76 < "$new"',
-      '  fi',
-    ];
-  } else {
-    // all: HEAD -> working tree
-    beforeLines = [
-      '  printf "##BEFORE\\n"',
-      '  if [ "$code" != "A" ]; then',
-      '    git --no-pager show "HEAD:$old" 2>/dev/null | base64 -w 76',
-      '  fi',
-    ];
-    afterLines = [
-      '  printf "##AFTER\\n"',
-      '  if [ "$code" != "D" ] && [ -f "$new" ]; then',
-      '    base64 -w 76 < "$new"',
-      '  fi',
-    ];
-  }
-  return [
-    'stty -opost -echo 2>/dev/null',
-    'export GIT_PAGER=cat',
-    'export GIT_TERMINAL_PROMPT=0',
-    `printf "##TITLE\\t${title}\\n"`,
-    'git --no-pager status --porcelain=v1 2>/dev/null | while IFS= read -r line; do',
-    '  [ -z "$line" ] && continue',
-    '  x=${line%"${line#?}"}',
-    '  rest=${line#?}',
-    '  y=${rest%"${rest#?}"}',
-    ...filterLines,
-    '  path=${line#???}',
-    '  old=$path',
-    '  new=$path',
-    '  code=M',
-    '  if [ "$x" = "D" ] || [ "$y" = "D" ]; then',
-    '    code=D',
-    '  elif [ "$x" = "?" ]; then',
-    '    code=A',
-    '  elif [ "$x" = "A" ]; then',
-    '    code=A',
-    '  elif [ "$x" = "R" ] || [ "$y" = "R" ]; then',
-    '    code=R',
-    '    old=${path%% -> *}',
-    '    new=${path#* -> }',
-    '  elif [ "$x" = "C" ] || [ "$y" = "C" ]; then',
-    '    code=C',
-    '    old=${path%% -> *}',
-    '    new=${path#* -> }',
-    '  fi',
-    '  printf "##FILE\\t%s\\t%s\\n" "$code" "$new"',
-    ...beforeLines,
-    ...afterLines,
-    'done',
-  ].join('\n');
-}
 const REASONING_CLOSE_DELAY_MS = 3000;
 const SUBAGENT_CLOSE_DELAY_MS = 3000;
 const ATTACHMENT_MIME_ALLOWLIST = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
@@ -593,27 +439,6 @@ type ShellSession = {
   exiting?: boolean;
   closeOnSuccess?: boolean;
   exitResolve?: (exitCode: number) => void;
-};
-
-type CommitSnapshotEntry = {
-  status: string;
-  file: string;
-  before: string;
-  after: string;
-  beforeBase64: string;
-  afterBase64: string;
-};
-
-type CommitSnapshotResult = {
-  title: string;
-  files: CommitSnapshotEntry[];
-};
-
-type FileSnapshotResult = {
-  before: string;
-  after: string;
-  beforeBase64: string;
-  afterBase64: string;
 };
 
 type Attachment = {
@@ -867,15 +692,13 @@ const workingDirectory = computed(
 );
 const canCompose = computed(() => Boolean(workingDirectory.value));
 const isWelcomeComposer = computed(() => !selectedSessionId.value.trim());
-const outputPanelKey = computed(
-  () => `${workingDirectory.value}::${selectedSessionId.value}`,
-);
+const outputPanelKey = computed(() => `${workingDirectory.value}::${selectedSessionId.value}`);
 watch(
   selectedSessionId,
   (sessionId) => {
     if (!sessionId) return;
     const next = activeDirectory.value.trim();
-    if (next) focusedDirectory.value = next;
+    if (next && next !== '/') focusedDirectory.value = next;
   },
   { immediate: true },
 );
@@ -1170,7 +993,6 @@ const {
 const {
   treeNodes,
   expandedTreePaths,
-  expandedTreePathSet,
   selectedTreePath,
   treeLoading,
   treeError,
@@ -1394,10 +1216,10 @@ function toggleCurrentSessionBookmark() {
 const canSend = computed(() =>
   Boolean(
     uiInitState.value === 'ready' &&
-      connectionState.value === 'ready' &&
-      workingDirectory.value &&
-      !isSending.value &&
-      (messageInput.value.trim().length > 0 || attachments.value.length > 0),
+    connectionState.value === 'ready' &&
+    workingDirectory.value &&
+    !isSending.value &&
+    (messageInput.value.trim().length > 0 || attachments.value.length > 0),
   ),
 );
 
@@ -2102,9 +1924,7 @@ function syncFloatingExtent() {
   const headerRect = header.getBoundingClientRect();
   const headerBottom = headerRect.bottom;
   const inputTop =
-    isWelcomeComposer.value || !input
-      ? window.innerHeight
-      : input.getBoundingClientRect().top;
+    isWelcomeComposer.value || !input ? window.innerHeight : input.getBoundingClientRect().top;
   const topOffset = Math.max(0, headerBottom);
   const availableHeight = Math.max(0, inputTop - headerBottom);
   canvas.style.setProperty('--canvas-top', `${topOffset}px`);
@@ -2482,20 +2302,6 @@ function handleTopPanelSessionSelect(payload: {
     resolveProjectIdForDirectory(payload.worktree) ||
     selectedProjectId.value;
   void switchSessionSelection(projectId, payload.sessionId);
-}
-
-function handleNotificationSessionSelect() {
-  const queue = notificationSessionOrder.value.filter((key) => {
-    const entry = serverState.notifications[key];
-    return Boolean(entry && entry.requestIds.length > 0);
-  });
-  if (queue.length === 0) return;
-  const currentSessionId = selectedSessionId.value;
-  const nextKey = queue.find((key) => key !== currentSessionId) ?? queue[0];
-  if (!nextKey) return;
-  const entry = serverState.notifications[nextKey];
-  if (!entry) return;
-  void switchSessionSelection(entry.projectId.trim(), entry.sessionId.trim());
 }
 
 async function mutateSession(
@@ -3312,6 +3118,9 @@ async function restoreShellSessions() {
   shellDirectory = directory;
   if (sandboxChanged) {
     disposeShellWindows();
+  } else if (uiInitState.value === 'ready') {
+    // Same directory: existing shell windows are still valid; skip GET /pty.
+    return;
   }
   try {
     const ptys = await fetchPtyList(directory || undefined);
@@ -3355,114 +3164,6 @@ async function runTreeShellCommand(command: string) {
   }
 }
 
-function decodeCommitSnapshotBase64(value: string) {
-  if (!value) return '';
-  return new TextDecoder().decode(toUint8ArrayFromBase64(value));
-}
-
-function parseCommitSnapshotOutput(rawOutput: string): CommitSnapshotResult {
-  const files: CommitSnapshotEntry[] = [];
-  let title = '';
-  let section: 'none' | 'before' | 'after' = 'none';
-  let current:
-    | {
-        status: string;
-        file: string;
-        before: string[];
-        after: string[];
-      }
-    | undefined;
-
-  const pushCurrent = () => {
-    if (!current || !current.file) {
-      current = undefined;
-      section = 'none';
-      return;
-    }
-    const beforeBase64 = current.before.join('');
-    const afterBase64 = current.after.join('');
-    files.push({
-      status: current.status,
-      file: current.file,
-      before: decodeCommitSnapshotBase64(beforeBase64),
-      after: decodeCommitSnapshotBase64(afterBase64),
-      beforeBase64,
-      afterBase64,
-    });
-    current = undefined;
-    section = 'none';
-  };
-
-  for (const rawLine of rawOutput.split('\n')) {
-    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
-    if (line.startsWith('##TITLE\t')) {
-      title = line.slice('##TITLE\t'.length);
-      continue;
-    }
-    if (line.startsWith('##FILE\t')) {
-      pushCurrent();
-      const payload = line.slice('##FILE\t'.length);
-      const separator = payload.indexOf('\t');
-      const status = separator >= 0 ? payload.slice(0, separator) : payload;
-      const file = separator >= 0 ? payload.slice(separator + 1) : '';
-      current = { status, file, before: [], after: [] };
-      section = 'none';
-      continue;
-    }
-    if (line === '##BEFORE') {
-      section = 'before';
-      continue;
-    }
-    if (line === '##AFTER') {
-      section = 'after';
-      continue;
-    }
-    if (!current || line.length === 0) continue;
-    if (section === 'before') {
-      current.before.push(line);
-    } else if (section === 'after') {
-      current.after.push(line);
-    }
-  }
-
-  pushCurrent();
-  return { title, files };
-}
-
-function parseFileSnapshotOutput(rawOutput: string): FileSnapshotResult {
-  const lines = rawOutput.split(/\r?\n/);
-  let section: 'none' | 'before' | 'after' = 'none';
-  const before: string[] = [];
-  const after: string[] = [];
-  for (const line of lines) {
-    if (line === '##BEFORE') {
-      section = 'before';
-      continue;
-    }
-    if (line === '##AFTER') {
-      section = 'after';
-      continue;
-    }
-    if (!line) continue;
-    if (section === 'before') {
-      before.push(line);
-      continue;
-    }
-    if (section === 'after') {
-      after.push(line);
-    }
-  }
-
-  const beforeBase64 = before.join('');
-  const afterBase64 = after.join('');
-  return {
-    before: decodeCommitSnapshotBase64(beforeBase64),
-    after: decodeCommitSnapshotBase64(afterBase64),
-    beforeBase64,
-    afterBase64,
-  };
-}
-
 function parseSlashCommand(input: string) {
   const trimmed = input.trim();
   if (!trimmed.startsWith('/')) return null;
@@ -3484,104 +3185,9 @@ const DEBUG_SUBCOMMANDS: Record<string, string> = {
   notification: 'Dump pending notification state',
 };
 
-function formatSessionGraphDump(): string {
-  const lines: string[] = [];
-
-  const allProjects = Object.values(serverState.projects).sort((a, b) =>
-    a.worktree === b.worktree ? a.id.localeCompare(b.id) : a.worktree.localeCompare(b.worktree),
-  );
-  const totalSessions = allProjects.reduce((count, project) => {
-    return (
-      count +
-      Object.values(project.sandboxes).reduce((projectCount, sandbox) => {
-        return projectCount + Object.keys(sandbox.sessions).length;
-      }, 0)
-    );
-  }, 0);
-
-  lines.push('Project Tree (worker-state)');
-  lines.push(`  projects: ${allProjects.length}  sessions(total): ${totalSessions}`);
-  lines.push('');
-
-  function fmtTime(ts?: number) {
-    if (!ts) return '-';
-    return new Date(ts).toLocaleString();
-  }
-
-  function fmtStatus(s: string) {
-    if (s === 'busy') return '[BUSY]';
-    if (s === 'retry') return '[RETRY]';
-    if (s === 'idle') return '[idle]';
-    return `[${s}]`;
-  }
-
-  for (const project of allProjects) {
-    lines.push(`PROJECT ${project.id}`);
-    lines.push(`  worktree: ${project.worktree || '-'}`);
-    if (project.name) lines.push(`  name: ${project.name}`);
-    if (project.icon?.color) lines.push(`  color: ${project.icon.color}`);
-    lines.push(
-      `  time: created=${fmtTime(project.time?.created)} updated=${fmtTime(project.time?.updated)} initialized=${fmtTime(project.time?.initialized)}`,
-    );
-
-    const sandboxEntries = Object.entries(project.sandboxes).sort(([a], [b]) => a.localeCompare(b));
-    if (sandboxEntries.length === 0) {
-      lines.push('  (no sandboxes)');
-      lines.push('');
-      continue;
-    }
-
-    for (let si = 0; si < sandboxEntries.length; si++) {
-      const [sandboxDirectory, sandbox] = sandboxEntries[si];
-      const isLastSandbox = si === sandboxEntries.length - 1;
-      const sConnector = isLastSandbox ? '└── ' : '├── ';
-      const sPrefix = isLastSandbox ? '    ' : '│   ';
-
-      const branchMeta = sandbox.name ? `  (branch: ${sandbox.name})` : '';
-      lines.push(`${sConnector}SANDBOX ${sandboxDirectory}${branchMeta}`);
-      lines.push(`${sPrefix}rootSessions: [${sandbox.rootSessions.join(', ')}]`);
-
-      const sessions = Object.values(sandbox.sessions).sort((a, b) => {
-        const aTime = a.timeUpdated ?? a.timeCreated ?? 0;
-        const bTime = b.timeUpdated ?? b.timeCreated ?? 0;
-        return bTime - aTime;
-      });
-
-      if (sessions.length === 0) {
-        lines.push(`${sPrefix}(no sessions)`);
-        continue;
-      }
-
-      for (let i = 0; i < sessions.length; i++) {
-        const session = sessions[i];
-        const isLastSession = i === sessions.length - 1;
-        const sessionConnector = isLastSession ? '└── ' : '├── ';
-        const sessionPrefix = `${sPrefix}${isLastSession ? '    ' : '│   '}`;
-        const status = fmtStatus(session.status ?? 'unknown');
-        const title = session.title ? `  "${session.title}"` : '';
-        const slug = session.slug ? `  slug=${session.slug}` : '';
-        lines.push(`${sPrefix}${sessionConnector}${session.id}  ${status}${title}${slug}`);
-        const revertLabel = session.revert
-          ? `msg=${session.revert.messageID}${session.revert.partID ? ` part=${session.revert.partID}` : ''}`
-          : '-';
-        lines.push(
-          `${sessionPrefix}dir=${session.directory || sandboxDirectory}  parent=${session.parentID || '(root)'}  archived=${fmtTime(session.timeArchived)}  revert=${revertLabel}`,
-        );
-        lines.push(
-          `${sessionPrefix}created=${fmtTime(session.timeCreated)}  updated=${fmtTime(session.timeUpdated)}`,
-        );
-      }
-    }
-
-    lines.push('');
-  }
-
-  return lines.join('\n');
-}
-
 function openDebugSessionViewer() {
   const key = 'debug:session-graph';
-  const content = formatSessionGraphDump();
+  const content = formatSessionGraphDump(serverState.projects);
   const pos = getFileViewerPosition(0.12, 0.08);
   if (fw.has(key)) fw.close(key);
   fw.open(key, {
@@ -4016,7 +3622,6 @@ async function reloadSelectedSessionState() {
     if (uiInitState.value === 'ready') {
       await restoreShellSessions();
     }
-    void reloadTodosForAllowedSessions();
     const directory = activeDirectory.value || undefined;
     void fetchPendingPermissions(directory);
     void fetchPendingQuestions(directory);
@@ -4092,7 +3697,6 @@ watch(workingDirectory, (directory) => {
   const activePath = directory || undefined;
   if (!activePath) return;
   void fetchCommands(activePath);
-  void reloadTodosForAllowedSessions();
   if (!selectedSessionId.value && uiInitState.value === 'ready') {
     fw.closeAll({ exclude: (key) => key.startsWith('shell:') });
     msg.reset();
@@ -4125,15 +3729,12 @@ watch(sidePanelActiveTab, () => {
   persistSidePanelTab(sidePanelActiveTab.value);
 });
 
-watch(
-  [sidePanelActiveTab, workingDirectory, gitStatus],
-  () => {
-    if (sidePanelActiveTab.value !== 'git') return;
-    if (gitStatus.value !== null) return;
-    if (!workingDirectory.value.trim()) return;
-    void refreshGitStatus();
-  },
-);
+watch([sidePanelActiveTab, workingDirectory, gitStatus], () => {
+  if (sidePanelActiveTab.value !== 'git') return;
+  if (gitStatus.value !== null) return;
+  if (!workingDirectory.value.trim()) return;
+  void refreshGitStatus();
+});
 
 watch(
   allowedSessionIds,
@@ -4401,15 +4002,6 @@ const TOOL_WINDOW_SUPPORTED = new Set([
 
 function shouldRenderToolWindow(tool: string) {
   return !TOOL_WINDOW_HIDDEN.has(tool) && TOOL_WINDOW_SUPPORTED.has(tool);
-}
-
-function toUint8ArrayFromBase64(input: string) {
-  const decoded = atob(input);
-  const bytes = new Uint8Array(decoded.length);
-  for (let i = 0; i < decoded.length; i += 1) {
-    bytes[i] = decoded.charCodeAt(i);
-  }
-  return bytes;
 }
 
 function getFileViewerPosition(factorX = 0.16, factorY = 0.1) {

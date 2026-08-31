@@ -288,8 +288,8 @@ export function useQuestions(options: {
         .forEach((entry) => {
           upsertQuestionEntry(entry);
         });
-    } catch (error) {
-      log('Question list failed', error);
+    } catch {
+      // Pending questions are best-effort; keep existing entries if the list fails.
     }
   }
 
@@ -315,5 +315,3 @@ function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
 }
-
-function log(..._args: unknown[]): void {}
