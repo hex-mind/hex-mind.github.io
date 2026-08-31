@@ -2,20 +2,10 @@ import { ref } from 'vue';
 import type { ComputedRef, Ref } from 'vue';
 import PermissionContent from '../components/ToolWindow/Permission.vue';
 import * as opencodeApi from '../utils/opencode';
+import type { PermissionNextRequest } from '../types/sse';
 import type { useFloatingWindows } from './useFloatingWindows';
 
-export type PermissionRequest = {
-  id: string;
-  sessionID: string;
-  permission: string;
-  patterns: string[];
-  metadata: Record<string, unknown>;
-  always: string[];
-  tool?: {
-    messageID: string;
-    callID: string;
-  };
-};
+export type PermissionRequest = PermissionNextRequest;
 
 export type PermissionReply = 'once' | 'always' | 'reject';
 

@@ -359,8 +359,6 @@ import DropdownItem from './Dropdown/Item.vue';
 import DropdownLabel from './Dropdown/Label.vue';
 import DropdownSearch from './Dropdown/Search.vue';
 
-export type { GitBranchInfo, GitDiffStats, GitFileStatus, GitStatusCode, TreeNode };
-
 type TreeViewMode = 'staged' | 'changes' | 'all';
 
 type DisplayStatus = {

@@ -17,7 +17,7 @@ App.vue picks the appropriate Viewer depending on the use case:
 | File / binary / image | `ContentViewer`    |
 | Diff (git, message)   | `DiffViewer`       |
 | Debug text dump       | `ContentViewer`    |
-| Shell / terminal      | `ShellContent`     |
+| Shell / terminal      | `ToolWindow/Shell.vue` |
 | Tool output (grep, …) | per-tool component |
 
 ---
@@ -161,7 +161,7 @@ MessageViewer
 | `mode="code"`     | Force CodeRenderer                               |
 | `allowModeToggle` | Show Rendered / Source tabs when applicable      |
 
-Used by: `ThreadBlock`, `ThreadHistoryContent`, `Welcome`,
+Used by: `ThreadBlock`, `ThreadHistoryContent`, `App.vue` (welcome composer),
 `ToolWindow/Question`, `ToolWindow/Subagent`, `ToolWindow/Reasoning`
 
 ---

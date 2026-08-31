@@ -1,7 +1,6 @@
 export type ToolRenderersHelpers = {
   FILE_READ_EVENT_TYPES: Set<string>;
   FILE_WRITE_EVENT_TYPES: Set<string>;
-  guessLanguage: (path?: string, eventType?: string) => string;
   shouldRenderToolWindow: (tool: string) => boolean;
   extractToolOutputText: (output: unknown) => string | undefined;
   formatToolValue: (value: unknown) => string;
@@ -49,7 +48,7 @@ function toolPrefix(tool: string, label: string, detail?: string): string {
 
 export function extractPatch(
   payload: unknown,
-  helpers: Pick<ToolRenderersHelpers, 'guessLanguage'>,
+  helpers: Pick<ToolRenderersHelpers, 'guessLanguageFromPath'>,
 ) {
   if (!payload || typeof payload !== 'object') return null;
   const record = payload as Record<string, unknown>;
@@ -131,7 +130,7 @@ export function extractPatch(
         toolName: 'apply_patch' as const,
         toolTitle: relativePath,
         title: toolPrefix('apply_patch', 'PATCH', relativePath),
-        lang: helpers.guessLanguage(relativePath),
+        lang: helpers.guessLanguageFromPath(relativePath),
         view: 'diff' as const,
       };
     })

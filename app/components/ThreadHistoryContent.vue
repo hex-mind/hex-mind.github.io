@@ -66,7 +66,7 @@
         <div
           v-else
           class="history-item history-item-tool"
-          :style="{ '--tool-color': toolHeaderColor(entry.part.tool) }"
+          :style="{ '--tool-color': toolColor(entry.part.tool) }"
           @click="handleToolClick(entry.part)"
         >
           <div class="history-meta">
@@ -90,6 +90,7 @@
 import MessageViewer from './MessageViewer.vue';
 import { useFloatingWindow } from '../composables/useFloatingWindow';
 import { toolColor } from './ToolWindow/utils';
+import { formatMessageTime } from '../utils/formatters';
 import type { QuestionInfo, ReasoningPart, ToolPart } from '../types/sse';
 
 type QuestionHistoryEntry = {
@@ -219,28 +220,9 @@ function toolSummary(part: ToolPart): string {
 function toolStatusLabel(part: ToolPart): string {
   return part.state.status;
 }
-
-function toolHeaderColor(tool: string): string {
-  return toolColor(tool);
-}
-
-function formatMessageTime(value?: number) {
-  if (typeof value !== 'number') return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-}
 </script>
 
 <style scoped>
-.history-content {
-}
-
 .history-list {
   padding: 12px;
   display: flex;

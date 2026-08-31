@@ -34,6 +34,10 @@ HEX is a Vue 3 browser client. OpenCode owns sessions, tools, PTY, and the files
 
 Still holds PTY/shell windows, composer drafts, panel sashes, slash/debug, and tool-window routing. If you touch one of those, extract that slice rather than adding a sibling of the same size.
 
+## Independent judgment
+
+Read `AGENTS.md` § Independent judgment. Do not implement a requested layout that fights the table above or ordinary Vue 3 composition (duplicate stores, scattered `fetch`, more logic inlined in `App.vue`). Push back with the smaller design first.
+
 ## Style
 
 Match existing Vue/TS. Small diffs. No drive-by refactors. Commits/PRs only when asked.

@@ -172,21 +172,7 @@ import type {
 import SessionSearch from './SessionSearch.vue';
 import type { SessionSearchHit } from '../utils/sessionSearch';
 import TreeView from './TreeView.vue';
-
-type TodoItem = {
-  content: string;
-  status: string;
-  priority: string;
-};
-
-type TodoSession = {
-  sessionId: string;
-  title: string;
-  isSubagent: boolean;
-  todos: TodoItem[];
-  loading: boolean;
-  error: string | undefined;
-};
+import type { TodoSession } from '../composables/useTodos';
 
 const props = defineProps<{
   collapsed: boolean;

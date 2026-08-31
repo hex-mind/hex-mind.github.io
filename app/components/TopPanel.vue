@@ -311,12 +311,12 @@ import DropdownItem from './Dropdown/Item.vue';
 import DropdownSearch from './Dropdown/Search.vue';
 import { formatSessionTitle } from '../utils/formatters';
 import { confirmAction } from '../composables/useConfirm';
-import { MAX_VISIBLE_SESSIONS } from '../utils/sessionTree';
 import { normalizeDirectory } from '../utils/path';
 import type { SessionTarget } from '../types/session';
 
 declare const __GIT_REVISION__: string;
 const gitRevision = typeof __GIT_REVISION__ !== 'undefined' ? __GIT_REVISION__ : 'dev';
+const MAX_VISIBLE_SESSIONS = 5;
 
 export type TopPanelSession = {
   id: string;

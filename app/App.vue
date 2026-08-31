@@ -203,14 +203,10 @@
     </template>
     <div v-else class="app-loading-view" role="status" aria-live="polite">
       <div class="app-loading-card">
-        <div class="absolute w-0 h-0 -z-10 flex items-center justify-center">
-          <div class="flex fixed flex-col items-center w-96 h-40 translate-x-1/2 -translate-y-1/2">
-            <div class="mb-4">
-              <img src="/hex-logo.png" alt="HEX" class="app-brand-logo brand-logo-dark" />
-              <img src="/hex-logo-light.png" alt="HEX" class="app-brand-logo brand-logo-light" />
-            </div>
-            <div class="app-brand-tagline">for opencode</div>
-          </div>
+        <div class="app-loading-brand">
+          <img src="/hex-logo.png" alt="HEX" class="app-brand-logo brand-logo-dark" />
+          <img src="/hex-logo-light.png" alt="HEX" class="app-brand-logo brand-logo-light" />
+          <div class="app-brand-tagline">for opencode</div>
         </div>
         <div v-if="uiInitState === 'login'" class="app-login-form">
           <p class="app-loading-title">Connect to OpenCode Server</p>
@@ -322,7 +318,6 @@ import TopPanel, {
 import SettingsModal from './components/SettingsModal.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ContentViewer from './components/viewers/ContentViewer.vue';
-import DiffViewer from './components/viewers/DiffViewer.vue';
 import ShellContent from './components/ToolWindow/Shell.vue';
 import {
   formatGlobToolTitle,
@@ -334,6 +329,10 @@ import {
   formatQueryToolTitle,
   toolColor,
   WINDOW_COLOR,
+  formatToolValue,
+  parseToolOutputText,
+  formatTaskToolOutput,
+  shouldRenderToolWindow,
 } from './components/ToolWindow/utils';
 import { useAutoScroller, type ScrollMode } from './composables/useAutoScroller';
 import { useFileTree, type FileNode } from './composables/useFileTree';
@@ -341,7 +340,7 @@ import { usePtyOneshot } from './composables/usePtyOneshot';
 import { useFloatingWindows } from './composables/useFloatingWindows';
 import { usePermissions, type PermissionRequest } from './composables/usePermissions';
 import { useQuestions, type QuestionRequest, type QuestionInfo } from './composables/useQuestions';
-import { useTodos, type TodoItem } from './composables/useTodos';
+import { useTodos, type TodoSession } from './composables/useTodos';
 import { useDeltaAccumulator } from './composables/useDeltaAccumulator';
 import { useGlobalEvents } from './composables/useGlobalEvents';
 import { useMessages } from './composables/useMessages';
@@ -350,8 +349,10 @@ import { useReasoningWindows } from './composables/useReasoningWindows';
 import { useServerState } from './composables/useServerState';
 import { useSessionSelection } from './composables/useSessionSelection';
 import { useSubagentWindows } from './composables/useSubagentWindows';
+import { useGitDiffWindows } from './composables/useGitDiffWindows';
 import { renderWorkerHtml } from './utils/workerRenderer';
-import type { ReasoningPart, ToolPart } from './types/sse';
+import type { PtyInfo, ReasoningPart, ToolPart } from './types/sse';
+import type { MessageTokens } from './types/message';
 import {
   extractFileRead as extractToolFileRead,
   extractPatch as extractToolPatch,
@@ -359,20 +360,18 @@ import {
 import * as opencodeApi from './utils/opencode';
 import { opencodeTheme, resolveTheme, resolveAgentColor } from './utils/theme';
 import { splitFileContentDirectoryAndPath, normalizeDirectory } from './utils/path';
-import { formatSessionTitle } from './utils/formatters';
+import { formatSessionTitle, clamp, toErrorMessage } from './utils/formatters';
 import type { SessionTarget } from './types/session';
 import { pickLocalDirectory } from './utils/pickLocalDirectory';
 import { rememberInstanceDirectories } from './utils/instanceDirectories';
 import { formatSessionGraphDump } from './utils/debugDump';
+import { toUint8ArrayFromBase64 } from './utils/gitSnapshots';
+import type { WorktreeSnapshotMode } from './utils/gitSnapshots';
 import {
-  COMMIT_SNAPSHOT_SCRIPT,
-  FILE_SNAPSHOT_SCRIPT,
-  buildWorktreeSnapshotScript,
-  parseCommitSnapshotOutput,
-  parseFileSnapshotOutput,
-  toUint8ArrayFromBase64,
-  type WorktreeSnapshotMode,
-} from './utils/gitSnapshots';
+  FILE_VIEWER_WINDOW_WIDTH,
+  FILE_VIEWER_WINDOW_HEIGHT,
+  fileViewerWindowChrome,
+} from './utils/fileViewerWindow';
 import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
 import { useBookmarkedSessions } from './composables/useBookmarkedSessions';
@@ -389,8 +388,6 @@ import {
 const credentials = useCredentials();
 const { suppressAutoWindows, theme: uiTheme } = useSettings();
 const FOLLOW_THRESHOLD_PX = 24;
-const FILE_VIEWER_WINDOW_WIDTH = 840;
-const FILE_VIEWER_WINDOW_HEIGHT = 520;
 const TERM_COLUMNS = 80;
 const TERM_ROWS = 25;
 const TERM_FONT_SIZE_PX = 13;
@@ -407,29 +404,10 @@ const REASONING_CLOSE_DELAY_MS = 3000;
 const SUBAGENT_CLOSE_DELAY_MS = 3000;
 const ATTACHMENT_MIME_ALLOWLIST = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
-type TodoSession = {
-  sessionId: string;
-  title: string;
-  isSubagent: boolean;
-  todos: TodoItem[];
-  loading: boolean;
-  error: string | undefined;
-};
-
 type FileContentResponse = {
   content?: string;
   encoding?: string;
   type?: 'text' | 'binary';
-};
-
-type PtyInfo = {
-  id: string;
-  title: string;
-  command: string;
-  args: string[];
-  cwd: string;
-  status: 'running' | 'exited';
-  pid: number;
 };
 
 type ShellSession = {
@@ -487,7 +465,7 @@ const outputPanelRef = ref<{
 } | null>(null);
 const inputPanelRef = ref<{ focus: () => void; reset: () => void } | null>(null);
 const outputPanelContainerEl = computed(() => outputPanelRef.value?.panelEl ?? undefined);
-const outputPanelScrollMode = computed<ScrollMode>(() => 'follow');
+const outputPanelScrollMode = ref<ScrollMode>('follow');
 const {
   isFollowing,
   enableFollow,
@@ -524,12 +502,6 @@ function handleOutputPanelContentResized() {
   notifyContentChange();
 }
 
-const runningToolIds = reactive(new Set<string>());
-
-type MessageDiffEntry = { file: string; diff: string; before?: string; after?: string };
-
-const userMessageMetaById = ref<Record<string, UserMessageMeta>>({});
-const userMessageTimeById = ref<Record<string, number>>({});
 const globalEventUnsubscribers: Array<() => void> = [];
 
 const sidePanelResizeState = ref<{
@@ -560,7 +532,6 @@ const bodyPanelStyle = computed(() => {
 const appBodyEl = ref<HTMLDivElement | null>(null);
 const sidePanelAreaEl = ref<HTMLDivElement | null>(null);
 let primaryHistoryRequestId = 0;
-const recentUserInputs: { text: string; time: number }[] = [];
 const composerDraftRevisionByContext = new Map<string, number>();
 const composerDraftTabId =
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -806,7 +777,6 @@ const subagentWindows = useSubagentWindows({
 });
 
 const homePath = ref('');
-const serverWorktreePath = ref('');
 
 const initialQuery = readQuerySelection();
 const isProjectPickerOpen = ref(false);
@@ -830,7 +800,6 @@ const connectionState = ref<'connecting' | 'bootstrapping' | 'ready' | 'reconnec
   'connecting',
 );
 const reconnectingMessage = ref('');
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let initializationInFlight = false;
 const loginUrl = ref('http://localhost:4096');
 const loginUsername = ref('');
@@ -874,15 +843,6 @@ watch(
     });
   },
   { immediate: true },
-);
-
-const filteredSessions = computed(() =>
-  sessions.value.filter((session) => {
-    if (session.parentID) return false;
-    const directory = activeDirectory.value;
-    if (directory && session.directory && session.directory !== directory) return false;
-    return true;
-  }),
 );
 
 const topPanelTreeData = computed<TopPanelWorktree[]>(() => {
@@ -1241,8 +1201,7 @@ const isThinking = computed(() => {
   return Boolean(
     ownStatus === 'busy' ||
     ownStatus === 'retry' ||
-    busyDescendantSessionIds.value.length > 0 ||
-    runningToolIds.size > 0,
+    busyDescendantSessionIds.value.length > 0,
   );
 });
 const canAbort = computed(() =>
@@ -1358,11 +1317,6 @@ function validateSelectedSession() {
   if (current && !current.parentID) return;
 
   selectedSessionId.value = '';
-}
-
-function toErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }
 
 const resolvedTheme = computed(() => resolveTheme(opencodeTheme, uiTheme.value));
@@ -1848,12 +1802,6 @@ function handleComposerDraftStorage(event: StorageEvent) {
   applyComposerDraftToComposerState(draft, contextKey);
 }
 
-function clamp(value: number, min: number, max: number) {
-  if (value < min) return min;
-  if (value > max) return max;
-  return value;
-}
-
 function getSessionStatus(sessionId: string, projectId?: string) {
   if (!sessionId) return undefined;
   const preferredProjectId = projectId?.trim() || resolveProjectIdForSession(sessionId);
@@ -2154,13 +2102,9 @@ async function fetchHomePath() {
   try {
     const data = (await opencodeApi.getPathInfo()) as {
       home?: string;
-      worktree?: string;
     };
     if (typeof data.home === 'string' && data.home.trim()) {
       homePath.value = data.home.trim();
-    }
-    if (typeof data.worktree === 'string' && data.worktree.trim()) {
-      serverWorktreePath.value = data.worktree.trim();
     }
   } catch {
     return;
@@ -2430,9 +2374,6 @@ async function bootstrapSelections() {
       await initializeSessionSelection();
     }
 
-    if (activeDirectory.value) {
-      void fetchCommands(activeDirectory.value);
-    }
   } finally {
     isBootstrapping.value = false;
   }
@@ -2441,7 +2382,6 @@ async function bootstrapSelections() {
 async function fetchProviders(force = false) {
   if (providersLoading.value || (!force && providersLoaded.value)) return;
   providersLoading.value = true;
-  log('providers fetch start');
   try {
     const data = (await opencodeApi.listProviders()) as ProviderResponse;
     providers.value = Array.isArray(data.providers) ? data.providers : [];
@@ -2487,7 +2427,6 @@ async function fetchProviders(force = false) {
       models.every((model, index) => model.id === modelOptions.value[index]?.id);
     if (!sameModels) {
       modelOptions.value = models;
-      log('providers models updated', models.length);
     }
 
     if (!selectedModel.value) {
@@ -2509,12 +2448,10 @@ async function fetchProviders(force = false) {
       !nextThinkingOptions.includes(selectedThinking.value)
     ) {
       selectedThinking.value = thinkingOptions.value[0];
-      log('providers thinking set', selectedThinking.value);
     }
     providersLoaded.value = true;
-    log('providers fetch done');
-  } catch (error) {
-    log('Provider load failed', error);
+  } catch {
+    // Keep last successful provider list.
   } finally {
     providersLoading.value = false;
   }
@@ -2547,8 +2484,8 @@ async function fetchAgents() {
         applyAgentDefaults(preferred);
       }
     }
-  } catch (error) {
-    log('Agent load failed', error);
+  } catch {
+    // Keep last successful agent list.
   } finally {
     agentsLoading.value = false;
   }
@@ -2562,8 +2499,8 @@ async function fetchCommands(directory?: string) {
     const list = Array.isArray(data) ? data : [];
     list.sort((a, b) => a.name.localeCompare(b.name));
     commands.value = list;
-  } catch (error) {
-    log('Command load failed', error);
+  } catch {
+    // Keep last successful command list.
   } finally {
     commandsLoading.value = false;
   }
@@ -2628,56 +2565,6 @@ function handleWindowAttentionChange() {
   syncActiveSelectionToWorker();
 }
 
-type UserMessageMeta = {
-  agent?: string;
-  providerId?: string;
-  modelId?: string;
-  variant?: string;
-};
-
-type MessageTokens = {
-  input: number;
-  output: number;
-  cache?: {
-    read: number;
-    write: number;
-  };
-};
-
-function parseMessageTime(info?: Record<string, unknown>): number | undefined {
-  if (!info) return undefined;
-  const time = info.time as Record<string, unknown> | undefined;
-  if (!time || typeof time !== 'object') return undefined;
-  const created = time.created;
-  return typeof created === 'number' ? created : undefined;
-}
-
-function parseUserMessageMeta(info?: Record<string, unknown>): UserMessageMeta | null {
-  if (!info) return null;
-  const agent = typeof info.agent === 'string' ? info.agent.trim() : '';
-  const model = (info.model as Record<string, unknown> | undefined) ?? undefined;
-  const providerId =
-    typeof info.providerID === 'string'
-      ? info.providerID.trim()
-      : typeof model?.providerID === 'string'
-        ? model.providerID.trim()
-        : '';
-  const modelId =
-    typeof info.modelID === 'string'
-      ? String(info.modelID).trim()
-      : typeof model?.modelID === 'string'
-        ? String(model.modelID).trim()
-        : '';
-  const variant = typeof info.variant === 'string' ? info.variant.trim() : '';
-  if (!agent && !modelId && !providerId && !variant) return null;
-  return {
-    agent: agent || undefined,
-    providerId: providerId || undefined,
-    modelId: modelId || undefined,
-    variant: variant || undefined,
-  };
-}
-
 function resolveProviderModelLimit(providerId?: string, modelId?: string) {
   const normalizedProvider = providerId?.trim() ?? '';
   const normalizedModel = modelId?.trim() ?? '';
@@ -2699,16 +2586,6 @@ function computeContextPercent(tokens: MessageTokens, providerId?: string, model
   return Math.round((total / contextLimit) * 100);
 }
 
-function storeUserMessageMeta(messageId: string | undefined, meta: UserMessageMeta | null) {
-  if (!messageId || !meta) return;
-  userMessageMetaById.value = { ...userMessageMetaById.value, [messageId]: meta };
-}
-
-function storeUserMessageTime(messageId: string | undefined, messageTime?: number) {
-  if (!messageId || typeof messageTime !== 'number') return;
-  userMessageTimeById.value = { ...userMessageTimeById.value, [messageId]: messageTime };
-}
-
 async function fetchHistory(sessionId: string, isSubagentMessage = false) {
   if (!sessionId) return;
   const requestId = !isSubagentMessage ? ++primaryHistoryRequestId : 0;
@@ -2726,26 +2603,12 @@ async function fetchHistory(sessionId: string, isSubagentMessage = false) {
     }
     msg.loadHistory(data);
 
-    data.forEach((message) => {
-      const info = message.info as Record<string, unknown> | undefined;
-      const id = typeof info?.id === 'string' ? info.id : undefined;
-      if (!id) return;
-      const meta = parseUserMessageMeta(info);
-      const messageTime = parseMessageTime(info);
-      storeUserMessageMeta(id, meta);
-      storeUserMessageTime(id, messageTime);
-    });
-
     if (!isSubagentMessage) {
       notifyContentChange(false);
     }
-  } catch (error) {
-    log('History load failed', error);
+  } catch {
+    // History stays empty until the next successful fetch.
   }
-}
-
-function buildPtyWsUrl(path: string, directory?: string) {
-  return opencodeApi.createWsUrl(path, { directory });
 }
 
 function parsePtyInfo(value: unknown): PtyInfo | null {
@@ -2957,9 +2820,7 @@ function notifyPtySize(session: ShellSession) {
   const { rows, cols } = session.terminal;
   if (rows > 0 && cols > 0) {
     const directory = session.pty.cwd || activeDirectory.value || undefined;
-    updatePtySize(session.pty.id, rows, cols, directory).catch((error) => {
-      log('PTY resize failed', error);
-    });
+    updatePtySize(session.pty.id, rows, cols, directory).catch(() => {});
   }
 }
 
@@ -3001,7 +2862,7 @@ function connectShellSocket(ptyId: string) {
   const session = shellSessionsByPtyId.get(ptyId);
   if (!session) return;
   const directory = session.pty.cwd || activeDirectory.value || undefined;
-  const url = buildPtyWsUrl(`/pty/${ptyId}/connect`, directory);
+  const url = opencodeApi.createWsUrl(`/pty/${ptyId}/connect`, { directory });
   const socket = new WebSocket(url);
   session.socket = socket;
   socket.binaryType = 'arraybuffer';
@@ -3078,9 +2939,7 @@ function removeShellWindow(ptyId: string, options?: { kill?: boolean }) {
   fw.close(`shell:${ptyId}`);
   if (options?.kill) {
     const directory = session.pty.cwd || activeDirectory.value || undefined;
-    opencodeApi.deletePty(ptyId, directory).catch((error) => {
-      log('PTY delete failed', error);
-    });
+    opencodeApi.deletePty(ptyId, directory).catch(() => {});
   }
 }
 
@@ -3129,8 +2988,8 @@ async function restoreShellSessions() {
       if (pty.title === 'One-shot PTY' || pty.title === 'Commit Snapshot') return;
       ensureShellWindow(pty);
     });
-  } catch (error) {
-    log('PTY restore failed', error);
+  } catch {
+    // Existing shell windows stay as-is if the list fails.
   }
 }
 
@@ -3198,16 +3057,8 @@ function openDebugSessionViewer() {
       gutterMode: 'none',
       theme: shikiTheme.value,
     },
-    closable: true,
-    resizable: true,
-    focusOnOpen: true,
-    scroll: 'manual',
+    ...fileViewerWindowChrome(pos),
     title: 'Debug: Session Graph',
-    x: pos.x,
-    y: pos.y,
-    width: FILE_VIEWER_WINDOW_WIDTH,
-    height: FILE_VIEWER_WINDOW_HEIGHT,
-    expiry: Infinity,
   });
 }
 
@@ -3312,16 +3163,8 @@ function openDebugNotificationViewer() {
       gutterMode: 'none',
       theme: shikiTheme.value,
     },
-    closable: true,
-    resizable: true,
-    focusOnOpen: true,
-    scroll: 'manual',
+    ...fileViewerWindowChrome(pos),
     title: 'Debug: Notifications',
-    x: pos.x,
-    y: pos.y,
-    width: FILE_VIEWER_WINDOW_WIDTH,
-    height: FILE_VIEWER_WINDOW_HEIGHT,
-    expiry: Infinity,
   });
 }
 
@@ -3385,10 +3228,6 @@ async function sendMessage() {
   const selectedModelIDs = parseProviderModelKey(selectedModel.value);
   const providerID = selectedInfo?.providerID ?? (selectedModelIDs.providerID || undefined);
   const modelID = selectedInfo?.modelID ?? (selectedModelIDs.modelID || undefined);
-  if (hasText) {
-    recentUserInputs.push({ text, time: Date.now() });
-    while (recentUserInputs.length > 20) recentUserInputs.shift();
-  }
   messageInput.value = '';
   enableFollow();
   isSending.value = true;
@@ -3578,7 +3417,7 @@ watch(
 );
 
 watch(
-  filteredSessions,
+  sessions,
   () => {
     if (!bootstrapReady.value && !isBootstrapping.value) return;
     if (isBootstrapping.value) return;
@@ -3744,8 +3583,6 @@ watch(
   { immediate: true },
 );
 
-function log(..._args: unknown[]) {}
-
 const shikiTheme = ref(uiTheme.value === 'light' ? 'github-light' : 'github-dark');
 
 watch(uiTheme, (theme) => {
@@ -3769,17 +3606,19 @@ watch(uiTheme, (theme) => {
   });
 });
 
+const { openGitDiff, openAllGitDiff, handleShowMessageDiff, handleShowCommit } = useGitDiffWindows({
+  fw,
+  runOneShotPtyCommand,
+  shikiTheme,
+  getFileViewerPosition,
+});
+
 const TOOL_RENDERER_READ_EVENT_TYPES = new Set(['session.diff', 'file.edited']);
-
-const TOOL_RENDERER_WRITE_EVENT_TYPES = new Set<string>([]);
-
-const toolRendererReadTypesKey = `FILE_${'READ'}_EVENT_TYPES`;
-const toolRendererWriteTypesKey = `FILE_${'WRITE'}_EVENT_TYPES`;
+const TOOL_RENDERER_WRITE_EVENT_TYPES = new Set<string>();
 
 const toolRendererHelpers = {
-  [toolRendererReadTypesKey]: TOOL_RENDERER_READ_EVENT_TYPES,
-  [toolRendererWriteTypesKey]: TOOL_RENDERER_WRITE_EVENT_TYPES,
-  guessLanguage,
+  FILE_READ_EVENT_TYPES: TOOL_RENDERER_READ_EVENT_TYPES,
+  FILE_WRITE_EVENT_TYPES: TOOL_RENDERER_WRITE_EVENT_TYPES,
   shouldRenderToolWindow,
   extractToolOutputText: parseToolOutputText,
   formatToolValue,
@@ -3821,45 +3660,6 @@ watchEffect(() => {
   opencodeApi.setBaseUrl(credentials.baseUrl.value);
   opencodeApi.setAuthorization(credentials.authHeader.value);
 });
-
-function formatToolValue(value: unknown) {
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function parseToolOutputText(output: unknown) {
-  if (output === undefined) return undefined;
-  if (typeof output === 'string') return output;
-  if (output && typeof output === 'object') {
-    const outputRecord = output as Record<string, unknown>;
-    const outputContent =
-      (outputRecord.content as string | undefined) ??
-      (outputRecord.text as string | undefined) ??
-      (outputRecord.body as string | undefined) ??
-      (outputRecord.result as string | undefined);
-    if (typeof outputContent === 'string') return outputContent;
-    const stdout = outputRecord.stdout;
-    const stderr = outputRecord.stderr;
-    const parts: string[] = [];
-    if (typeof stdout === 'string' && stdout.length > 0) parts.push(stdout);
-    if (typeof stderr === 'string' && stderr.length > 0) parts.push(stderr);
-    if (parts.length > 0) return parts.join('\n');
-  }
-  return formatToolValue(output);
-}
-
-function formatTaskToolOutput(value: string) {
-  return value
-    .split('\n')
-    .filter((line) => !/^task_id:\s*/i.test(line.trim()))
-    .join('\n')
-    .replace(/<\/?task_result>/gi, '')
-    .trim();
-}
 
 function decodeApiTextContent(data: FileContentResponse) {
   const encoding = typeof data?.encoding === 'string' ? data.encoding : 'utf-8';
@@ -3975,35 +3775,6 @@ function renderEditDiffHtml(params: {
     });
 }
 
-const TOOL_WINDOW_HIDDEN = new Set([
-  'question',
-  'todoread',
-  'todowrite',
-  'lsp',
-  'plan_enter',
-  'plan_exit',
-  'task',
-]);
-const TOOL_WINDOW_SUPPORTED = new Set([
-  'apply_patch',
-  'bash',
-  'codesearch',
-  'edit',
-  'glob',
-  'grep',
-  'list',
-  'multiedit',
-  'read',
-  'task',
-  'webfetch',
-  'websearch',
-  'write',
-]);
-
-function shouldRenderToolWindow(tool: string) {
-  return !TOOL_WINDOW_HIDDEN.has(tool) && TOOL_WINDOW_SUPPORTED.has(tool);
-}
-
 function getFileViewerPosition(factorX = 0.16, factorY = 0.1) {
   const metrics = getCanvasMetrics();
   const x = metrics
@@ -4021,303 +3792,6 @@ function getFileViewerPosition(factorX = 0.16, factorY = 0.1) {
       )
     : 24;
   return { x, y };
-}
-
-async function openGitDiff(payload: { path: string; staged: boolean }) {
-  const { path, staged } = payload;
-  const key = `git-diff:${staged ? 'staged' : 'changes'}:${path}`;
-  if (fw.has(key)) {
-    fw.bringToFront(key);
-    return;
-  }
-
-  const mode = staged ? 'staged' : 'unstaged';
-  const pos = getFileViewerPosition();
-  await fw.open(key, {
-    content: `Loading ${mode} diff for ${path}...`,
-    lang: 'text',
-    variant: 'plain',
-    closable: true,
-    resizable: true,
-    focusOnOpen: true,
-    scroll: 'manual',
-    title: `${path} (${mode})`,
-    x: pos.x,
-    y: pos.y,
-    width: FILE_VIEWER_WINDOW_WIDTH,
-    height: FILE_VIEWER_WINDOW_HEIGHT,
-    expiry: Infinity,
-  });
-
-  try {
-    const output = await runOneShotPtyCommand('bash', [
-      '--noprofile',
-      '--norc',
-      '-c',
-      FILE_SNAPSHOT_SCRIPT,
-      '_',
-      mode,
-      path,
-    ]);
-    const snapshot = parseFileSnapshotOutput(output);
-    if (!fw.has(key)) return;
-    await fw.open(key, {
-      component: DiffViewer,
-      props: {
-        path,
-        isDiff: true,
-        diffCode: snapshot.before,
-        diffAfter: snapshot.after,
-        diffCodeBase64: snapshot.beforeBase64,
-        diffAfterBase64: snapshot.afterBase64,
-        gutterMode: 'double',
-        lang: guessLanguage(path),
-        theme: shikiTheme.value,
-      },
-      closable: true,
-      resizable: true,
-      focusOnOpen: true,
-      scroll: 'manual',
-      title: `${path} (${mode})`,
-      x: pos.x,
-      y: pos.y,
-      width: FILE_VIEWER_WINDOW_WIDTH,
-      height: FILE_VIEWER_WINDOW_HEIGHT,
-      expiry: Infinity,
-    });
-  } catch (error) {
-    log('File snapshot failed', error);
-    if (fw.has(key)) {
-      await fw.close(key);
-    }
-  }
-}
-
-async function openAllGitDiff(mode: WorktreeSnapshotMode = 'all') {
-  const key = `git-diff:${mode}`;
-  if (fw.has(key)) {
-    fw.bringToFront(key);
-    return;
-  }
-
-  const pos = getFileViewerPosition();
-  await fw.open(key, {
-    content: 'Loading all changes...',
-    lang: 'text',
-    variant: 'plain',
-    closable: true,
-    resizable: true,
-    focusOnOpen: true,
-    scroll: 'manual',
-    title: 'Loading...',
-    x: pos.x,
-    y: pos.y,
-    width: FILE_VIEWER_WINDOW_WIDTH,
-    height: FILE_VIEWER_WINDOW_HEIGHT,
-    expiry: Infinity,
-  });
-
-  try {
-    const output = await runOneShotPtyCommand('bash', [
-      '--noprofile',
-      '--norc',
-      '-c',
-      buildWorktreeSnapshotScript(mode),
-    ]);
-    const snapshot = parseCommitSnapshotOutput(output);
-    if (snapshot.files.length === 0) {
-      throw new Error('no files parsed from working tree snapshot');
-    }
-    if (!fw.has(key)) return;
-
-    const first = snapshot.files[0];
-    const title =
-      snapshot.files.length === 1 ? first.file : `${snapshot.files.length} files changed`;
-    const diffTabs =
-      snapshot.files.length > 1
-        ? snapshot.files.map((entry) => ({
-            file: entry.file,
-            before: entry.before,
-            after: entry.after,
-            beforeBase64: entry.beforeBase64,
-            afterBase64: entry.afterBase64,
-          }))
-        : undefined;
-
-    await fw.open(key, {
-      component: DiffViewer,
-      props: {
-        path: first.file,
-        isDiff: true,
-        diffCode: first.before,
-        diffAfter: first.after,
-        diffCodeBase64: first.beforeBase64,
-        diffAfterBase64: first.afterBase64,
-        diffTabs,
-        gutterMode: 'double',
-        lang: snapshot.files.length === 1 ? guessLanguage(first.file) : 'text',
-        theme: shikiTheme.value,
-      },
-      title,
-      closable: true,
-      resizable: true,
-      focusOnOpen: true,
-      scroll: 'manual',
-      x: pos.x,
-      y: pos.y,
-      width: FILE_VIEWER_WINDOW_WIDTH,
-      height: FILE_VIEWER_WINDOW_HEIGHT,
-      expiry: Infinity,
-    });
-  } catch (error) {
-    log('Working tree snapshot failed', error);
-    if (fw.has(key)) {
-      await fw.close(key);
-    }
-  }
-}
-
-function handleShowMessageDiff(payload: { messageKey: string; diffs: Array<MessageDiffEntry> }) {
-  const { messageKey, diffs } = payload;
-  if (!diffs || diffs.length === 0) return;
-  const key = `message-diff:${messageKey}`;
-  if (fw.has(key)) {
-    fw.bringToFront(key);
-    return;
-  }
-  const hasBeforeAfter = diffs.some(
-    (d) => typeof d.before === 'string' && typeof d.after === 'string',
-  );
-  const combinedDiff = hasBeforeAfter ? '' : diffs.map((d) => d.diff).join('\n');
-  const fileCount = diffs.length;
-  const title = fileCount === 1 ? diffs[0].file : `${fileCount} files changed`;
-  const firstFile = diffs[0]?.file ?? '';
-
-  let diffTabs: Array<{ file: string; before: string; after: string }> | undefined;
-  if (hasBeforeAfter && fileCount > 1) {
-    diffTabs = diffs
-      .filter((d) => typeof d.before === 'string' && typeof d.after === 'string')
-      .map((d) => ({
-        file: d.file,
-        before: d.before!,
-        after: d.after!,
-      }));
-  }
-
-  const pos = getFileViewerPosition();
-  fw.open(key, {
-    component: DiffViewer,
-    props: {
-      path: firstFile,
-      isDiff: true,
-      diffCode: hasBeforeAfter ? (diffs[0]?.before ?? '') : '',
-      diffAfter: hasBeforeAfter ? (diffs[0]?.after ?? '') : undefined,
-      diffPatch: hasBeforeAfter ? undefined : combinedDiff,
-      diffTabs,
-      gutterMode: hasBeforeAfter ? 'double' : 'none',
-      lang: fileCount === 1 ? guessLanguage(firstFile) : 'text',
-      theme: shikiTheme.value,
-    },
-    closable: true,
-    resizable: true,
-    focusOnOpen: true,
-    scroll: 'manual',
-    title,
-    x: pos.x,
-    y: pos.y,
-    width: FILE_VIEWER_WINDOW_WIDTH,
-    height: FILE_VIEWER_WINDOW_HEIGHT,
-    expiry: Infinity,
-  });
-}
-
-async function handleShowCommit(hashRaw: string) {
-  const hash = hashRaw.trim();
-  if (!/^[0-9a-f]{7,40}$/i.test(hash)) return;
-  const key = `commit-diff:${hash}`;
-  if (fw.has(key)) {
-    fw.bringToFront(key);
-    return;
-  }
-
-  const pos = getFileViewerPosition();
-  await fw.open(key, {
-    content: `Loading commit ${hash}...`,
-    lang: 'text',
-    variant: 'plain',
-    closable: true,
-    resizable: true,
-    focusOnOpen: true,
-    scroll: 'manual',
-    title: `commit ${hash}`,
-    x: pos.x,
-    y: pos.y,
-    width: FILE_VIEWER_WINDOW_WIDTH,
-    height: FILE_VIEWER_WINDOW_HEIGHT,
-    expiry: Infinity,
-  });
-
-  try {
-    const output = await runOneShotPtyCommand('bash', [
-      '--noprofile',
-      '--norc',
-      '-c',
-      COMMIT_SNAPSHOT_SCRIPT,
-      '_',
-      hash,
-    ]);
-    const snapshot = parseCommitSnapshotOutput(output);
-    if (snapshot.files.length === 0) {
-      throw new Error('no files parsed from commit snapshot');
-    }
-    if (!fw.has(key)) return;
-
-    const first = snapshot.files[0];
-    const title =
-      snapshot.title ||
-      (snapshot.files.length === 1 ? first.file : `${snapshot.files.length} files changed`);
-    const diffTabs =
-      snapshot.files.length > 1
-        ? snapshot.files.map((entry) => ({
-            file: entry.file,
-            before: entry.before,
-            after: entry.after,
-            beforeBase64: entry.beforeBase64,
-            afterBase64: entry.afterBase64,
-          }))
-        : undefined;
-
-    await fw.open(key, {
-      component: DiffViewer,
-      props: {
-        path: first.file,
-        isDiff: true,
-        diffCode: first.before,
-        diffAfter: first.after,
-        diffCodeBase64: first.beforeBase64,
-        diffAfterBase64: first.afterBase64,
-        diffTabs,
-        gutterMode: 'double',
-        lang: snapshot.files.length === 1 ? guessLanguage(first.file) : 'text',
-        theme: shikiTheme.value,
-      },
-      title,
-      closable: true,
-      resizable: true,
-      focusOnOpen: true,
-      scroll: 'manual',
-      x: pos.x,
-      y: pos.y,
-      width: FILE_VIEWER_WINDOW_WIDTH,
-      height: FILE_VIEWER_WINDOW_HEIGHT,
-      expiry: Infinity,
-    });
-  } catch (error) {
-    log('Commit snapshot failed', error);
-    if (fw.has(key)) {
-      await fw.close(key);
-    }
-  }
 }
 
 function openToolPartAsWindow(
@@ -4590,7 +4064,7 @@ async function openFileViewer(path: string, lines?: string) {
     return;
   }
   const pos = getFileViewerPosition(0.18, 0.14);
-  const lang = guessLanguage(path);
+  const lang = guessLanguageFromPath(path);
   fw.open(key, {
     component: ContentViewer,
     props: {
@@ -4600,16 +4074,8 @@ async function openFileViewer(path: string, lines?: string) {
       gutterMode: 'default',
       theme: shikiTheme.value,
     },
-    closable: true,
-    resizable: true,
-    focusOnOpen: true,
-    scroll: 'manual',
+    ...fileViewerWindowChrome(pos),
     title: toFileViewerTitle(path, lines),
-    x: pos.x,
-    y: pos.y,
-    width: FILE_VIEWER_WINDOW_WIDTH,
-    height: FILE_VIEWER_WINDOW_HEIGHT,
-    expiry: Infinity,
   });
   const directory = activeDirectory.value.trim();
   if (!directory) {
@@ -4653,7 +4119,7 @@ async function openFileViewer(path: string, lines?: string) {
         props: {
           path,
           binaryBase64: content,
-          lang: guessLanguage(path),
+          lang: guessLanguageFromPath(path),
           lines,
           gutterMode: 'default',
           theme: shikiTheme.value,
@@ -4661,7 +4127,7 @@ async function openFileViewer(path: string, lines?: string) {
       });
       return;
     }
-    const resolvedLang = guessLanguage(path);
+    const resolvedLang = guessLanguageFromPath(path);
     const textContent = content;
     fw.updateOptions(key, {
       props: {
@@ -4683,58 +4149,6 @@ async function openFileViewer(path: string, lines?: string) {
         theme: shikiTheme.value,
       },
     });
-  }
-}
-
-function guessLanguage(path?: string, eventType?: string) {
-  if (!path) {
-    if (eventType && eventType.startsWith('session.diff')) return 'text';
-    return 'text';
-  }
-
-  const ext = path.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'ts':
-      return 'typescript';
-    case 'tsx':
-      return 'tsx';
-    case 'js':
-      return 'javascript';
-    case 'jsx':
-      return 'jsx';
-    case 'vue':
-      return 'vue';
-    case 'json':
-      return 'json';
-    case 'md':
-      return 'markdown';
-    case 'html':
-      return 'html';
-    case 'css':
-      return 'css';
-    case 'scss':
-      return 'scss';
-    case 'yml':
-    case 'yaml':
-      return 'yaml';
-    case 'diff':
-    case 'patch':
-      return 'diff';
-    case 'sh':
-      return 'shellscript';
-    case 'py':
-      return 'python';
-    case 'java':
-      return 'java';
-    case 'php':
-      return 'php';
-    case 'sql':
-      return 'sql';
-    case 'svg':
-    case 'xml':
-      return 'xml';
-    default:
-      return 'text';
   }
 }
 
@@ -4880,8 +4294,6 @@ async function startInitialization() {
     }
     if (workingDirectory.value) {
       void fetchCommands(workingDirectory.value);
-      void fetchPendingPermissions(workingDirectory.value);
-      void fetchPendingQuestions(workingDirectory.value);
     }
     void fetchProviders();
     void fetchAgents();
@@ -5140,10 +4552,6 @@ onBeforeUnmount(() => {
     const dispose = globalEventUnsubscribers.pop();
     dispose?.();
   }
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
   mainSessionScope.dispose();
   sessionScope.dispose();
   ge.disconnect();
@@ -5197,24 +4605,35 @@ onBeforeUnmount(() => {
 .app-loading-view {
   flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  place-items: center;
-  z-index: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: safe center;
+  padding: 24px 16px;
+  overflow: auto;
 }
 
 .app-loading-card {
   position: relative;
-  width: min(420px, 92vw);
+  width: min(420px, 100%);
   border: 1px solid #2b2b2b;
   background: #1f1f1f;
   border-radius: 14px;
-  padding: 20px;
+  padding: 24px 20px 20px;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
   text-align: center;
 }
 
+.app-loading-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
 .app-brand-logo {
-  width: 180px;
+  width: min(160px, 42vw);
   height: auto;
 }
 

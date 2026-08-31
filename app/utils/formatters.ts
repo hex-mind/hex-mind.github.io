@@ -42,3 +42,14 @@ export function formatSessionTitle(...parts: (string | undefined)[]): string {
   const stripped = raw.replace(ISO_TITLE_SUFFIX, '').trim();
   return stripped || raw;
 }
+
+export function clamp(value: number, min: number, max: number) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+export function toErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}

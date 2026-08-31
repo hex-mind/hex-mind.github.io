@@ -3,32 +3,13 @@ import type { ComputedRef, Ref } from 'vue';
 import QuestionContent from '../components/ToolWindow/Question.vue';
 import { WINDOW_COLOR } from '../components/ToolWindow/utils';
 import * as opencodeApi from '../utils/opencode';
+import { toErrorMessage } from '../utils/formatters';
+import type { QuestionInfo, QuestionOption, QuestionRequest } from '../types/sse';
 import type { useFloatingWindows } from './useFloatingWindows';
 
-export type QuestionOption = {
-  label: string;
-  description: string;
-};
+export type { QuestionInfo, QuestionOption, QuestionRequest };
 
-export type QuestionInfo = {
-  question: string;
-  header: string;
-  options: QuestionOption[];
-  multiple?: boolean;
-  custom?: boolean;
-};
-
-export type QuestionRequest = {
-  id: string;
-  sessionID: string;
-  questions: QuestionInfo[];
-  tool?: {
-    messageID: string;
-    callID: string;
-  };
-};
-
-export type QuestionAnswer = string[];
+type QuestionAnswer = string[];
 
 const QUESTION_WINDOW_WIDTH = 760;
 const QUESTION_WINDOW_HEIGHT = 560;
@@ -309,9 +290,4 @@ export function useQuestions(options: {
     isQuestionSessionAllowed,
     fetchPendingQuestions,
   };
-}
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }

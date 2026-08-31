@@ -8,6 +8,15 @@ export type TodoItem = {
   priority: string;
 };
 
+export type TodoSession = {
+  sessionId: string;
+  title: string;
+  isSubagent: boolean;
+  todos: TodoItem[];
+  loading: boolean;
+  error: string | undefined;
+};
+
 export function useTodos(options: {
   selectedSessionId: Ref<string>;
   allowedSessionIds: ComputedRef<Set<string>>;

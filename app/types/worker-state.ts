@@ -8,7 +8,6 @@
 // - All child/descendant sessions are placed under the root session's sandbox
 // - rootSessions array maintains display order (sorted by timeUpdated desc)
 // - SessionState.status is the individual session's own status
-// - NotificationState uses Set<string> internally but serializes as string[]
 // ---------------------------------------------------------------------------
 
 /**
@@ -82,5 +81,3 @@ export type WorkerNotificationEntry = {
   sessionId: string;
   requestIds: string[];
 };
-
-export type NotificationState = Record<string, WorkerNotificationEntry>;

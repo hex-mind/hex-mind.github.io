@@ -90,24 +90,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-
-type PermissionRequest = {
-  id: string;
-  sessionID: string;
-  permission: string;
-  patterns: string[];
-  metadata: Record<string, unknown>;
-  always: string[];
-  tool?: {
-    messageID: string;
-    callID: string;
-  };
-};
+import type { PermissionNextRequest } from '../../types/sse';
 
 type PermissionReply = 'once' | 'always' | 'reject';
 
 const props = defineProps<{
-  request: PermissionRequest;
+  request: PermissionNextRequest;
   isSubmitting?: boolean;
   error?: string;
 }>();

@@ -4,11 +4,6 @@ export type SseConnectionOptions = {
   baseUrl: string;
   authorization?: string;
 };
-
-export type SseConnectionConnectOptions = {
-  failFast?: boolean;
-  timeoutMs?: number;
-};
 type LocalNetworkRequestInit = RequestInit & {
   targetAddressSpace?: 'loopback';
 };

@@ -4,6 +4,19 @@ HEX is a Vue 3 + TypeScript web UI for a locally running [OpenCode](https://open
 
 OpenCode skills for this repo live in `.opencode/skills/` (`hex-ui`, `hex-performance`, `hex-architecture`, `hex-git-panel`). Load the matching skill before UI, startup, layout, or git-panel work.
 
+## Independent judgment
+
+Do not rubber-stamp the user's diagnosis, proposed fix, or architecture. The request is a hypothesis. Check the code (and this file) before agreeing.
+
+Before implementing, look for:
+
+1. **Wrong premises** — Does the claimed cause match the code? If they say Vue always refetches, and the real cause is a `watch` plus no session cache, say that first. Do not implement a Vue workaround for an app-design issue.
+2. **Logical jumps** — "X is slow" does not imply "rewrite X". Name the missing step. "I clicked session" does not imply every `/file` call is session-scoped.
+3. **Missing information** — If you cannot tell which directory, session, or code path is involved, inspect or ask. Do not invent a story and code to it.
+4. **Architecture** — Prefer mainstream Vue 3 composition: one source of truth, HTTP in `opencode.ts`, session graph in the worker, UI state in composables/components. Do not add a parallel store, a second REST client, or grow `App.vue` because the prompt sketched it that way. If the requested shape fights this repo or ordinary Vue/TS practice, push back with a smaller design and the tradeoff.
+
+Disagree briefly, then implement the sounder path unless the user explicitly overrides after hearing the objection.
+
 ## Runtime
 
 - The user runs OpenCode (`opencode serve`, default `http://127.0.0.1:4096`). **Do not start, restart, or occupy port 4096** unless they explicitly ask.
@@ -42,6 +55,8 @@ Startup must stay cheap. Do not put these back on the splash critical path:
 | `app/types/worker-state.ts` | Session-graph types |
 | `app/utils/opencode.ts` | REST client for OpenCode |
 | `app/utils/gitSnapshots.ts` | One-shot PTY scripts + parsers for git/commit diffs |
+| `app/composables/useGitDiffWindows.ts` | Git / commit / message diff floating windows |
+| `app/utils/fileViewerWindow.ts` | Shared file-viewer window size + chrome |
 | `app/utils/debugDump.ts` | `/debug session` graph dump |
 | `app/composables/useFileTree.ts` | Files tree, git status, background `@file` index |
 | `app/composables/useServerState.ts` | Tab copy of worker graph |

@@ -10,7 +10,7 @@ import type { useFloatingWindows } from './useFloatingWindows';
 import { WINDOW_COLOR } from '../components/ToolWindow/utils';
 import { useDeltaAccumulator } from './useDeltaAccumulator';
 
-export type ReasoningFinish = {
+type ReasoningFinish = {
   id: string;
   time: number;
 };

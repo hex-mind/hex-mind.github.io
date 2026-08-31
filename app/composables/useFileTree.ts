@@ -2,7 +2,7 @@ import { computed, ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import type { FileWatcherUpdatedPacket } from '../types/sse';
 import * as opencodeApi from '../utils/opencode';
-import { stripTrailingSlashes as normalizeDirectory } from '../utils/path';
+import { normalizeDirectory } from '../utils/path';
 import { usePtyOneshot } from './usePtyOneshot';
 
 export type TreeNode = {
@@ -63,7 +63,7 @@ export type BranchEntry = {
   hasLocalCounterpart: boolean;
 };
 
-export type GitStatus = {
+type GitStatus = {
   branch: GitBranchInfo;
   files: GitFileStatus[];
   diffStats: GitDiffStats;

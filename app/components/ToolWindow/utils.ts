@@ -65,6 +65,74 @@ export function formatQueryToolTitle(
   return query || undefined;
 }
 
+export function formatToolValue(value: unknown) {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+export function parseToolOutputText(output: unknown) {
+  if (output === undefined) return undefined;
+  if (typeof output === 'string') return output;
+  if (output && typeof output === 'object') {
+    const outputRecord = output as Record<string, unknown>;
+    const outputContent =
+      (outputRecord.content as string | undefined) ??
+      (outputRecord.text as string | undefined) ??
+      (outputRecord.body as string | undefined) ??
+      (outputRecord.result as string | undefined);
+    if (typeof outputContent === 'string') return outputContent;
+    const stdout = outputRecord.stdout;
+    const stderr = outputRecord.stderr;
+    const parts: string[] = [];
+    if (typeof stdout === 'string' && stdout.length > 0) parts.push(stdout);
+    if (typeof stderr === 'string' && stderr.length > 0) parts.push(stderr);
+    if (parts.length > 0) return parts.join('\n');
+  }
+  return formatToolValue(output);
+}
+
+export function formatTaskToolOutput(value: string) {
+  return value
+    .split('\n')
+    .filter((line) => !/^task_id:\s*/i.test(line.trim()))
+    .join('\n')
+    .replace(/<\/?task_result>/gi, '')
+    .trim();
+}
+
+const TOOL_WINDOW_HIDDEN = new Set([
+  'question',
+  'todoread',
+  'todowrite',
+  'lsp',
+  'plan_enter',
+  'plan_exit',
+  'task',
+]);
+const TOOL_WINDOW_SUPPORTED = new Set([
+  'apply_patch',
+  'bash',
+  'codesearch',
+  'edit',
+  'glob',
+  'grep',
+  'list',
+  'multiedit',
+  'read',
+  'task',
+  'webfetch',
+  'websearch',
+  'write',
+]);
+
+export function shouldRenderToolWindow(tool: string) {
+  return !TOOL_WINDOW_HIDDEN.has(tool) && TOOL_WINDOW_SUPPORTED.has(tool);
+}
+
 /** One accent per window role, sampled from the HEX logo. */
 export const WINDOW_COLOR = {
   cyan: '#5ecbf5',
@@ -147,6 +215,7 @@ export function guessLanguageFromPath(path?: string): string {
       return 'ruby';
     case 'toml':
       return 'toml';
+    case 'svg':
     case 'xml':
       return 'xml';
     case 'c':

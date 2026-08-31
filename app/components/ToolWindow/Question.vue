@@ -98,29 +98,7 @@
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
 import MessageViewer from '../MessageViewer.vue';
 import { StorageKeys, storageGetJSON, storageSetJSON } from '../../utils/storageKeys';
-
-type QuestionOption = {
-  label: string;
-  description: string;
-};
-
-type QuestionInfo = {
-  question: string;
-  header: string;
-  options: QuestionOption[];
-  multiple?: boolean;
-  custom?: boolean;
-};
-
-type QuestionRequest = {
-  id: string;
-  sessionID: string;
-  questions: QuestionInfo[];
-  tool?: {
-    messageID: string;
-    callID: string;
-  };
-};
+import type { QuestionRequest } from '../../types/sse';
 
 type QuestionDraft = {
   selectedAnswers: string[][];

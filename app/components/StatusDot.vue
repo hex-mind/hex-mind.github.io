@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-export type StatusDotKind = 'idle' | 'busy' | 'retry' | 'standby';
+type StatusDotKind = 'idle' | 'busy' | 'retry' | 'standby';
 
 const props = withDefaults(
   defineProps<{

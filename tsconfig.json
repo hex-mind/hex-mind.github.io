@@ -14,5 +14,5 @@
     "noUnusedParameters": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["app/**/*.ts", "app/**/*.vue", "server/**/*.ts", "vite.config.ts"]
+  "include": ["app/**/*.ts", "app/**/*.vue", "vite.config.ts"]
 }
