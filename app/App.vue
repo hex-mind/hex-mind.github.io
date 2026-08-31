@@ -4353,6 +4353,7 @@ function handleAbortInit() {
 }
 
 function handleLogout() {
+  isSettingsOpen.value = false;
   credentials.clear();
   ge.disconnect();
   disposeShellWindows();
