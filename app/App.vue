@@ -1125,6 +1125,7 @@ const recentSessionItems = computed(() => {
     timeUpdated: number;
     pinned?: boolean;
     hasNotification?: boolean;
+    status?: 'busy' | 'idle' | 'retry' | 'unknown';
   }> = [];
   for (const worktree of topPanelTreeData.value) {
     for (const sandbox of worktree.sandboxes) {
@@ -1142,6 +1143,7 @@ const recentSessionItems = computed(() => {
           isSelected: session.id === selectedSessionId.value,
           pinned: isPinned(session.id),
           hasNotification: notifiedSessionIds.value.has(session.id),
+          status: session.status,
           timeUpdated: session.timeUpdated ?? session.timeCreated ?? 0,
         });
       }

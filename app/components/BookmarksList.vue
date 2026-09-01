@@ -45,8 +45,13 @@
                 />
                 <span v-else class="bookmark-item-title-row">
                   <span class="bookmark-item-title">{{ session.title }}</span>
+                  <StatusDot
+                    v-if="session.status === 'busy'"
+                    class="bookmark-item-status"
+                    status="busy"
+                  />
                   <span
-                    v-if="session.hasNotification"
+                    v-else-if="session.hasNotification"
                     class="bookmark-item-mark"
                     title="Pending message"
                   ></span>
@@ -134,6 +139,7 @@ import { Icon } from '@iconify/vue';
 import { confirmAction } from '../composables/useConfirm';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
+import StatusDot from './StatusDot.vue';
 
 export type BookmarkedSessionView = {
   sessionId: string;
@@ -148,6 +154,7 @@ export type BookmarkedSessionView = {
   pinned?: boolean;
   timeUpdated?: number;
   hasNotification?: boolean;
+  status?: 'busy' | 'idle' | 'retry' | 'unknown';
 };
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -437,6 +444,10 @@ function focusRenameInput() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.bookmark-item-status {
+  flex: 0 0 6px;
 }
 
 .bookmark-item-mark {
