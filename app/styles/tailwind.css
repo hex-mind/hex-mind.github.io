@@ -383,7 +383,10 @@ html[data-theme='light'] .activity-button {
   color: #9ca3af;
 }
 
-html[data-theme='light'] .activity-button:hover {
+html[data-theme='light'] .activity-button:hover,
+html[data-theme='light'] .activity-button:focus-visible,
+html[data-theme='light'] .activity-button.is-open,
+html[data-theme='light'] .activity-bar .ui-dropdown.is-open .activity-button {
   background: #ececec !important;
   color: #2f2f2f !important;
   border-color: transparent !important;

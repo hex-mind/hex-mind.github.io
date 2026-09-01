@@ -2,7 +2,7 @@
   <dialog
     ref="dialogRef"
     class="modal-backdrop"
-    @close="$emit('close')"
+    @close="handleDialogClose"
     @cancel.prevent
     @click.self="dialogRef?.close()"
   >
@@ -94,7 +94,7 @@ const props = defineProps<{
   open: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (event: 'close'): void;
   (event: 'logout'): void;
 }>();
@@ -107,6 +107,16 @@ const ctrlEnterToSend = computed({
     enterToSend.value = !value;
   },
 });
+
+function handleDialogClose() {
+  emit('close');
+  requestAnimationFrame(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.classList.contains('activity-button')) {
+      active.blur();
+    }
+  });
+}
 
 watch(
   () => props.open,

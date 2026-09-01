@@ -13,6 +13,7 @@ Read `AGENTS.md` and `docs/architecture.md` first.
 
 - Top bar shows `focusedDirectory`. Clicking a path selects the path; only `>` expands sessions.
 - Opening a folder must not create a session.
+- **New session** (top bar / Cmd+J / Alt+N) clears `selectedSessionId` and stays on the path. It does not `POST /session`. The main column shows the welcome composer until the user sends.
 - Deleting the current session stays on that path. Do not jump to another chat.
 - Compose / send / files / git / shell use `workingDirectory` (`focusedDirectory || activeDirectory`). Do not require a session id.
 

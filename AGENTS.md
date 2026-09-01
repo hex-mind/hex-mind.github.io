@@ -26,7 +26,7 @@ Disagree briefly, then implement the sounder path unless the user explicitly ove
 
 ## Product rules (do not regress)
 
-- **Path-first.** The top bar shows the focused directory. Clicking a path selects the path; only `>` expands sessions. Opening a folder must not auto-create a session. Deleting the current session stays on that path and does not jump to another chat.
+- **Path-first.** The top bar shows the focused directory. Clicking a path selects the path; only `>` expands sessions. Opening a folder must not auto-create a session. **New session** (top bar / Cmd+J) clears the selected session and shows the welcome composer; it does not `POST /session`. Deleting the current session stays on that path and does not jump to another chat.
 - Compose / send / files / git / shell use `workingDirectory` (`focusedDirectory || activeDirectory`), not “must have a session id”.
 - Default send is Enter. Do not advertise Ctrl+Enter unless settings changed it.
 - Do not bind Cmd/Ctrl+F to the left Search tab. In-window find in `FloatingWindow` may keep Cmd+F.
@@ -63,7 +63,7 @@ Startup must stay cheap. Do not put these back on the splash critical path:
 | `app/composables/useGlobalEvents.ts` | Tab ↔ worker events |
 | `app/utils/pickLocalDirectory.ts` | Native folder picker → absolute path |
 | `docs/architecture.md` | Runtime architecture |
-| `docs/API.md` / `docs/SSE.md` / `docs/projects.md` | OpenCode protocol |
+| `docs/API.md` / `docs/SSE.md` / `docs/projects.md` | HEX-used OpenCode HTTP/SSE + session graph |
 
 ## App.vue size
 

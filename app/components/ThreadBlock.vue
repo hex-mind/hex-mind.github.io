@@ -50,6 +50,7 @@
               type="button"
               class="ib-user-editor-button send"
               :disabled="!editText.trim()"
+              :title="enterToSend ? 'Enter to send' : 'Ctrl+Enter to send'"
               @click="submitEdit(root)"
             >
               Send
@@ -187,6 +188,7 @@ import type {
 import type { MessageInfo, QuestionInfo, ToolPart } from '../types/sse';
 import { formatElapsedTime, formatMessageError, formatMessageTime } from '../utils/formatters';
 import { confirmAction } from '../composables/useConfirm';
+import { useSettings } from '../composables/useSettings';
 
 const HISTORY_TOOL_NAMES = new Set(['bash', 'write', 'edit', 'multiedit', 'apply_patch']);
 
@@ -242,6 +244,7 @@ const emit = defineEmits<{
 }>();
 
 const msg = useMessages();
+const { enterToSend } = useSettings();
 const copied = ref(false);
 const questionCopied = ref(false);
 const isEditing = ref(false);
@@ -541,10 +544,23 @@ function handleEditKeydown(root: MessageInfo, event: KeyboardEvent) {
     cancelEdit();
     return;
   }
-  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.altKey) {
+  if (event.key === 'Enter' && event.ctrlKey && !event.metaKey && !event.altKey) {
     event.preventDefault();
     submitEdit(root);
     return;
+  }
+  if (
+    event.key === 'Enter' &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    !event.altKey
+  ) {
+    if (enterToSend.value) {
+      event.preventDefault();
+      submitEdit(root);
+      return;
+    }
   }
   if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
     if (!cycleEditMode(event.shiftKey ? 'prev' : 'next')) return;

@@ -70,8 +70,10 @@ An identifier assigned by OpenCode to each project (SHA hash string). **Only ass
 
 A conversation session belonging to a specific sandbox (and thus a specific projectID).
 
-- Sessions without a `parentID` are **root sessions**, shown in the top-right session list.
+- Sessions without a `parentID` are **root sessions**, shown in Recents and in the top-bar path dropdown (`>`).
 - Sessions with a `parentID` are **child sessions**, created by subagents.
+
+With no root session selected, the main column is the welcome composer. Path select and **New session** do not create a session.
 
 ## API and Directory
 
@@ -93,10 +95,9 @@ The session graph is built from two primary APIs:
 A single worktree may have multiple sandboxes:
 
 - The worktree itself (`ProjectInfo.worktree`)
-- Git worktrees (`GET /experimental/worktree?directory=X`)
-- Sandboxes (`ProjectInfo.sandboxes[]`)
+- Git worktrees and other sandbox paths (`ProjectInfo.sandboxes[]`)
 
-These lists come from the `/project` and `/experimental/worktree` APIs and are synced into each project's `sandboxes`.
+These lists come from `GET /project` (plus sessions discovered during bootstrap). HEX only **deletes** worktrees (`DELETE /experimental/worktree`); it does not list them via a separate GET.
 
 ## SSE Events
 
@@ -177,5 +178,5 @@ Computed from `useServerState().projects`:
 4. Remembered localStorage directories lazy-sync after bootstrap (not on splash).
 ```
 
-Selecting a path does not create a session. Deleting the current session stays on that path.
+Selecting a path does not create a session. **New session** clears `selectedSessionId` and stays on the path (welcome composer). Send creates the session. Deleting the current session stays on that path.
 

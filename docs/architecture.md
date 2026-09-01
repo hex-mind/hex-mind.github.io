@@ -2,7 +2,7 @@
 
 HEX is a browser client for a local OpenCode server. The UI never owns the agent runtime: OpenCode does sessions, tools, PTY, and the filesystem. HEX renders that state and sends user actions back over HTTP, SSE, and WebSocket.
 
-Related docs: [README.md](./README.md), [API.md](./API.md), [SSE.md](./SSE.md), [projects.md](./projects.md), [window-arch.md](./window-arch.md), [prd-git-panel.md](./prd-git-panel.md), [tools/](./tools/). Agent working notes: [AGENTS.md](../AGENTS.md). OpenCode skills: [`.opencode/skills/`](../.opencode/skills/).
+Related docs: [README.md](./README.md), [API.md](./API.md), [SSE.md](./SSE.md), [projects.md](./projects.md), [window-arch.md](./window-arch.md), [prd-git-panel.md](./prd-git-panel.md). Agent working notes: [AGENTS.md](../AGENTS.md). OpenCode skills: [`.opencode/skills/`](../.opencode/skills/).
 
 ## Runtime pieces
 
@@ -28,7 +28,7 @@ HEX is **path-first**:
 - `activeDirectory` — path of the selected session, if any.
 - `workingDirectory` — `focusedDirectory || activeDirectory`. Files, git, compose, and PTY use this.
 
-Selecting a path does not create a session. If the current session is not on that path, the session id is cleared and the thread is empty. Send may create a session in `workingDirectory` at that moment.
+Selecting a path does not create a session. **New session** (top bar / Cmd+J) also does not call `POST /session` — it clears `selectedSessionId` and stays on the path. With no session selected, the main column shows the welcome composer (“Ready to dive in?”). Send creates a session in `workingDirectory` at that moment, then Recents can list it.
 
 OpenCode scopes almost every call with `?directory=` (or `x-opencode-directory`). Each distinct directory can become an OpenCode **instance** (watchers, LSP). Creating instances is expensive and leaks EventTarget listeners in current OpenCode builds, so HEX must not probe dozens of guessed paths at startup.
 
@@ -55,7 +55,9 @@ Remembered paths in `localStorage` (`instanceDirectories`, cap 80) are **lazy-sy
 
 ## Session graph
 
-The worker builds the tree described in [projects.md](./projects.md): worktree → sandbox → sessions. The tab keeps a reactive copy via `useServerState`. Top bar, Recent, and bookmarks read that graph. They do not each re-fetch `/session`.
+The worker builds the tree described in [projects.md](./projects.md): worktree → sandbox → sessions. The tab keeps a reactive copy via `useServerState`. Top bar (`>` session list), Recents, and bookmarks read that graph. They do not each re-fetch `/session`.
+
+Recents (side panel): **Pinned** first, then Today / 7 days / 30 days / Older. Cap: all pinned + 40 unpinned. A session appears there after it exists on the server (typically after the first send).
 
 ## Files and git
 
@@ -69,7 +71,7 @@ OpenCode `GET /file` returns HTTP 500 for missing paths. Pickers must list an ex
 
 `useMessages` applies history plus SSE deltas. Assistant markdown is highlighted in `render-worker`. Initial thread paint is gated by `useInitialRenderTracking` (5s safety timeout). File-index updates must not force a full markdown re-render (`useAssistantPreRenderer` does not watch `files`).
 
-Tool cards, diffs, and file viewers use floating windows (`docs/window-arch.md`).
+Tool cards, diffs, and file viewers use floating windows ([window-arch.md](./window-arch.md)). Tool titles/windows are routed from `app/utils/toolRenderers.ts` into `app/components/ToolWindow/` (Shell, Grep, Glob, Web, Subagent, Reasoning, Permission, Question). That code is the source of truth for tool UI — HEX does not keep a separate tools encyclopedia.
 
 ## Event flow
 

@@ -10,6 +10,8 @@
         :aria-label="tabTitle(tab)"
         :title="tabTitle(tab)"
         @click="emit('select-tab', tab.id)"
+        @pointerup="blurMouseTarget"
+
       >
         <Icon :icon="tab.icon" :width="21" :height="21" />
         <span
@@ -25,6 +27,8 @@
         aria-label="Open shell"
         title="Open shell"
         @click="emit('open-shell')"
+        @pointerup="blurMouseTarget"
+
       >
         <Icon icon="lucide:terminal" :width="21" :height="21" />
       </button>
@@ -37,9 +41,11 @@
           <button
             type="button"
             class="activity-button activity-utility-button"
+            :class="{ 'is-open': tipsMenuOpen }"
             aria-label="Tips"
             title="Tips"
             @click.stop="tipsMenuOpen = !tipsMenuOpen"
+            @pointerup="blurMouseTarget"
           >
             <Icon icon="lucide:lightbulb" :width="21" :height="21" />
           </button>
@@ -87,6 +93,8 @@
         aria-label="Settings"
         title="Settings"
         @click="emit('open-settings')"
+        @pointerup="blurMouseTarget"
+
       >
         <Icon icon="lucide:settings" :width="21" :height="21" />
       </button>
@@ -241,6 +249,13 @@ function tabTitle(tab: { id: SidePanelTab; label: string }) {
   }
   return tab.label;
 }
+
+function blurMouseTarget(event: PointerEvent) {
+  if (event.pointerType !== 'mouse') return;
+  const target = event.currentTarget;
+  if (target instanceof HTMLElement) target.blur();
+}
+
 const tipsMenuOpen = ref(false);
 const isMac =
   typeof navigator !== 'undefined' &&
@@ -406,15 +421,20 @@ const {
 }
 
 .activity-button:hover,
+.activity-button.is-open,
 .activity-bar :deep(.ui-dropdown.is-open) .activity-button {
   background: rgba(255, 255, 255, 0.08);
   color: #d7d7d7;
 }
 
-.activity-button:focus,
+.activity-button:focus {
+  outline: none;
+}
+
 .activity-button:focus-visible {
   outline: none;
   background: rgba(255, 255, 255, 0.08);
+  color: #d7d7d7;
 }
 
 .activity-button.is-active {
@@ -498,4 +518,13 @@ const {
     flex-basis: 34px;
   }
 }
+
+html[data-theme='light'] .activity-button:hover,
+html[data-theme='light'] .activity-button:focus-visible,
+html[data-theme='light'] .activity-button.is-open,
+html[data-theme='light'] .activity-bar :deep(.ui-dropdown.is-open) .activity-button {
+  background: #ececec;
+  color: #2f2f2f;
+}
+
 </style>

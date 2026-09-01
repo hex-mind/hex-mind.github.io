@@ -1,18 +1,10 @@
-# PRD: Git panel — on-demand status
+# Git panel
 
-Status: **shipped for fetch + Staged/Changes split**. Fine-tuning (ahead/behind, stage/unstage UI) is later.
+Shipped: on-demand fetch + Staged / Changes split. Later: ahead/behind, stage/unstage UI.
 
-## Problem
+## Fetch
 
-The Git side panel has Staged and Changes tabs, plus `+/-` totals that open a snapshot diff. `GET /file/status` cannot drive those tabs:
-
-- It does not expose index vs worktree (porcelain `XY`).
-- Staged-only files and many untracked files never appear.
-- Pulling it on every directory change also wasted work the user never looked at.
-
-## Decision
-
-**Pull git status only while the Git tab is in use**, via one-shot PTY porcelain (not `/file/status`):
+Pull git status **only while the Git tab is in use**, via one-shot PTY porcelain — not `GET /file/status`:
 
 ```text
 git status --porcelain=v1
@@ -29,7 +21,7 @@ git diff --cached --numstat
 | Files tab refresh | No (file tree only) |
 | User git command from the Git header | Yes |
 
-Never run this on splash or as part of Files listing. Branch picker stays a one-shot PTY **when the menu opens**.
+Never run this on splash or as part of Files listing. Branch picker: one-shot PTY `git branch` **when the menu opens**. Scripts/parsers: `app/utils/gitSnapshots.ts`. Listing: `app/composables/useFileTree.ts`.
 
 ## Staged vs Changes
 
