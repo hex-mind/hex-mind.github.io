@@ -377,7 +377,7 @@ function unquoteGitPath(value: string): string {
 
 function parsePorcelainLine(line: string): GitFileStatus | null {
   if (line.length < 4) return null;
-  if (line.startsWith('!!')) return null;
+  if (line.startsWith('!!') || line.startsWith('##')) return null;
   const index = gitCodeFromPorcelain(line[0] ?? '');
   const worktree = gitCodeFromPorcelain(line[1] ?? '');
   let rest = line.slice(3);
@@ -421,13 +421,18 @@ function parseGitStatusOutput(output: string): {
   diffStats: GitDiffStats;
 } {
   const normalized = output.replace(/\r/g, '');
-  const take = (name: string) => {
-    const start = normalized.indexOf(`##${name}\n`);
-    if (start < 0) return '';
-    const from = start + name.length + 3;
-    const next = normalized.indexOf('\n##', from);
-    return (next < 0 ? normalized.slice(from) : normalized.slice(from, next)).replace(/\n+$/, '');
-  };
+  const sections: Record<string, string[]> = {};
+  let current: string | undefined;
+  for (const line of normalized.split('\n')) {
+    const header = /^##([A-Z][A-Z0-9]*)$/.exec(line);
+    if (header?.[1]) {
+      current = header[1];
+      if (!sections[current]) sections[current] = [];
+      continue;
+    }
+    if (current) sections[current].push(line);
+  }
+  const take = (name: string) => (sections[name] ?? []).join('\n').replace(/\n+$/, '');
   const gitMark = take('GIT').split('\n')[0]?.trim();
   const inside = gitMark ? gitMark === '1' : Boolean(take('BRANCH') || take('STATUS'));
   const branch = normalizeGitBranchName(take('BRANCH').split('\n')[0] ?? '');

@@ -612,20 +612,12 @@ function normalizePath(value: string) {
     .replace(/\/$/, '');
 }
 
-function needsPseudoNode(status: GitFileStatus) {
-  if (status.index === '?' || status.worktree === '?') return true;
-  if (status.index === 'A' || status.index === 'D') return true;
-  if (status.worktree === 'A' || status.worktree === 'D') return true;
-  return false;
-}
-
 function withPseudoNodes(
   nodes: TreeNode[],
   statusByPath: Record<string, GitFileStatus>,
 ): TreeNode[] {
   const result = cloneNodes(nodes);
   const missingPaths = Object.values(statusByPath)
-    .filter((status) => needsPseudoNode(status))
     .map((status) => normalizePath(status.path))
     .filter((path) => path.length > 0)
     .sort((a, b) => a.split('/').length - b.split('/').length);

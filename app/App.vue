@@ -365,6 +365,7 @@ import type { SessionTarget } from './types/session';
 import { pickLocalDirectory } from './utils/pickLocalDirectory';
 import { rememberInstanceDirectories } from './utils/instanceDirectories';
 import { formatSessionGraphDump } from './utils/debugDump';
+import { waitForState } from './utils/waitForState';
 import { toUint8ArrayFromBase64 } from './utils/gitSnapshots';
 import type { WorktreeSnapshotMode } from './utils/gitSnapshots';
 import {
@@ -3399,6 +3400,36 @@ function focusInput() {
   nextTick(() => inputPanelRef.value?.focus());
 }
 
+async function abortSessionTree(sessionId: string) {
+  const directory = activeDirectory.value.trim();
+  const extraIds =
+    sessionId === selectedSessionId.value ? busyDescendantSessionIds.value : [];
+  await Promise.all([
+    opencodeApi.abortSession(sessionId, directory || undefined),
+    ...extraIds.map((sid) =>
+      opencodeApi.abortSession(sid, directory || undefined).catch(() => {}),
+    ),
+  ]);
+}
+
+function sessionTreeIsBusy(sessionId: string) {
+  const own = getSessionStatus(sessionId);
+  if (own === 'busy' || own === 'retry') return true;
+  return sessionId === selectedSessionId.value && busyDescendantSessionIds.value.length > 0;
+}
+
+async function waitUntilSessionIdle(sessionId: string) {
+  await waitForState(
+    () =>
+      [
+        getSessionStatus(sessionId),
+        sessionId === selectedSessionId.value ? busyDescendantSessionIds.value.length : 0,
+      ] as const,
+    ([own, descendantCount]) => own !== 'busy' && own !== 'retry' && descendantCount === 0,
+    15_000,
+  );
+}
+
 async function abortSession() {
   if (!ensureConnectionReady('Stopping')) return;
   const sessionId = selectedSessionId.value;
@@ -3406,15 +3437,7 @@ async function abortSession() {
   isAborting.value = true;
   sendStatus.value = 'Stopping...';
   try {
-    const directory = activeDirectory.value.trim();
-    const busyDescendants = busyDescendantSessionIds.value;
-    const abortPromises = [
-      opencodeApi.abortSession(sessionId, directory || undefined),
-      ...busyDescendants.map((sid) =>
-        opencodeApi.abortSession(sid, directory || undefined).catch(() => {}),
-      ),
-    ];
-    await Promise.all(abortPromises);
+    await abortSessionTree(sessionId);
     sendStatus.value = 'Stopped.';
   } catch (error) {
     sendStatus.value = `Stop failed: ${toErrorMessage(error)}`;
@@ -4041,6 +4064,11 @@ async function handleEditMessage(payload: {
   const directory = activeDirectory.value.trim();
   sessionError.value = '';
   try {
+    if (sessionTreeIsBusy(payload.sessionId)) {
+      sendStatus.value = 'Stopping...';
+      await abortSessionTree(payload.sessionId);
+      await waitUntilSessionIdle(payload.sessionId);
+    }
     sendStatus.value = 'Updating prompt...';
     await openCodeApi.revertSession({
       sessionId: payload.sessionId,

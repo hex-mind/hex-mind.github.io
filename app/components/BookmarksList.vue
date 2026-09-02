@@ -46,9 +46,9 @@
                 <span v-else class="bookmark-item-title-row">
                   <span class="bookmark-item-title">{{ session.title }}</span>
                   <StatusDot
-                    v-if="session.status === 'busy'"
+                    v-if="session.status === 'busy' || session.status === 'retry'"
                     class="bookmark-item-status"
-                    status="busy"
+                    :status="session.status"
                   />
                   <span
                     v-else-if="session.hasNotification"
