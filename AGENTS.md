@@ -21,6 +21,7 @@ Disagree briefly, then implement the sounder path unless the user explicitly ove
 
 - The user runs OpenCode (`opencode serve`, default `http://127.0.0.1:4096`). **Do not start, restart, or occupy port 4096** unless they explicitly ask.
 - Local Vite is typically `http://localhost:5173`. Prefer `localhost`, not `127.0.0.1`, when opening the app in a browser.
+- **Ports you bind are yours to release.** If this agent started Vite (or anything else) on 5173 — or any other port — stop that process when verification is done. Do not leave it listening. Do not kill a server the user already had running unless they asked.
 - Hosted UI: `https://hex-mind.github.io` talking to the same local OpenCode. CORS must allow that origin.
 - Chrome may block loopback access from HTTPS; see README.
 
@@ -81,6 +82,6 @@ Still in `App.vue` (extract later if you touch that area): PTY/shell windows, co
 
 - Match existing Vue/TS style. Small diffs. No drive-by refactors.
 - Prefer `app/utils/opencode.ts` for HTTP; do not scatter raw `fetch` to OpenCode.
-- After UI/layout/behavior changes, verify in the browser when tools are available (`localhost`, not `127.0.0.1`).
+- After UI/layout/behavior changes, verify in the browser when tools are available (`localhost`, not `127.0.0.1`). If this agent started the Vite (or other) server for that check, **stop it before finishing** so 5173 is free. Never leave a leftover listener.
 - Commits and PRs only when the user asks. PR titles in English (`type: summary`).
 - Do not update git config, skip hooks, or force-push unless the user asks.

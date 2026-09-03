@@ -10,13 +10,6 @@
           @touchmove="$emit('touchmove')"
         >
           <div ref="contentEl" class="output-panel-content" @click="handleContentClick">
-            <div
-              v-if="initialRenderTrackingActive"
-              class="absolute w-full h-full m-auto flex justify-center items-center"
-            >
-              <div class="app-loading-spinner" aria-hidden="true"></div>
-            </div>
-
             <template v-for="root in renderedRoots" :key="root.id">
               <ThreadBlock
                 v-show="!initialRenderTrackingActive"
@@ -60,6 +53,10 @@
 
             <FileRefPopup ref="fileRefPopupRef" :files="files" @open-file="handlePopupOpenFile" />
           </div>
+        </div>
+
+        <div v-if="initialRenderTrackingActive" class="output-panel-loading" aria-hidden="true">
+          <div class="app-loading-spinner"></div>
         </div>
 
         <button
@@ -411,6 +408,20 @@ defineExpose({ panelEl, scrollToThread });
   margin-inline: auto;
   padding: 4px 16px var(--composer-dock-height, 10rem);
   box-sizing: border-box;
+}
+
+.output-panel-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.output-panel-loading .app-loading-spinner {
+  margin: 0;
 }
 
 .output-panel-content :deep(.markdown-host code.file-ref) {

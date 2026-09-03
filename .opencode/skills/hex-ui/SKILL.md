@@ -31,3 +31,5 @@ Read `AGENTS.md` and `docs/architecture.md` first.
 ## Verify
 
 After UI/layout/behavior changes, exercise the flow in the browser at `http://localhost:5173` (not `127.0.0.1`). Do not start or occupy OpenCode port 4096.
+
+If this agent started Vite (or any other listener) for the check, **stop that process when done**. Do not leave 5173 — or any port this agent bound — occupied. Do not kill a server the user already had running.

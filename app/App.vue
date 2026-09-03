@@ -534,6 +534,8 @@ const appBodyEl = ref<HTMLDivElement | null>(null);
 const sidePanelAreaEl = ref<HTMLDivElement | null>(null);
 let primaryHistoryRequestId = 0;
 const composerDraftRevisionByContext = new Map<string, number>();
+/** Keep welcome composer agent/model when POST /session selects the new id. */
+let preserveComposerOnNextSessionSelect = false;
 const composerDraftTabId =
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -2131,7 +2133,13 @@ async function createSessionInDirectory(directory: string) {
   rememberInstanceDirectories([directory]);
   const session = await openCodeApi.createSession(directory);
   if (!session?.id) return undefined;
-  await switchSessionSelection(session.projectID, session.id);
+  preserveComposerOnNextSessionSelect = true;
+  try {
+    await switchSessionSelection(session.projectID, session.id);
+  } catch (error) {
+    preserveComposerOnNextSessionSelect = false;
+    throw error;
+  }
   return session;
 }
 
@@ -3204,16 +3212,21 @@ function runDebugCommand(args: string): { ok: boolean; message: string } {
   return { ok: false, message: `Unknown debug subcommand: ${sub}. Type /debug help for a list.` };
 }
 
-async function sendCommand(sessionId: string, command: CommandInfo, commandArgs: string) {
+async function sendCommand(
+  sessionId: string,
+  command: CommandInfo,
+  commandArgs: string,
+  composer?: { agent: string; model: string; variant: string | undefined },
+) {
   if (!ensureConnectionReady('Sending commands')) return;
   const directory = activeDirectory.value.trim();
   await opencodeApi.sendCommand(sessionId, {
     directory: directory || undefined,
     command: command.name,
     arguments: commandArgs,
-    agent: command.agent || selectedMode.value,
-    model: command.model || selectedModel.value,
-    variant: selectedThinking.value,
+    agent: command.agent || composer?.agent || selectedMode.value,
+    model: command.model || composer?.model || selectedModel.value,
+    variant: composer?.variant ?? selectedThinking.value,
   });
 }
 
@@ -3221,8 +3234,12 @@ async function sendMessage() {
   if (!ensureConnectionReady('Sending')) return;
   if (!canSend.value) return;
   const text = messageInput.value.trim();
+  const pendingAttachments = attachments.value.slice();
+  const sendAgent = selectedMode.value;
+  const sendModel = selectedModel.value;
+  const sendVariant = selectedThinking.value;
   const hasText = text.length > 0;
-  const hasAttachments = attachments.value.length > 0;
+  const hasAttachments = pendingAttachments.length > 0;
   if (!hasText && !hasAttachments) return;
   let sessionId = selectedSessionId.value;
   if (!sessionId) {
@@ -3240,8 +3257,8 @@ async function sendMessage() {
   }
   const slash = hasText ? parseSlashCommand(text) : null;
   const commandMatch = slash ? findCommandByName(slash.name) : null;
-  const selectedInfo = modelOptions.value.find((model) => model.id === selectedModel.value);
-  const selectedModelIDs = parseProviderModelKey(selectedModel.value);
+  const selectedInfo = modelOptions.value.find((model) => model.id === sendModel);
+  const selectedModelIDs = parseProviderModelKey(sendModel);
   const providerID = selectedInfo?.providerID ?? (selectedModelIDs.providerID || undefined);
   const modelID = selectedInfo?.modelID ?? (selectedModelIDs.modelID || undefined);
   messageInput.value = '';
@@ -3262,7 +3279,11 @@ async function sendMessage() {
       return;
     }
     if (slash && commandMatch) {
-      await sendCommand(sessionId, commandMatch, slash.arguments ?? '');
+      await sendCommand(sessionId, commandMatch, slash.arguments ?? '', {
+        agent: sendAgent,
+        model: sendModel,
+        variant: sendVariant,
+      });
       sendStatus.value = 'Sent.';
       clearComposerDraftForCurrentContext();
       return;
@@ -3273,7 +3294,7 @@ async function sendMessage() {
     if (hasText) parts.push({ type: 'text', text });
     if (hasAttachments) {
       parts.push(
-        ...attachments.value.map((item) => ({
+        ...pendingAttachments.map((item) => ({
           type: 'file',
           mime: item.mime,
           url: item.dataUrl,
@@ -3283,12 +3304,12 @@ async function sendMessage() {
     }
     await opencodeApi.sendPromptAsync(sessionId, {
       directory,
-      agent: selectedMode.value,
+      agent: sendAgent,
       model: {
         providerID,
         modelID: modelID || '',
       },
-      variant: selectedThinking.value,
+      variant: sendVariant,
       parts,
     });
     sendStatus.value = 'Sent.';
@@ -3511,6 +3532,12 @@ watch(
   (contextKey, previousKey) => {
     const prevContextKey = previousKey ?? '';
     if (contextKey === prevContextKey) return;
+    if (preserveComposerOnNextSessionSelect) {
+      preserveComposerOnNextSessionSelect = false;
+      persistComposerDraftForCurrentContext();
+      nextTick(() => syncFloatingExtent());
+      return;
+    }
     clearComposerInputState();
     nextTick(() => {
       inputPanelRef.value?.reset();
