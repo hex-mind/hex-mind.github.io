@@ -3,7 +3,6 @@
     class="app"
     :class="{
       'is-side-resizing': !!sidePanelResizeState,
-      'is-input-resizing': !!inputPanelResizeState,
       'todo-collapsed': sidePanelCollapsed,
     }"
     :style="bodyPanelStyle"
@@ -84,7 +83,6 @@
           @pointerdown="startSidePanelResize"
         ></div>
         <div
-          ref="appMainColumnEl"
           class="app-main-column"
           :class="{
             'is-composer-hidden': inputPanelCollapsed && !isWelcomeComposer,
@@ -131,12 +129,6 @@
               </div>
             </div>
           </main>
-          <div
-            v-if="!inputPanelCollapsed && !isWelcomeComposer"
-            class="panel-sash panel-sash-horizontal"
-            :class="{ 'is-dragging': !!inputPanelResizeState }"
-            @pointerdown="startInputPanelResize"
-          ></div>
           <div
             v-if="!inputPanelCollapsed || isWelcomeComposer"
             class="app-input-dock"
@@ -511,23 +503,16 @@ const sidePanelResizeState = ref<{
   minWidth: number;
   maxWidth: number;
 } | null>(null);
-const inputPanelResizeState = ref<{
-  startY: number;
-  startHeight: number;
-  minHeight: number;
-  maxHeight: number;
-} | null>(null);
 const sidePanelWidth = ref<number | null>(null);
-const inputPanelHeight = ref<number | null>(null);
-const appMainColumnEl = ref<HTMLDivElement | null>(null);
+const inputDockMeasuredHeight = ref<number | null>(null);
 const PANEL_SASH_SIZE_PX = 4;
-const INPUT_PANEL_MIN_PX = 112;
 
 const bodyPanelStyle = computed(() => {
   const style: Record<string, string> = {};
   if (sidePanelWidth.value !== null) style['--todo-panel-width'] = `${sidePanelWidth.value}px`;
-  if (inputPanelHeight.value !== null)
-    style['--input-panel-height'] = `${inputPanelHeight.value}px`;
+  if (inputDockMeasuredHeight.value != null) {
+    style['--input-panel-height'] = `${inputDockMeasuredHeight.value}px`;
+  }
   return Object.keys(style).length > 0 ? style : undefined;
 });
 const appBodyEl = ref<HTMLDivElement | null>(null);
@@ -546,6 +531,7 @@ const shellExitWaiters = new Map<string, (exitCode: number) => void>();
 const ptyMetaDecoder = new TextDecoder();
 let floatingExtentResizeObserver: ResizeObserver | null = null;
 let floatingExtentObservedEl: HTMLDivElement | null = null;
+let floatingExtentObservedInput: HTMLElement | null = null;
 const notificationSessionOrder = ref<string[]>([]);
 const notificationPermissionRequested = ref(false);
 
@@ -1876,7 +1862,6 @@ function syncCanvasTermMetrics() {
 }
 
 function handleWindowResize() {
-  clampInputPanelHeightToBounds();
   syncCanvasTermMetrics();
   syncFloatingExtent();
   scheduleShellFitAll();
@@ -1886,6 +1871,10 @@ function syncFloatingExtent() {
   const canvas = toolWindowCanvasEl.value;
   const header = document.querySelector('.app-header') as HTMLElement | null;
   const input = inputEl.value;
+  if (input) {
+    const height = Math.round(input.getBoundingClientRect().height);
+    if (height > 0) inputDockMeasuredHeight.value = height;
+  }
   if (!canvas || !header) return;
   const headerRect = header.getBoundingClientRect();
   const headerBottom = headerRect.bottom;
@@ -1914,6 +1903,14 @@ function updateFloatingExtentObserver() {
     floatingExtentResizeObserver.observe(nextEl);
   }
   floatingExtentObservedEl = nextEl ?? null;
+  const nextInput = inputEl.value;
+  if (floatingExtentObservedInput && floatingExtentObservedInput !== nextInput) {
+    floatingExtentResizeObserver.unobserve(floatingExtentObservedInput);
+  }
+  if (nextInput && nextInput !== floatingExtentObservedInput) {
+    floatingExtentResizeObserver.observe(nextInput);
+  }
+  floatingExtentObservedInput = nextInput ?? null;
   if (nextEl) syncFloatingExtent();
 }
 
@@ -2049,39 +2046,6 @@ function startSidePanelResize(event: PointerEvent) {
   event.preventDefault();
 }
 
-function startInputPanelResize(event: PointerEvent) {
-  if (event.button !== 0) return;
-  const column = appMainColumnEl.value;
-  const input = inputEl.value;
-  if (!column || !input) return;
-  const columnRect = column.getBoundingClientRect();
-  const inputRect = input.getBoundingClientRect();
-  const minH = INPUT_PANEL_MIN_PX;
-  const outputMin = 120;
-  const maxH = Math.max(minH, columnRect.height - outputMin - PANEL_SASH_SIZE_PX);
-  inputPanelResizeState.value = {
-    startY: event.clientY,
-    startHeight: inputRect.height,
-    minHeight: minH,
-    maxHeight: maxH,
-  };
-  inputPanelHeight.value = inputRect.height;
-  (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
-  event.preventDefault();
-}
-
-function clampInputPanelHeightToBounds() {
-  if (inputPanelHeight.value === null) return;
-  const column = appMainColumnEl.value;
-  if (!column) return;
-  const outputMin = 120;
-  const maxH = Math.max(
-    INPUT_PANEL_MIN_PX,
-    column.getBoundingClientRect().height - outputMin - PANEL_SASH_SIZE_PX,
-  );
-  inputPanelHeight.value = clamp(inputPanelHeight.value, INPUT_PANEL_MIN_PX, maxH);
-}
-
 function handlePointerMove(event: PointerEvent) {
   if (sidePanelResizeState.value) {
     const { startX, startWidth, minWidth, maxWidth } = sidePanelResizeState.value;
@@ -2089,21 +2053,12 @@ function handlePointerMove(event: PointerEvent) {
     sidePanelWidth.value = clamp(startWidth + dx, minWidth, maxWidth);
     syncFloatingExtent();
     scheduleShellFitAll();
-    return;
-  }
-  if (inputPanelResizeState.value) {
-    const { startY, startHeight, minHeight, maxHeight } = inputPanelResizeState.value;
-    const dy = startY - event.clientY;
-    inputPanelHeight.value = clamp(startHeight + dy, minHeight, maxHeight);
-    syncFloatingExtent();
-    scheduleShellFitAll();
   }
 }
 
 function handlePointerUp() {
-  if (sidePanelResizeState.value || inputPanelResizeState.value) scheduleShellFitAll();
+  if (sidePanelResizeState.value) scheduleShellFitAll();
   sidePanelResizeState.value = null;
-  inputPanelResizeState.value = null;
 }
 
 function resolveProjectIdForDirectory(directory?: string) {
@@ -3476,6 +3431,13 @@ watch(
 );
 
 watch(
+  inputEl,
+  () => {
+    updateFloatingExtentObserver();
+  },
+);
+
+watch(
   sessions,
   () => {
     if (!bootstrapReady.value && !isBootstrapping.value) return;
@@ -4085,9 +4047,10 @@ async function handleEditMessage(payload: {
   text: string;
   model: string;
   agent: string;
+  attachments?: Array<{ filename: string; mime: string; dataUrl: string }>;
 }) {
   if (!ensureConnectionReady('Editing message')) return;
-  if (!payload.text.trim()) return;
+  if (!payload.text.trim() && !(payload.attachments && payload.attachments.length > 0)) return;
   const directory = activeDirectory.value.trim();
   sessionError.value = '';
   try {
@@ -4104,6 +4067,12 @@ async function handleEditMessage(payload: {
       directory: directory || undefined,
     });
     messageInput.value = payload.text;
+    attachments.value = (payload.attachments ?? []).map((item) => ({
+      id: generateAttachmentId(),
+      filename: item.filename,
+      mime: item.mime,
+      dataUrl: item.dataUrl,
+    }));
     if (payload.agent && payload.agent !== selectedMode.value) {
       handleSelectedModeUpdate(payload.agent);
     }
@@ -4627,6 +4596,7 @@ onBeforeUnmount(() => {
   floatingExtentResizeObserver?.disconnect();
   floatingExtentResizeObserver = null;
   floatingExtentObservedEl = null;
+  floatingExtentObservedInput = null;
   while (globalEventUnsubscribers.length > 0) {
     const dispose = globalEventUnsubscribers.pop();
     dispose?.();
@@ -4672,12 +4642,6 @@ onBeforeUnmount(() => {
 .app.is-side-resizing,
 .app.is-side-resizing * {
   cursor: ew-resize !important;
-  user-select: none !important;
-}
-
-.app.is-input-resizing,
-.app.is-input-resizing * {
-  cursor: ns-resize !important;
   user-select: none !important;
 }
 
@@ -4912,8 +4876,8 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: stretch;
   width: 100%;
-  height: var(--input-panel-height, var(--input-panel-default));
-  min-height: 112px;
+  height: auto;
+  min-height: var(--input-panel-default);
   max-height: calc(100% - 120px);
 }
 
@@ -4968,7 +4932,7 @@ onBeforeUnmount(() => {
   gap: 0;
   margin: var(--workbench-inset) 0 0;
   --composer-dock-height: calc(
-    16px + var(--panel-sash-size) + var(--input-panel-height, var(--input-panel-default))
+    16px + var(--input-panel-height, var(--input-panel-default))
   );
 }
 
@@ -4982,17 +4946,6 @@ onBeforeUnmount(() => {
   align-self: stretch;
   width: 100%;
   max-width: none;
-  min-width: 0;
-}
-
-.app-main-column > .panel-sash-horizontal {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(16px + var(--input-panel-height, var(--input-panel-default)));
-  margin-inline: auto;
-  z-index: 31;
-  width: min(var(--thread-max-width), calc(100% - 32px));
   min-width: 0;
 }
 
@@ -5034,18 +4987,6 @@ onBeforeUnmount(() => {
   bottom: 0;
   left: -3px;
   right: -3px;
-}
-
-.panel-sash-horizontal {
-  height: var(--panel-sash-size);
-  cursor: ns-resize;
-}
-
-.panel-sash-horizontal::after {
-  left: 0;
-  right: 0;
-  top: -3px;
-  bottom: -3px;
 }
 
 .panel-sash.is-dragging {

@@ -45,8 +45,10 @@
         ref="textareaRef"
         v-model="messageValue"
         class="input-textarea"
+        rows="3"
         :disabled="false"
         placeholder="Send a message..."
+        @input="syncTextareaHeight"
         @keydown="handleKeydown"
         @paste="handlePaste"
         @drop="handleDrop"
@@ -229,7 +231,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
@@ -303,6 +305,21 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const modelDropdownRef = ref<HTMLElement | null>(null);
 const acceptMime = 'image/png,image/jpeg,image/gif,image/webp';
+
+function textareaMaxHeightPx() {
+  return Math.round(Math.min(window.innerHeight * 0.4, 360));
+}
+
+function syncTextareaHeight() {
+  const el = textareaRef.value;
+  if (!el) return;
+  const max = textareaMaxHeightPx();
+  const min = Number.parseFloat(getComputedStyle(el).minHeight) || 0;
+  el.style.height = '0px';
+  const height = Math.min(Math.max(el.scrollHeight, min), max);
+  el.style.height = `${height}px`;
+  el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
+}
 
 const { enterToSend, suppressAutoWindows } = useSettings();
 
@@ -725,11 +742,19 @@ function thinkingValueStyle(key: unknown) {
 
 function focus() {
   textareaRef.value?.focus();
+  nextTick(syncTextareaHeight);
 }
 
 function reset() {
   historyOpen.value = false;
 }
+
+watch(
+  () => [props.messageInput, props.attachments.length] as const,
+  () => nextTick(syncTextareaHeight),
+);
+
+onMounted(() => nextTick(syncTextareaHeight));
 
 defineExpose({ focus, reset });
 </script>
@@ -866,13 +891,16 @@ defineExpose({ focus, reset });
 
 .input-textarea {
   resize: none;
-  min-height: 1em;
+  min-height: calc(4.5em + 18px);
+  max-height: min(40vh, 360px);
   font-size: 16px;
   line-height: 1.5;
   display: block;
   width: 100%;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   height: auto;
+  overflow-x: hidden;
+  overflow-y: hidden;
   position: relative;
   z-index: 1;
   border: none;

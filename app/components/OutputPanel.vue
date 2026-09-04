@@ -140,6 +140,7 @@ const emit = defineEmits<{
       text: string;
       model: string;
       agent: string;
+      attachments?: Array<{ filename: string; mime: string; dataUrl: string }>;
     },
   ): void;
   (event: 'revert-message', payload: { sessionId: string; messageId: string }): void;

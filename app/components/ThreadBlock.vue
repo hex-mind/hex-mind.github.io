@@ -23,14 +23,48 @@
           aria-label="Edit prompt"
           @input="syncEditTextareaHeight"
           @keydown="handleEditKeydown(root, $event)"
+          @paste="handleEditPaste"
+          @drop="handleEditDrop"
+          @dragover.prevent
+          @dragenter.prevent
         ></textarea>
+        <input
+          ref="editFileInputRef"
+          class="ib-user-editor-file"
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          multiple
+          @change="handleEditFileChange"
+        />
+        <div v-if="editAttachments.length > 0" class="attachment-list">
+          <div v-for="item in editAttachments" :key="item.id" class="attachment-item">
+            <img
+              v-if="item.mime.startsWith('image/')"
+              class="attachment-thumb clickable"
+              :src="item.dataUrl"
+              :alt="item.filename"
+              @click="emit('open-image', { url: item.dataUrl, filename: item.filename })"
+            />
+            <div class="attachment-meta">
+              <div class="attachment-name">{{ item.filename }}</div>
+              <div class="attachment-type">{{ item.mime }}</div>
+            </div>
+            <button
+              type="button"
+              class="attachment-remove"
+              @click="removeEditAttachment(item.id)"
+            >
+              <Icon icon="lucide:x" :width="12" :height="12" />
+            </button>
+          </div>
+        </div>
         <div class="ib-user-editor-footer">
           <div class="ib-user-editor-selects">
             <AgentPicker
               v-model="editMode"
               class="ib-user-editor-agent"
               :options="agentOptions"
-              placement="bottom"
+              placement="top"
               title="Agent (Tab)"
               :resolve-agent-color="resolveAgentColor"
             />
@@ -38,18 +72,27 @@
               v-model="editModel"
               class="ib-user-editor-picker"
               :options="modelOptions"
-              placement="bottom"
+              placement="top"
               title="Model"
             />
           </div>
           <div class="ib-user-editor-actions">
+            <button
+              type="button"
+              class="ib-user-editor-button attach"
+              :disabled="!editCanAttach"
+              title="Attach"
+              @click="triggerEditFileInput"
+            >
+              <Icon icon="lucide:paperclip" :width="14" :height="14" />
+            </button>
             <button type="button" class="ib-user-editor-button cancel" @click="cancelEdit">
               Cancel
             </button>
             <button
               type="button"
               class="ib-user-editor-button send"
-              :disabled="!editText.trim()"
+              :disabled="!canSubmitEdit"
               :title="enterToSend ? 'Enter to send' : 'Ctrl+Enter to send'"
               @click="submitEdit(root)"
             >
@@ -203,6 +246,7 @@ const props = defineProps<{
     displayName: string;
     providerID?: string;
     providerLabel?: string;
+    attachmentCapable?: boolean;
   }>;
   selectedModel: string;
   agentOptions: AgentOption[];
@@ -233,6 +277,7 @@ const emit = defineEmits<{
       text: string;
       model: string;
       agent: string;
+      attachments?: Array<{ filename: string; mime: string; dataUrl: string }>;
     },
   ): void;
   (event: 'revert-message', payload: { sessionId: string; messageId: string }): void;
@@ -251,7 +296,12 @@ const isEditing = ref(false);
 const editText = ref('');
 const editModel = ref('');
 const editMode = ref('');
+const editAttachments = ref<Array<{ id: string; filename: string; mime: string; dataUrl: string }>>(
+  [],
+);
 const editTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const editFileInputRef = ref<HTMLInputElement | null>(null);
+const EDIT_IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 let copiedResetTimer: number | undefined;
 let questionCopiedResetTimer: number | undefined;
 
@@ -506,8 +556,101 @@ async function confirmRevert(root: MessageInfo) {
 function syncEditTextareaHeight() {
   const textarea = editTextareaRef.value;
   if (!textarea) return;
-  textarea.style.height = 'auto';
+  textarea.style.height = '0px';
   textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
+const editCanAttach = computed(() => {
+  const selected = props.modelOptions.find((model) => model.id === editModel.value);
+  return selected?.attachmentCapable !== false;
+});
+
+const canSubmitEdit = computed(
+  () => editText.value.trim().length > 0 || editAttachments.value.length > 0,
+);
+
+function createEditAttachmentId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `att-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function readEditFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('File read failed.'));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === 'string') resolve(result);
+      else reject(new Error('File read failed.'));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addEditAttachments(files: File[]) {
+  const accepted = files.filter((file) => {
+    const mime = (file.type || '').toLowerCase();
+    if (EDIT_IMAGE_MIMES.has(mime) || mime.startsWith('image/')) return true;
+    return /\.(png|jpe?g|gif|webp)$/i.test(file.name || '');
+  });
+  if (accepted.length === 0) return;
+  const next = await Promise.all(
+    accepted.map(async (file) => {
+      const buffer = await file.arrayBuffer();
+      const copy = new File([buffer], file.name || 'image', {
+        type: file.type || 'application/octet-stream',
+      });
+      return {
+        id: createEditAttachmentId(),
+        filename: copy.name,
+        mime: copy.type,
+        dataUrl: await readEditFileAsDataUrl(copy),
+      };
+    }),
+  );
+  editAttachments.value = [...editAttachments.value, ...next];
+}
+
+function removeEditAttachment(id: string) {
+  editAttachments.value = editAttachments.value.filter((item) => item.id !== id);
+}
+
+function triggerEditFileInput() {
+  if (!editCanAttach.value) return;
+  editFileInputRef.value?.click();
+}
+
+async function handleEditFileChange(event: Event) {
+  const input = event.target as HTMLInputElement | null;
+  const files = input?.files ? Array.from(input.files) : [];
+  try {
+    if (files.length > 0) await addEditAttachments(files);
+  } finally {
+    if (input) input.value = '';
+  }
+}
+
+function handleEditPaste(event: ClipboardEvent) {
+  const list = event.clipboardData?.items;
+  if (!list) return;
+  const files: File[] = [];
+  for (const item of Array.from(list)) {
+    if (item.kind !== 'file') continue;
+    const file = item.getAsFile();
+    if (!file) continue;
+    const mime = file.type || item.type || '';
+    files.push(mime && mime !== file.type ? new File([file], file.name || 'image', { type: mime }) : file);
+  }
+  if (files.length === 0) return;
+  event.preventDefault();
+  void addEditAttachments(files);
+}
+
+function handleEditDrop(event: DragEvent) {
+  const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
+  if (files.length === 0) return;
+  event.preventDefault();
+  void addEditAttachments(files);
 }
 
 watch(editText, () => {
@@ -557,6 +700,7 @@ function handleEditKeydown(root: MessageInfo, event: KeyboardEvent) {
     !event.altKey
   ) {
     if (enterToSend.value) {
+      if (!canSubmitEdit.value) return;
       event.preventDefault();
       submitEdit(root);
       return;
@@ -572,6 +716,12 @@ function startEdit(root: MessageInfo) {
   editText.value = getMessageContent(root);
   editModel.value = props.selectedModel;
   editMode.value = resolveEditMode(root);
+  editAttachments.value = getMessageAttachments(root).map((item) => ({
+    id: item.id,
+    filename: item.filename,
+    mime: item.mime,
+    dataUrl: item.url,
+  }));
   isEditing.value = true;
   nextTick(() => {
     const textarea = editTextareaRef.value;
@@ -586,23 +736,30 @@ function cancelEdit() {
   editText.value = '';
   editModel.value = '';
   editMode.value = '';
+  editAttachments.value = [];
 }
 
 function submitEdit(root: MessageInfo) {
   if (root.role !== 'user' || !root.sessionID || !root.id) return;
   const text = editText.value.trim();
-  if (!text) return;
+  if (!text && editAttachments.value.length === 0) return;
   emit('edit-message', {
     sessionId: root.sessionID,
     messageId: root.id,
     text,
     model: editModel.value || props.selectedModel,
     agent: editMode.value || props.selectedMode,
+    attachments: editAttachments.value.map((item) => ({
+      filename: item.filename,
+      mime: item.mime,
+      dataUrl: item.dataUrl,
+    })),
   });
   isEditing.value = false;
   editText.value = '';
   editModel.value = '';
   editMode.value = '';
+  editAttachments.value = [];
 }
 
 async function copyQuestion(root: MessageInfo) {
@@ -846,6 +1003,92 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 .ib-user-editor-button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
+}
+
+.ib-user-editor-file {
+  display: none;
+}
+
+.ib-user-editor .attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 0 0;
+  border-top: 1px solid #2b2b2b;
+  box-sizing: border-box;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.ib-user-editor .attachment-item {
+  display: flex;
+  align-items: center;
+  flex: 0 1 250px;
+  max-width: 250px;
+  min-width: 0;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #2b2b2b;
+  background: #181818;
+  box-sizing: border-box;
+}
+
+.ib-user-editor .attachment-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid #2b2b2b;
+  object-fit: cover;
+  background: #1f1f1f;
+}
+
+.ib-user-editor .attachment-thumb.clickable {
+  cursor: pointer;
+}
+
+.ib-user-editor .attachment-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ib-user-editor .attachment-name {
+  font-size: 12px;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ib-user-editor .attachment-type {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.ib-user-editor .attachment-remove {
+  background: #252526;
+  color: #cccccc;
+  border: 1px solid #2b2b2b;
+  border-radius: 6px;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ib-user-editor-button.attach {
+  min-width: 32px;
+  padding: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ib-user-editor-button.send {
