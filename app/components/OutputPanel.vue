@@ -38,7 +38,7 @@
             </template>
 
             <div v-if="sessionRevert" class="session-revert-banner">
-              <span>Later messages are hidden.</span>
+              <span>This message and later ones are hidden.</span>
               <button type="button" @click="emit('undo-revert')">Undo</button>
             </div>
 

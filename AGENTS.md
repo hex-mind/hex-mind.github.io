@@ -76,7 +76,7 @@ Startup must stay cheap. Do not put these back on the splash critical path:
 - Git snapshot scripts/parsers → `gitSnapshots.ts`
 - Isolated UI state → a composable (`use*.ts`) or a child component
 
-Still in `App.vue` (extract later if you touch that area): PTY/shell windows, composer drafts, panel sashes, slash/debug commands, tool-window routing.
+Still in `App.vue` (extract later if you touch that area): composer send/slash/debug, panel sashes, and tool-window routing.
 
 ## Implementation habits
 

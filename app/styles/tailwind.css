@@ -238,6 +238,56 @@ html[data-theme='light'] .todo-group {
   border-color: #ececec !important;
 }
 
+html[data-theme='light'] .todo-group-header {
+  border-bottom-color: #ececec !important;
+}
+
+html[data-theme='light'] .todo-badge {
+  color: #1d4ed8 !important;
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+
+html[data-theme='light'] .todo-status {
+  color: #6b7280 !important;
+}
+
+html[data-theme='light'] .todo-item.is-completed .todo-status {
+  color: #15803d !important;
+}
+
+html[data-theme='light'] .todo-item.is-in_progress .todo-status {
+  color: #b45309 !important;
+}
+
+html[data-theme='light'] .todo-item.is-cancelled .todo-status {
+  color: #dc2626 !important;
+}
+
+html[data-theme='light'] .todo-priority {
+  color: #4b5563 !important;
+  border-color: #d1d5db !important;
+  background: #f9fafb !important;
+}
+
+html[data-theme='light'] .todo-priority.is-high {
+  color: #b91c1c !important;
+  border-color: #fecaca !important;
+  background: #fef2f2 !important;
+}
+
+html[data-theme='light'] .todo-priority.is-medium {
+  color: #b45309 !important;
+  border-color: #fde68a !important;
+  background: #fffbeb !important;
+}
+
+html[data-theme='light'] .todo-priority.is-low {
+  color: #047857 !important;
+  border-color: #a7f3d0 !important;
+  background: #ecfdf5 !important;
+}
+
 html[data-theme='light'] .thread-block {
   background: transparent !important;
   border-color: transparent !important;
@@ -1167,12 +1217,26 @@ html[data-theme='light'] .ib-target-separator {
   color: #6b7280 !important;
 }
 
-html[data-theme='light'] .agent-dropdown-name.is-build {
-  color: #2563eb !important;
+html[data-theme='light'] .agent-value-name.is-build,
+html[data-theme='light'] .agent-dropdown-name.is-build,
+html[data-theme='light'] .ib-target-agent.is-build,
+html[data-theme='light'] .history-target-agent.is-build {
+  color: #1d4ed8 !important;
 }
 
-html[data-theme='light'] .agent-dropdown-name.is-plan {
+html[data-theme='light'] .agent-value-name.is-plan,
+html[data-theme='light'] .agent-dropdown-name.is-plan,
+html[data-theme='light'] .ib-target-agent.is-plan,
+html[data-theme='light'] .history-target-agent.is-plan {
   color: #b45309 !important;
+}
+
+html[data-theme='light'] .ib-target-variant {
+  color: #b45309 !important;
+}
+
+html[data-theme='light'] .command-icon {
+  color: #0f766e !important;
 }
 
 html[data-theme='light'] :is(.attachment-item, .history-popup .ui-dropdown-item) {
@@ -1260,9 +1324,51 @@ html[data-theme='light'] .viewer-tab.active {
   background: #ffffff !important;
 }
 
+html[data-theme='light'] .history-item-reasoning {
+  border-color: #ddd6fe !important;
+}
+
 html[data-theme='light'] .history-item-reasoning:hover {
   background: #faf5ff !important;
-  border-color: #d8b4fe !important;
+  border-color: #c4b5fd !important;
+}
+
+html[data-theme='light'] .history-item-reasoning .history-meta {
+  background: #f5f3ff !important;
+}
+
+html[data-theme='light'] .history-reasoning-badge {
+  background: #ede9fe !important;
+  color: #6d28d9 !important;
+}
+
+html[data-theme='light'] .history-tool-badge.history-tool-bash {
+  background: #ccfbf1 !important;
+  color: #0f766e !important;
+}
+
+html[data-theme='light'] .history-tool-badge.history-tool-write {
+  background: #ede9fe !important;
+  color: #6d28d9 !important;
+}
+
+html[data-theme='light'] .history-tool-badge.history-tool-edit,
+html[data-theme='light'] .history-tool-badge.history-tool-multiedit,
+html[data-theme='light'] .history-tool-badge.history-tool-apply_patch {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme='light'] .history-tool-status.is-completed {
+  color: #15803d !important;
+}
+
+html[data-theme='light'] .history-tool-status.is-error {
+  color: #dc2626 !important;
+}
+
+html[data-theme='light'] .history-tool-status.is-running {
+  color: #b45309 !important;
 }
 
 html[data-theme='light'] .history-item-question {
@@ -1331,6 +1437,27 @@ html[data-theme='light'] .statusbar {
 
 html[data-theme='light'] :is(.statusbar-right.is-error, .statusbar-right.is-retry) {
   color: #dc2626 !important;
+}
+
+html[data-theme='light'] .message-content .markdown-host ol > li::before,
+html[data-theme='light'] .message-content .markdown-host ul > li::before {
+  color: #2563eb !important;
+}
+
+html[data-theme='light'] .message-content .grep-match {
+  color: #854d0e !important;
+  background: #fef9c3 !important;
+}
+
+html[data-theme='light'] .markdown-host code.file-ref,
+html[data-theme='light'] .markdown-host code.commit-ref {
+  text-decoration-color: rgba(37, 99, 235, 0.4) !important;
+}
+
+html[data-theme='light'] .markdown-host code.file-ref:hover,
+html[data-theme='light'] .markdown-host code.commit-ref:hover {
+  color: #1d4ed8 !important;
+  text-decoration-color: #2563eb !important;
 }
 
 html[data-theme='light'] .message-content .markdown-host blockquote {

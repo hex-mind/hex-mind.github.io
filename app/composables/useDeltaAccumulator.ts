@@ -2,7 +2,9 @@ import type {
   MessageInfo,
   MessagePart,
   MessagePartDeltaPacket,
+  MessagePartRemovedPacket,
   MessagePartUpdatedPacket,
+  MessageRemovedPacket,
   MessageUpdatedPacket,
 } from '../types/sse';
 
@@ -66,6 +68,18 @@ export function useDeltaAccumulator() {
         } else {
           (part as Record<string, unknown>)[field] = packet.delta;
         }
+      }),
+    );
+
+    offs.push(
+      ge.on('message.removed', (packet: MessageRemovedPacket) => {
+        messages.delete(packet.messageID);
+      }),
+    );
+
+    offs.push(
+      ge.on('message.part.removed', (packet: MessagePartRemovedPacket) => {
+        messages.get(packet.messageID)?.parts.delete(packet.partID);
       }),
     );
 

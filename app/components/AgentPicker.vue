@@ -14,9 +14,20 @@
       @update:open="(open) => emit('update:open', open)"
     >
       <template #value="{ value: id }">
-        <span class="agent-value-name" :style="agentValueStyle(id)">{{
-          findAgent(id)?.label
-        }}</span>
+        <span
+          class="agent-value-name"
+          :class="agentNameClass(id)"
+          :style="agentValueStyle(id)"
+        >
+          <Icon
+            v-if="agentIcon(id)"
+            class="agent-value-icon"
+            :icon="agentIcon(id)"
+            :width="12"
+            :height="12"
+          />
+          {{ findAgent(id)?.label }}
+        </span>
       </template>
       <template #default>
         <div class="dropdown-list">
@@ -24,12 +35,16 @@
           <DropdownItem v-for="agent in options" :key="agent.id" :value="agent.id">
             <span
               class="agent-dropdown-name"
-              :class="{
-                'is-build': agent.id.toLowerCase() === 'build',
-                'is-plan': agent.id.toLowerCase() === 'plan',
-              }"
+              :class="agentNameClass(agent.id)"
               :style="agentOptionNameStyle(agent)"
             >
+              <Icon
+                v-if="agentIcon(agent.id)"
+                class="agent-value-icon"
+                :icon="agentIcon(agent.id)"
+                :width="12"
+                :height="12"
+              />
               {{ agent.label }}
             </span>
           </DropdownItem>
@@ -41,9 +56,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
 import { useSettings } from '../composables/useSettings';
+import { namedRoleChrome } from '../utils/theme';
 
 export type AgentOption = {
   id: string;
@@ -82,14 +99,21 @@ function findAgent(id: unknown): AgentOption | undefined {
   return props.options.find((agent) => agent.id === id);
 }
 
+function agentNameClass(id: unknown) {
+  const key = typeof id === 'string' ? id.trim().toLowerCase() : '';
+  if (key === 'build') return 'is-build';
+  if (key === 'plan') return 'is-plan';
+  return undefined;
+}
+
+function agentIcon(id: unknown) {
+  if (typeof id !== 'string') return undefined;
+  return namedRoleChrome(id)?.icon;
+}
+
 function resolveAgentStyle(name?: string, explicitColor?: string) {
-  const normalizedName = name?.toLowerCase();
-  if (normalizedName === 'build') {
-    return { color: theme.value === 'light' ? '#2563eb' : '#60a5fa' };
-  }
-  if (normalizedName === 'plan') {
-    return { color: theme.value === 'light' ? '#b45309' : '#f59e0b' };
-  }
+  const chrome = namedRoleChrome(name);
+  if (chrome) return { color: theme.value === 'light' ? chrome.light : chrome.dark };
   const color = explicitColor || props.resolveAgentColor?.(name);
   return color ? { color } : undefined;
 }
@@ -130,6 +154,17 @@ function onSelect(value: unknown) {
 .agent-picker-popup {
   max-height: 280px;
   outline: none;
+}
+
+.agent-value-name,
+.agent-dropdown-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.agent-value-icon {
+  flex: 0 0 auto;
 }
 
 .agent-value-name {

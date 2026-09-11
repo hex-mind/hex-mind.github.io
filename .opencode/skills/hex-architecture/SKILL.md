@@ -32,7 +32,7 @@ HEX is a Vue 3 browser client. OpenCode owns sessions, tools, PTY, and the files
 
 ## App.vue
 
-Still holds PTY/shell windows, composer drafts, panel sashes, slash/debug, and tool-window routing. If you touch one of those, extract that slice rather than adding a sibling of the same size.
+Still holds composer send/slash/debug, panel sashes, and tool-window routing. If you touch one of those, extract that slice rather than adding a sibling of the same size.
 
 ## Independent judgment
 

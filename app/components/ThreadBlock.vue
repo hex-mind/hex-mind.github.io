@@ -545,7 +545,7 @@ async function confirmRevert(root: MessageInfo) {
   if (root.role !== 'user' || !root.sessionID || !root.id) return;
   const confirmed = await confirmAction({
     title: 'Revert to this message?',
-    message: 'Later messages in this chat will be hidden until you undo.',
+    message: 'This message and later ones in this chat will be hidden until you undo.',
     confirmLabel: 'Revert',
     danger: true,
   });
@@ -778,7 +778,7 @@ async function confirmUndoRevert() {
   if (!props.sessionRevert) return;
   const confirmed = await confirmAction({
     title: 'Undo revert?',
-    message: 'Hidden messages after this point will show again.',
+    message: 'This message and later ones will show again.',
     confirmLabel: 'Undo',
   });
   if (!confirmed) return;

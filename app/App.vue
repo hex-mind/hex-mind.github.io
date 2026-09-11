@@ -291,7 +291,6 @@ import {
   watchEffect,
 } from 'vue';
 import { bundledThemes } from 'shiki/bundle/web';
-import { Terminal } from '@xterm/xterm';
 import InputPanel from './components/InputPanel.vue';
 import OutputPanel from './components/OutputPanel.vue';
 import ProjectPicker from './components/ProjectPicker.vue';
@@ -310,7 +309,6 @@ import TopPanel, {
 import SettingsModal from './components/SettingsModal.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ContentViewer from './components/viewers/ContentViewer.vue';
-import ShellContent from './components/ToolWindow/Shell.vue';
 import {
   formatGlobToolTitle,
   resolveReadWritePath,
@@ -342,6 +340,11 @@ import { useServerState } from './composables/useServerState';
 import { useSessionSelection } from './composables/useSessionSelection';
 import { useSubagentWindows } from './composables/useSubagentWindows';
 import { useGitDiffWindows } from './composables/useGitDiffWindows';
+import { useShellWindows } from './composables/useShellWindows';
+import {
+  useComposerDrafts,
+  type Attachment,
+} from './composables/useComposerDrafts';
 import { renderWorkerHtml } from './utils/workerRenderer';
 import type { PtyInfo, ReasoningPart, ToolPart } from './types/sse';
 import type { MessageTokens } from './types/message';
@@ -350,7 +353,7 @@ import {
   extractPatch as extractToolPatch,
 } from './utils/toolRenderers';
 import * as opencodeApi from './utils/opencode';
-import { opencodeTheme, resolveTheme, resolveAgentColor } from './utils/theme';
+import { opencodeTheme, resolveTheme, resolveAgentColor, namedRoleChrome } from './utils/theme';
 import { splitFileContentDirectoryAndPath, normalizeDirectory } from './utils/path';
 import { formatSessionTitle, clamp, toErrorMessage } from './utils/formatters';
 import type { SessionTarget } from './types/session';
@@ -372,27 +375,13 @@ import { usePinnedSessions } from './composables/usePinnedSessions';
 import {
   StorageKeys,
   storageGet,
-  storageKey,
   storageRemove,
   storageSet,
-  storageSetJSON,
 } from './utils/storageKeys';
 
 const credentials = useCredentials();
 const { suppressAutoWindows, theme: uiTheme } = useSettings();
 const FOLLOW_THRESHOLD_PX = 24;
-const TERM_COLUMNS = 80;
-const TERM_ROWS = 25;
-const TERM_FONT_SIZE_PX = 13;
-const TERM_LINE_HEIGHT = 1.1;
-const TERM_TITLEBAR_HEIGHT_PX = 22;
-const TERM_WINDOW_BORDER_PX = 2;
-const TERM_INNER_PADDING_X_PX = 4;
-const TERM_INNER_PADDING_Y_PX = 4;
-const TERM_GUTTER_WIDTH_EM = 3.2;
-const TERM_FONT_FAMILY =
-  "'Iosevka Term', 'Iosevka Fixed', 'JetBrains Mono', 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace";
-const SHELL_LINGER_MS = 1000;
 const REASONING_CLOSE_DELAY_MS = 3000;
 const SUBAGENT_CLOSE_DELAY_MS = 3000;
 const ATTACHMENT_MIME_ALLOWLIST = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
@@ -401,33 +390,6 @@ type FileContentResponse = {
   content?: string;
   encoding?: string;
   type?: 'text' | 'binary';
-};
-
-type ShellSession = {
-  pty: PtyInfo;
-  terminal: Terminal;
-  socket?: WebSocket;
-  exiting?: boolean;
-  closeOnSuccess?: boolean;
-  exitResolve?: (exitCode: number) => void;
-};
-
-type Attachment = {
-  id: string;
-  filename: string;
-  mime: string;
-  dataUrl: string;
-};
-
-type ComposerDraft = {
-  messageInput: string;
-  attachments: Attachment[];
-  agent: string;
-  model: string;
-  variant?: string;
-  updatedAt: number;
-  rev: number;
-  writerTabId: string;
 };
 
 const fw = useFloatingWindows();
@@ -518,17 +480,8 @@ const bodyPanelStyle = computed(() => {
 const appBodyEl = ref<HTMLDivElement | null>(null);
 const sidePanelAreaEl = ref<HTMLDivElement | null>(null);
 let primaryHistoryRequestId = 0;
-const composerDraftRevisionByContext = new Map<string, number>();
 /** Keep welcome composer agent/model when POST /session selects the new id. */
 let preserveComposerOnNextSessionSelect = false;
-const composerDraftTabId =
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-const shellSessionsByPtyId = new Map<string, ShellSession>();
-const pendingShellFits = new Set<string>();
-const shellExitWaiters = new Map<string, (exitCode: number) => void>();
-const ptyMetaDecoder = new TextDecoder();
 let floatingExtentResizeObserver: ResizeObserver | null = null;
 let floatingExtentObservedEl: HTMLDivElement | null = null;
 let floatingExtentObservedInput: HTMLElement | null = null;
@@ -778,6 +731,26 @@ const worktreeError = ref('');
 const sessionError = ref('');
 const messageInput = ref('');
 const attachments = ref<Attachment[]>([]);
+const {
+  clearComposerInputState,
+  persistComposerDraftForCurrentContext,
+  persistComposerDraftForOutgoingContext,
+  restoreComposerDraftForCurrentContext,
+  clearComposerDraftAfterSend,
+} = useComposerDrafts({
+  messageInput,
+  attachments,
+  selectedMode,
+  selectedModel,
+  selectedThinking,
+  selectedSessionId,
+  workingDirectory,
+  agentOptions,
+  modelOptions,
+  applyAgentDefaults,
+  applyModelVariantSelection,
+  resolveDefaultAgentModel,
+});
 const sendStatus = ref('Ready');
 const isSending = ref(false);
 const isAborting = ref(false);
@@ -968,6 +941,28 @@ const treeDirectoryName = computed(() => {
 });
 
 const { runOneShotPtyCommand } = usePtyOneshot({ activeDirectory: workingDirectory });
+
+const {
+  syncCanvasTermMetrics,
+  scheduleShellFitAll,
+  restoreShellSessions,
+  disposeShellWindows,
+  openShellFromInput,
+  runTreeShellCommand,
+  handlePtyEvent,
+  lingerAndRemoveShellWindow,
+  handleWindowClose: handleShellWindowClose,
+} = useShellWindows({
+  fw,
+  workingDirectory,
+  activeDirectory,
+  uiTheme,
+  uiInitState,
+  toolWindowCanvasEl,
+  getRandomWindowPosition,
+  refreshGitStatus,
+  refreshBranchEntries,
+});
 
 const sessionRevert = computed<SessionInfo['revert'] | null>(() => {
   const projectId = selectedProjectId.value.trim();
@@ -1315,13 +1310,8 @@ const resolvedTheme = computed(() => resolveTheme(opencodeTheme, uiTheme.value))
 const visibleAgents = computed(() => agents.value.filter((a) => !a.hidden));
 
 function resolveAgentColorForName(agentName?: string) {
-  const normalized = agentName?.trim().toLowerCase();
-  if (normalized === 'build') {
-    return uiTheme.value === 'light' ? '#2563eb' : '#60a5fa';
-  }
-  if (normalized === 'plan') {
-    return uiTheme.value === 'light' ? '#b45309' : '#f59e0b';
-  }
+  const chrome = namedRoleChrome(agentName);
+  if (chrome) return uiTheme.value === 'light' ? chrome.light : chrome.dark;
   const agent = agentName ? agents.value.find((a) => a.name === agentName) : undefined;
   return resolveAgentColor(agentName ?? '', agent?.color, visibleAgents.value, resolvedTheme.value);
 }
@@ -1424,92 +1414,6 @@ function replaceQuerySelection(projectId: string, sessionId: string) {
   params.delete('worktree');
   url.search = params.toString();
   window.history.replaceState({}, '', url.toString());
-}
-
-function normalizeStoredAttachment(value: unknown): Attachment | null {
-  if (!value || typeof value !== 'object') return null;
-  const record = value as Record<string, unknown>;
-  const id = typeof record.id === 'string' ? record.id.trim() : '';
-  const filename = typeof record.filename === 'string' ? record.filename.trim() : '';
-  const mime = typeof record.mime === 'string' ? record.mime.trim() : '';
-  const dataUrl = typeof record.dataUrl === 'string' ? record.dataUrl : '';
-  if (!id || !filename || !mime || !dataUrl) return null;
-  return { id, filename, mime, dataUrl };
-}
-
-function normalizeStoredComposerDraft(value: unknown): ComposerDraft | null {
-  if (!value || typeof value !== 'object') return null;
-  const record = value as Record<string, unknown>;
-  const messageInput = typeof record.messageInput === 'string' ? record.messageInput : '';
-  const attachments = Array.isArray(record.attachments)
-    ? record.attachments
-        .map((item) => normalizeStoredAttachment(item))
-        .filter((item): item is Attachment => Boolean(item))
-    : [];
-  const agent = typeof record.agent === 'string' ? record.agent : '';
-  const model = typeof record.model === 'string' ? record.model : '';
-  const variant = typeof record.variant === 'string' ? record.variant : undefined;
-  const updatedAt = typeof record.updatedAt === 'number' ? record.updatedAt : Date.now();
-  const rev = typeof record.rev === 'number' ? record.rev : updatedAt;
-  const writerTabId = typeof record.writerTabId === 'string' ? record.writerTabId : '';
-  return {
-    messageInput,
-    attachments,
-    agent,
-    model,
-    variant,
-    updatedAt,
-    rev,
-    writerTabId,
-  };
-}
-
-function parseComposerDraftStore(raw: string | null) {
-  if (!raw) return {} as Record<string, ComposerDraft>;
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object') return {} as Record<string, ComposerDraft>;
-    const normalized: Record<string, ComposerDraft> = {};
-    Object.entries(parsed).forEach(([key, value]) => {
-      const draft = normalizeStoredComposerDraft(value);
-      if (!draft) return;
-      normalized[key] = draft;
-    });
-    return normalized;
-  } catch {
-    return {} as Record<string, ComposerDraft>;
-  }
-}
-
-function readComposerDraftStore() {
-  const raw = storageGet(StorageKeys.drafts.composer);
-  return parseComposerDraftStore(raw);
-}
-
-function writeComposerDraftStore(store: Record<string, ComposerDraft>) {
-  storageSetJSON(StorageKeys.drafts.composer, store);
-}
-
-function readComposerDraft(contextKey: string) {
-  if (!contextKey) return null;
-  const store = readComposerDraftStore();
-  return store[contextKey] ?? null;
-}
-
-function nextComposerDraftRevision(contextKey: string, existingDraft?: ComposerDraft | null) {
-  const storeRev = existingDraft?.rev ?? 0;
-  const knownRev = composerDraftRevisionByContext.get(contextKey) ?? 0;
-  const nextRev = Math.max(storeRev, knownRev) + 1;
-  composerDraftRevisionByContext.set(contextKey, nextRev);
-  return nextRev;
-}
-
-function writeComposerDraft(contextKey: string, draft: ComposerDraft) {
-  if (!contextKey) return;
-  const store = readComposerDraftStore();
-  store[contextKey] = draft;
-  composerDraftRevisionByContext.set(contextKey, draft.rev);
-  writeComposerDraftStore(store);
 }
 
 function readSidePanelCollapsed() {
@@ -1622,89 +1526,6 @@ function resolveProjectIdForSession(sessionId: string) {
   return '';
 }
 
-function clearComposerInputState() {
-  messageInput.value = '';
-  attachments.value = [];
-}
-
-function draftKeyForSelectedContext() {
-  return selectedSessionId.value;
-}
-
-function applyComposerDraftToComposerState(draft: ComposerDraft, contextKey: string) {
-  composerDraftRevisionByContext.set(contextKey, draft.rev);
-  messageInput.value = draft.messageInput;
-  attachments.value = draft.attachments.slice();
-
-  // Bootstrap guard: if options not loaded yet, apply draft values as-is
-  if (agentOptions.value.length === 0 || modelOptions.value.length === 0) {
-    if (draft.agent) selectedMode.value = draft.agent;
-    if (draft.model) selectedModel.value = draft.model;
-    selectedThinking.value = draft.variant;
-    return;
-  }
-
-  // Validate and apply agent
-  let agentToApply = draft.agent;
-  if (draft.agent && !agentOptions.value.some((o) => o.id === draft.agent)) {
-    // Agent not found, fall back to defaults
-    const defaults = resolveDefaultAgentModel();
-    agentToApply = defaults.agent;
-  } else if (draft.agent) {
-    agentToApply = draft.agent;
-    selectedMode.value = agentToApply;
-  }
-
-  // Apply agent defaults to get correct model and variant
-  if (agentToApply) {
-    selectedMode.value = agentToApply;
-    applyAgentDefaults(agentToApply);
-  }
-
-  const modelToApply =
-    draft.model && modelOptions.value.some((model) => model.id === draft.model)
-      ? draft.model
-      : undefined;
-  applyModelVariantSelection(modelToApply, draft.variant);
-}
-
-function restoreComposerDraftForContext(contextKey: string): boolean {
-  if (!contextKey) return false;
-  const draft = readComposerDraft(contextKey);
-  if (!draft) return false;
-  applyComposerDraftToComposerState(draft, contextKey);
-  return true;
-}
-
-function persistComposerDraftForCurrentContext() {
-  const contextKey = draftKeyForSelectedContext();
-  if (!contextKey) return;
-  const existingDraft = readComposerDraft(contextKey);
-  const rev = nextComposerDraftRevision(contextKey, existingDraft);
-  const draft: ComposerDraft = {
-    messageInput: messageInput.value,
-    attachments: attachments.value.map((item) => ({
-      id: item.id,
-      filename: item.filename,
-      mime: item.mime,
-      dataUrl: item.dataUrl,
-    })),
-    agent: selectedMode.value,
-    model: selectedModel.value,
-    variant: selectedThinking.value,
-    updatedAt: Date.now(),
-    rev,
-    writerTabId: composerDraftTabId,
-  };
-  writeComposerDraft(contextKey, draft);
-}
-
-function clearComposerDraftForCurrentContext() {
-  messageInput.value = '';
-  attachments.value = [];
-  persistComposerDraftForCurrentContext();
-}
-
 function handleMessageInputUpdate(value: string) {
   messageInput.value = value;
   persistComposerDraftForCurrentContext();
@@ -1789,23 +1610,6 @@ function handleSelectedThinkingUpdate(value: string | undefined) {
   persistComposerDraftForCurrentContext();
 }
 
-function handleComposerDraftStorage(event: StorageEvent) {
-  if (event.storageArea !== window.localStorage) return;
-  if (event.key !== storageKey(StorageKeys.drafts.composer)) return;
-  const contextKey = draftKeyForSelectedContext();
-  if (!contextKey) return;
-  const store = parseComposerDraftStore(event.newValue);
-  const draft = store[contextKey] ?? null;
-  const knownRev = composerDraftRevisionByContext.get(contextKey) ?? 0;
-  if (!draft) {
-    composerDraftRevisionByContext.delete(contextKey);
-    clearComposerInputState();
-    return;
-  }
-  if (draft.rev < knownRev) return;
-  applyComposerDraftToComposerState(draft, contextKey);
-}
-
 function getSessionStatus(sessionId: string, projectId?: string) {
   if (!sessionId) return undefined;
   const preferredProjectId = projectId?.trim() || resolveProjectIdForSession(sessionId);
@@ -1815,50 +1619,6 @@ function getSessionStatus(sessionId: string, projectId?: string) {
   const found = candidates.find((session) => session.id === sessionId);
   const status = found?.status;
   return status === 'busy' || status === 'idle' || status === 'retry' ? status : undefined;
-}
-
-function measureTerminalCellWidth(fontFamily: string, fontSizePx: number) {
-  if (typeof document === 'undefined') return fontSizePx * 0.62;
-  const probe = document.createElement('span');
-  probe.textContent = 'MMMMMMMMMM';
-  probe.style.position = 'absolute';
-  probe.style.visibility = 'hidden';
-  probe.style.pointerEvents = 'none';
-  probe.style.whiteSpace = 'pre';
-  probe.style.fontFamily = fontFamily;
-  probe.style.fontSize = `${fontSizePx}px`;
-  probe.style.lineHeight = String(TERM_LINE_HEIGHT);
-  document.body.appendChild(probe);
-  const rect = probe.getBoundingClientRect();
-  probe.remove();
-  const width = rect.width / 10;
-  return Number.isFinite(width) && width > 0 ? width : fontSizePx * 0.62;
-}
-
-function getTerminalWindowSize() {
-  const cellWidth = measureTerminalCellWidth(TERM_FONT_FAMILY, TERM_FONT_SIZE_PX);
-  const lineHeightPx = TERM_FONT_SIZE_PX * TERM_LINE_HEIGHT;
-  const gutterWidthPx = TERM_FONT_SIZE_PX * TERM_GUTTER_WIDTH_EM;
-  const contentWidth = TERM_COLUMNS * cellWidth;
-  const contentHeight = TERM_ROWS * lineHeightPx;
-  const width = Math.ceil(
-    contentWidth + gutterWidthPx + TERM_INNER_PADDING_X_PX + TERM_WINDOW_BORDER_PX,
-  );
-  const height = Math.ceil(
-    contentHeight + TERM_TITLEBAR_HEIGHT_PX + TERM_INNER_PADDING_Y_PX + TERM_WINDOW_BORDER_PX,
-  );
-  return { width, height };
-}
-
-function syncCanvasTermMetrics() {
-  const canvas = toolWindowCanvasEl.value;
-  if (!canvas) return;
-  const { width, height } = getTerminalWindowSize();
-  canvas.style.setProperty('--term-font-family', TERM_FONT_FAMILY);
-  canvas.style.setProperty('--term-font-size', `${TERM_FONT_SIZE_PX}px`);
-  canvas.style.setProperty('--term-line-height', String(TERM_LINE_HEIGHT));
-  canvas.style.setProperty('--term-width', `${width}px`);
-  canvas.style.setProperty('--term-height', `${height}px`);
 }
 
 function handleWindowResize() {
@@ -2590,416 +2350,9 @@ async function fetchHistory(sessionId: string, isSubagentMessage = false) {
   }
 }
 
-function parsePtyInfo(value: unknown): PtyInfo | null {
-  if (!value || typeof value !== 'object') return null;
-  const record = value as Record<string, unknown>;
-  const id = typeof record.id === 'string' ? record.id : undefined;
-  const title = typeof record.title === 'string' ? record.title : '';
-  const command = typeof record.command === 'string' ? record.command : '';
-  const args = Array.isArray(record.args) ? record.args.map((arg) => String(arg)) : [];
-  const cwd = typeof record.cwd === 'string' ? record.cwd : '';
-  const status =
-    record.status === 'running' || record.status === 'exited' ? record.status : 'running';
-  const pid = typeof record.pid === 'number' ? record.pid : 0;
-  if (!id) return null;
-  return { id, title, command, args, cwd, status, pid };
-}
-
-async function fetchPtyList(directory?: string) {
-  const data = await opencodeApi.listPtys(directory);
-  if (!Array.isArray(data)) return [] as PtyInfo[];
-  return data.map(parsePtyInfo).filter((pty): pty is PtyInfo => Boolean(pty));
-}
-
-async function createPtySession(command?: string, args?: string[]) {
-  const directory = workingDirectory.value || undefined;
-  const data = await opencodeApi.createPty({
-    directory,
-    command,
-    args,
-    cwd: directory,
-    title: 'Shell',
-  });
-  return parsePtyInfo(data);
-}
-
-async function updatePtySize(ptyId: string, rows: number, cols: number, directory?: string) {
-  const data = await opencodeApi.updatePtySize(ptyId, {
-    directory,
-    rows,
-    cols,
-  });
-  return parsePtyInfo(data);
-}
-
-function terminalTheme(theme: 'dark' | 'light') {
-  if (theme === 'light') {
-    return {
-      background: '#ffffff',
-      foreground: '#2f2f2f',
-      cursor: '#111827',
-      cursorAccent: '#ffffff',
-      selectionBackground: 'rgba(37, 99, 235, 0.2)',
-      black: '#2f2f2f',
-      red: '#dc2626',
-      green: '#16803c',
-      yellow: '#a16207',
-      blue: '#2563eb',
-      magenta: '#9333ea',
-      cyan: '#0e7490',
-      white: '#e5e7eb',
-      brightBlack: '#6b7280',
-      brightRed: '#ef4444',
-      brightGreen: '#16a34a',
-      brightYellow: '#ca8a04',
-      brightBlue: '#3b82f6',
-      brightMagenta: '#a855f7',
-      brightCyan: '#0891b2',
-      brightWhite: '#ffffff',
-    };
-  }
-  return {
-    background: '#050505',
-    foreground: '#e2e8f0',
-    cursor: '#e2e8f0',
-    selectionBackground: 'rgba(148, 163, 184, 0.3)',
-  };
-}
-
-function ensureShellWindow(pty: PtyInfo) {
-  if (shellSessionsByPtyId.has(pty.id)) return;
-  const key = `shell:${pty.id}`;
-  const { width, height } = getTerminalWindowSize();
-  const randomPosition = getRandomWindowPosition({ width, height });
-  fw.open(key, {
-    component: ShellContent,
-    props: { shellId: pty.id },
-    closable: true,
-    resizable: true,
-    scroll: 'none',
-    color: WINDOW_COLOR.blue,
-    title: pty.title || 'Shell',
-    width,
-    height,
-    x: randomPosition.x,
-    y: randomPosition.y,
-    expiry: Infinity,
-    onResize: () => scheduleShellFit(pty.id),
-  });
-  const terminal = new Terminal({
-    cols: TERM_COLUMNS,
-    rows: TERM_ROWS,
-    fontFamily: TERM_FONT_FAMILY,
-    fontSize: TERM_FONT_SIZE_PX,
-    lineHeight: TERM_LINE_HEIGHT,
-    cursorBlink: true,
-    theme: terminalTheme(uiTheme.value),
-  });
-  shellSessionsByPtyId.set(pty.id, {
-    pty,
-    terminal,
-  });
-  // Connect WebSocket immediately so the server's buffer replay arrives
-  // before a fast-exiting command deletes the session.
-  // xterm.js buffers write() calls made before open(), so data is not lost.
-  connectShellSocket(pty.id);
-  nextTick(() => {
-    const host = toolWindowCanvasEl.value?.querySelector(
-      `[data-shell-id="${pty.id}"]`,
-    ) as HTMLElement | null;
-    if (!host) return;
-    terminal.open(host);
-    // Wait for first paint so xterm has rendered cell dimensions
-    requestAnimationFrame(() => {
-      resizeWindowToFitTerminal(key, terminal, host);
-    });
-  });
-}
-
-function resizeWindowToFitTerminal(key: string, terminal: Terminal, _host: HTMLElement) {
-  const cell = getTerminalCellSize(terminal);
-  if (!cell) return;
-
-  // Measure scrollbar width
-  const viewport = terminal.element?.querySelector('.xterm-viewport') as HTMLElement | null;
-  const scrollbarWidth = viewport ? viewport.offsetWidth - viewport.clientWidth : 0;
-
-  // Terminal content area needed
-  const contentWidth = terminal.cols * cell.width + scrollbarWidth;
-  const contentHeight = terminal.rows * cell.height;
-
-  // Window chrome from known CSS values (constant-based, not dynamic measurement):
-  //   .floating-window         border: 1px * 2 sides = 2px each direction
-  //   .floating-window-titlebar height: 22px + border-bottom: 1px = 23px
-  //   .floating-window-body    padding: 2px 4px → 4px V, 8px H
-  const chromeX = TERM_WINDOW_BORDER_PX + 2 * TERM_INNER_PADDING_X_PX; // 2 + 8 = 10
-  const chromeY = TERM_WINDOW_BORDER_PX + TERM_TITLEBAR_HEIGHT_PX + 1 + TERM_INNER_PADDING_Y_PX; // 2 + 22 + 1 + 4 = 29
-
-  const newWidth = Math.ceil(contentWidth + chromeX);
-  const newHeight = Math.ceil(contentHeight + chromeY);
-
-  fw.updateOptions(key, { width: newWidth, height: newHeight });
-
-  // Notify server of terminal dimensions
-  const session = shellSessionsByPtyId.get(key.replace('shell:', ''));
-  if (session) notifyPtySize(session);
-}
-
-function scheduleShellFitAll() {
-  shellSessionsByPtyId.forEach((_, ptyId) => {
-    scheduleShellFit(ptyId);
-  });
-}
-
-function getTerminalCellSize(terminal: Terminal): { width: number; height: number } | null {
-  // Prefer measuring from rendered screen (most accurate)
-  const termEl = terminal.element;
-  if (termEl && terminal.cols > 0 && terminal.rows > 0) {
-    const screen = termEl.querySelector('.xterm-screen');
-    if (screen) {
-      const rect = screen.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        return { width: rect.width / terminal.cols, height: rect.height / terminal.rows };
-      }
-    }
-  }
-  // Fallback: xterm's internal renderer dimensions
-  const core = (terminal as any)._core;
-  const dims = core?._renderService?.dimensions?.css?.cell;
-  if (dims?.width > 0 && dims?.height > 0) {
-    return { width: dims.width, height: dims.height };
-  }
-  return null;
-}
-
-function fitTerminalToContainer(session: ShellSession): boolean {
-  const termEl = session.terminal.element;
-  if (!termEl?.isConnected) return false;
-  const parent = termEl.parentElement;
-  if (!parent) return false;
-  const parentRect = parent.getBoundingClientRect();
-  if (parentRect.width <= 0 || parentRect.height <= 0) return false;
-
-  const cell = getTerminalCellSize(session.terminal);
-  if (!cell) return false;
-
-  // Subtract scrollbar width from available horizontal space
-  const viewport = termEl.querySelector('.xterm-viewport') as HTMLElement | null;
-  const scrollbarWidth = viewport ? viewport.offsetWidth - viewport.clientWidth : 0;
-
-  const cols = Math.max(2, Math.floor((parentRect.width - scrollbarWidth) / cell.width));
-  const rows = Math.max(1, Math.floor(parentRect.height / cell.height));
-  if (cols !== session.terminal.cols || rows !== session.terminal.rows) {
-    session.terminal.resize(cols, rows);
-  }
-  return true;
-}
-
-function notifyPtySize(session: ShellSession) {
-  const { rows, cols } = session.terminal;
-  if (rows > 0 && cols > 0) {
-    const directory = session.pty.cwd || activeDirectory.value || undefined;
-    updatePtySize(session.pty.id, rows, cols, directory).catch(() => {});
-  }
-}
-
-function scheduleShellFit(ptyId: string) {
-  if (pendingShellFits.has(ptyId)) return;
-  pendingShellFits.add(ptyId);
-  nextTick(() => {
-    pendingShellFits.delete(ptyId);
-    const session = shellSessionsByPtyId.get(ptyId);
-    if (!session) return;
-    const currentSession = session;
-
-    let prevCols = -1;
-    let prevRows = -1;
-    let attempts = 0;
-
-    function tick() {
-      if (attempts >= 30 || !currentSession.terminal.element?.isConnected) {
-        notifyPtySize(currentSession);
-        return;
-      }
-      attempts++;
-      fitTerminalToContainer(currentSession);
-      const { cols, rows } = currentSession.terminal;
-      if (cols === prevCols && rows === prevRows) {
-        notifyPtySize(currentSession);
-        return;
-      }
-      prevCols = cols;
-      prevRows = rows;
-      requestAnimationFrame(tick);
-    }
-
-    tick();
-  });
-}
-
-function connectShellSocket(ptyId: string) {
-  const session = shellSessionsByPtyId.get(ptyId);
-  if (!session) return;
-  const directory = session.pty.cwd || activeDirectory.value || undefined;
-  const url = opencodeApi.createWsUrl(`/pty/${ptyId}/connect`, { directory });
-  const socket = new WebSocket(url);
-  session.socket = socket;
-  socket.binaryType = 'arraybuffer';
-  socket.addEventListener('message', (event) => {
-    if (event.data instanceof ArrayBuffer) {
-      const bytes = new Uint8Array(event.data);
-      if (bytes.length > 0 && bytes[0] === 0) {
-        const json = ptyMetaDecoder.decode(bytes.subarray(1));
-        try {
-          const meta = JSON.parse(json) as { cursor?: unknown };
-          if (
-            typeof meta.cursor === 'number' &&
-            Number.isSafeInteger(meta.cursor) &&
-            meta.cursor >= 0
-          ) {
-            return;
-          }
-        } catch {
-          return;
-        }
-        return;
-      }
-      session.terminal.write(bytes);
-      return;
-    }
-    if (typeof event.data === 'string') {
-      const trimmed = event.data.trim();
-      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-        try {
-          const meta = JSON.parse(trimmed) as { cursor?: unknown } & Record<string, unknown>;
-          const keys = Object.keys(meta);
-          if (
-            keys.length === 1 &&
-            keys[0] === 'cursor' &&
-            typeof meta.cursor === 'number' &&
-            Number.isSafeInteger(meta.cursor) &&
-            meta.cursor >= 0
-          ) {
-            return;
-          }
-        } catch {
-          // fall through to terminal output
-        }
-      }
-      session.terminal.write(event.data);
-    }
-  });
-  socket.addEventListener('open', () => {
-    // focus() requires the terminal to be mounted; defer if not yet attached.
-    if (session.terminal.element) {
-      session.terminal.focus();
-    } else {
-      nextTick(() => session.terminal.focus());
-    }
-  });
-  session.terminal.onData((data) => {
-    if (socket.readyState === WebSocket.OPEN) socket.send(data);
-  });
-  socket.addEventListener('close', () => {
-    if (session.exiting) {
-      setTimeout(() => removeShellWindow(ptyId), SHELL_LINGER_MS);
-    }
-  });
-}
-
-function removeShellWindow(ptyId: string, options?: { kill?: boolean }) {
-  const session = shellSessionsByPtyId.get(ptyId);
-  if (!session) return;
-  pendingShellFits.delete(ptyId);
-  session.socket?.close();
-  session.terminal.dispose();
-  shellSessionsByPtyId.delete(ptyId);
-  shellExitWaiters.delete(ptyId);
-  fw.close(`shell:${ptyId}`);
-  if (options?.kill) {
-    const directory = session.pty.cwd || activeDirectory.value || undefined;
-    opencodeApi.deletePty(ptyId, directory).catch(() => {});
-  }
-}
-
-function lingerAndRemoveShellWindow(ptyId: string) {
-  const session = shellSessionsByPtyId.get(ptyId);
-  if (!session || session.exiting) return;
-  session.exiting = true;
-  session.terminal.options.cursorBlink = false;
-  // If socket is already closed, start linger timer immediately.
-  // Otherwise the socket 'close' handler starts it after all data is flushed.
-  if (!session.socket || session.socket.readyState >= WebSocket.CLOSING) {
-    setTimeout(() => removeShellWindow(ptyId), SHELL_LINGER_MS);
-  }
-}
-
 function handleFloatingWindowClose(key: string) {
-  if (key.startsWith('shell:')) {
-    const ptyId = key.slice('shell:'.length);
-    removeShellWindow(ptyId, { kill: true });
-    return;
-  }
+  if (handleShellWindowClose(key)) return;
   void fw.close(key);
-}
-
-function disposeShellWindows() {
-  const ids = Array.from(shellSessionsByPtyId.keys());
-  ids.forEach((ptyId) => removeShellWindow(ptyId));
-}
-
-let shellDirectory = '';
-
-async function restoreShellSessions() {
-  const directory = workingDirectory.value || '';
-  const sandboxChanged = directory !== shellDirectory;
-  shellDirectory = directory;
-  if (sandboxChanged) {
-    disposeShellWindows();
-  } else if (uiInitState.value === 'ready') {
-    // Same directory: existing shell windows are still valid; skip GET /pty.
-    return;
-  }
-  try {
-    const ptys = await fetchPtyList(directory || undefined);
-    ptys.forEach((pty) => {
-      if (pty.status === 'exited') return;
-      if (pty.title === 'One-shot PTY' || pty.title === 'Commit Snapshot') return;
-      ensureShellWindow(pty);
-    });
-  } catch {
-    // Existing shell windows stay as-is if the list fails.
-  }
-}
-
-async function openShellFromInput(input: string) {
-  const script = input.trim();
-  const hasCommand = script.length > 0;
-  const pty = hasCommand
-    ? await createPtySession('/bin/sh', ['-c', script])
-    : await createPtySession();
-  if (!pty) return;
-  ensureShellWindow(pty);
-  if (!hasCommand) return;
-  const session = shellSessionsByPtyId.get(pty.id);
-  if (session) session.closeOnSuccess = true;
-}
-
-async function runTreeShellCommand(command: string) {
-  const script = command.trim();
-  if (!script) return;
-  const pty = await createPtySession('/bin/sh', ['-c', script]);
-  if (!pty) return;
-  ensureShellWindow(pty);
-  const session = shellSessionsByPtyId.get(pty.id);
-  if (session) session.closeOnSuccess = true;
-  const exitCode = await new Promise<number>((resolve) => {
-    shellExitWaiters.set(pty.id, resolve);
-  });
-  if (exitCode === 0) {
-    void refreshGitStatus();
-    void refreshBranchEntries();
-  }
 }
 
 function parseSlashCommand(input: string) {
@@ -3193,6 +2546,7 @@ async function sendMessage() {
   const sendAgent = selectedMode.value;
   const sendModel = selectedModel.value;
   const sendVariant = selectedThinking.value;
+  const sendingFromWelcome = !selectedSessionId.value.trim();
   const hasText = text.length > 0;
   const hasAttachments = pendingAttachments.length > 0;
   if (!hasText && !hasAttachments) return;
@@ -3220,27 +2574,29 @@ async function sendMessage() {
   enableFollow();
   isSending.value = true;
   sendStatus.value = 'Sending...';
+  const revertMessageId = sessionRevert.value?.messageID?.trim() || '';
   try {
     if (slash && slash.name.toLowerCase() === 'shell') {
       await openShellFromInput(slash.arguments ?? '');
       sendStatus.value = 'Shell ready.';
-      clearComposerDraftForCurrentContext();
+      clearComposerDraftAfterSend(sendingFromWelcome);
       return;
     }
     if (slash && slash.name.toLowerCase() === 'debug') {
       const debugResult = runDebugCommand(slash.arguments ?? '');
       sendStatus.value = debugResult.message;
-      clearComposerDraftForCurrentContext();
+      clearComposerDraftAfterSend(sendingFromWelcome);
       return;
     }
     if (slash && commandMatch) {
+      if (revertMessageId) msg.removeRootsFrom(revertMessageId);
       await sendCommand(sessionId, commandMatch, slash.arguments ?? '', {
         agent: sendAgent,
         model: sendModel,
         variant: sendVariant,
       });
       sendStatus.value = 'Sent.';
-      clearComposerDraftForCurrentContext();
+      clearComposerDraftAfterSend(sendingFromWelcome);
       return;
     }
     const directory = requireSelectedWorktree('send');
@@ -3257,6 +2613,7 @@ async function sendMessage() {
         })),
       );
     }
+    if (revertMessageId) msg.removeRootsFrom(revertMessageId);
     await opencodeApi.sendPromptAsync(sessionId, {
       directory,
       agent: sendAgent,
@@ -3269,9 +2626,10 @@ async function sendMessage() {
     });
     sendStatus.value = 'Sent.';
     attachments.value = [];
-    clearComposerDraftForCurrentContext();
+    clearComposerDraftAfterSend(sendingFromWelcome);
   } catch (error) {
     sendStatus.value = `Send failed: ${toErrorMessage(error)}`;
+    if (revertMessageId) void reloadSelectedSessionState();
   } finally {
     isSending.value = false;
   }
@@ -3500,14 +2858,14 @@ watch(
       nextTick(() => syncFloatingExtent());
       return;
     }
+    persistComposerDraftForOutgoingContext(prevContextKey);
     clearComposerInputState();
     nextTick(() => {
       inputPanelRef.value?.reset();
       syncFloatingExtent();
     });
-    if (!contextKey) return;
-    const hadDraft = restoreComposerDraftForContext(contextKey);
-    if (!hadDraft) resolveDefaultAgentModel();
+    const hadDraft = restoreComposerDraftForCurrentContext();
+    if (!hadDraft && contextKey) resolveDefaultAgentModel();
   },
   { immediate: true },
 );
@@ -3622,9 +2980,6 @@ const shikiTheme = ref(uiTheme.value === 'light' ? 'github-light' : 'github-dark
 
 watch(uiTheme, (theme) => {
   shikiTheme.value = theme === 'light' ? 'github-light' : 'github-dark';
-  shellSessionsByPtyId.forEach((session) => {
-    session.terminal.options.theme = terminalTheme(theme);
-  });
   fw.entries.value.forEach((entry) => {
     if (
       entry.key === 'thread-history' ||
@@ -4261,45 +3616,6 @@ function applySessionStatusEvent(
   }
 }
 
-function handlePtyEvent(event: {
-  type: 'pty.created' | 'pty.updated' | 'pty.exited';
-  info: PtyInfo | null;
-  id?: string;
-  exitCode?: number;
-}) {
-  const ptyId = event.id ?? event.info?.id;
-  if (!ptyId) return;
-  if (!shellSessionsByPtyId.has(ptyId)) return;
-  if (event.type === 'pty.exited') {
-    const exitCode = typeof event.exitCode === 'number' ? event.exitCode : -1;
-    const waiter = shellExitWaiters.get(ptyId);
-    if (waiter) {
-      shellExitWaiters.delete(ptyId);
-      waiter(exitCode);
-    }
-    const session = shellSessionsByPtyId.get(ptyId);
-    if (session?.closeOnSuccess && exitCode !== 0) {
-      session.terminal.write(`\r\n\u001b[31m[Command failed: ${exitCode}]\u001b[0m\r\n`);
-      return;
-    }
-    lingerAndRemoveShellWindow(ptyId);
-    return;
-  }
-  if (event.info) {
-    const existing = shellSessionsByPtyId.get(event.info.id);
-    if (existing) {
-      existing.pty = event.info;
-      if (event.info.title) {
-        fw.setTitle(`shell:${event.info.id}`, event.info.title);
-      }
-    }
-    if (event.info.status === 'exited') {
-      if (existing?.closeOnSuccess) return;
-      lingerAndRemoveShellWindow(event.info.id);
-    }
-  }
-}
-
 async function startInitialization() {
   if (initializationInFlight) return;
   initializationInFlight = true;
@@ -4423,7 +3739,6 @@ onMounted(() => {
   window.addEventListener('pointerup', handlePointerUp);
   window.addEventListener('pointercancel', handlePointerUp);
   window.addEventListener('resize', handleWindowResize);
-  window.addEventListener('storage', handleComposerDraftStorage);
   document.addEventListener('visibilitychange', handleWindowAttentionChange);
   window.addEventListener('focus', handleWindowAttentionChange);
   window.addEventListener('blur', handleWindowAttentionChange);
@@ -4589,7 +3904,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', handlePointerUp);
   window.removeEventListener('pointercancel', handlePointerUp);
   window.removeEventListener('resize', handleWindowResize);
-  window.removeEventListener('storage', handleComposerDraftStorage);
   document.removeEventListener('visibilitychange', handleWindowAttentionChange);
   window.removeEventListener('focus', handleWindowAttentionChange);
   window.removeEventListener('blur', handleWindowAttentionChange);

@@ -258,6 +258,21 @@ export const opencodeTheme: ThemeJson = {
   },
 };
 
+const NAMED_ROLE_CHROME = {
+  build: { icon: 'lucide:hammer', light: '#1d4ed8', dark: '#60a5fa' },
+  plan: { icon: 'lucide:map', light: '#b45309', dark: '#f59e0b' },
+  shell: { icon: 'lucide:code', light: '#0f766e', dark: '#67e8f9' },
+  bash: { icon: 'lucide:code', light: '#0f766e', dark: '#67e8f9' },
+  write: { icon: 'lucide:file-pen', light: '#6d28d9', dark: '#c4b5fd' },
+} as const;
+
+export function namedRoleChrome(name?: string) {
+  const key = name?.trim().toLowerCase();
+  if (!key) return undefined;
+  if (key in NAMED_ROLE_CHROME) return NAMED_ROLE_CHROME[key as keyof typeof NAMED_ROLE_CHROME];
+  return undefined;
+}
+
 export function resolveTheme(themeJson: ThemeJson, mode: 'dark' | 'light'): ThemeColors {
   const resolved: ThemeColors = {};
   const defs = themeJson.defs;

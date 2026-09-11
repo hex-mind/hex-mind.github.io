@@ -10,7 +10,9 @@ import type {
   MessageInfo,
   MessagePart,
   MessagePartDeltaPacket,
+  MessagePartRemovedPacket,
   MessagePartUpdatedPacket,
+  MessageRemovedPacket,
   MessageUpdatedPacket,
 } from '../types/sse';
 import type { SessionScope } from './useGlobalEvents';
@@ -197,6 +199,27 @@ function updatePart(part: MessagePart, notifyCollection = true) {
   triggerRef(messageRef);
 }
 
+function removeMessage(messageId: string) {
+  const messageRef = messages.value.get(messageId);
+  if (!messageRef) return;
+  for (const partRef of messageRef.value.parts) {
+    parts.delete(partLookupKey(partRef.value.messageID, partRef.value.id));
+  }
+  messages.value.delete(messageId);
+  triggerRef(messages);
+}
+
+function removePart(messageId: string, partId: string) {
+  const key = partLookupKey(messageId, partId);
+  const partRef = parts.get(key);
+  if (!partRef) return;
+  parts.delete(key);
+  const messageRef = messages.value.get(messageId);
+  if (!messageRef) return;
+  messageRef.value.parts.delete(partRef);
+  triggerRef(messageRef);
+}
+
 const unsubs: Array<() => void> = [];
 
 function bindScope(scope: SessionScope) {
@@ -219,6 +242,12 @@ function bindScope(scope: SessionScope) {
     }),
     scope.on('message.updated', (packet: MessageUpdatedPacket) => {
       updateMessage(packet.info);
+    }),
+    scope.on('message.removed', (packet: MessageRemovedPacket) => {
+      removeMessage(packet.messageID);
+    }),
+    scope.on('message.part.removed', (packet: MessagePartRemovedPacket) => {
+      removePart(packet.messageID, packet.partID);
     }),
   );
 }

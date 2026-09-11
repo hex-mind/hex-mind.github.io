@@ -1,6 +1,13 @@
 <template>
   <div v-if="hasTarget" class="ib-round-target">
-    <span v-if="target.agent" class="ib-target-agent" :style="agentStyle">
+    <span v-if="target.agent" class="ib-target-agent" :class="agentNameClass" :style="agentStyle">
+      <Icon
+        v-if="agentIcon"
+        class="ib-target-agent-icon"
+        :icon="agentIcon"
+        :width="10"
+        :height="10"
+      />
       {{ target.agent }}
     </span>
     <span v-if="target.modelDisplayName" class="ib-target-model">
@@ -18,7 +25,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { Icon } from '@iconify/vue';
 import type { ThreadTarget } from '../types/message';
+import { namedRoleChrome } from '../utils/theme';
 
 const props = defineProps<{
   target: ThreadTarget;
@@ -32,6 +41,15 @@ const hasTarget = computed(() => {
     props.target.providerLabel ||
     props.target.variant,
   );
+});
+
+const agentChrome = computed(() => namedRoleChrome(props.target.agent));
+const agentIcon = computed(() => agentChrome.value?.icon);
+const agentNameClass = computed(() => {
+  const key = props.target.agent?.trim().toLowerCase();
+  if (key === 'build') return 'is-build';
+  if (key === 'plan') return 'is-plan';
+  return undefined;
 });
 </script>
 
@@ -47,6 +65,16 @@ const hasTarget = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ib-target-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ib-target-agent-icon {
+  flex: 0 0 auto;
 }
 
 .ib-target-agent,
