@@ -38,11 +38,11 @@ export const COMMIT_SNAPSHOT_SCRIPT = [
   '  printf "##FILE\\t%s\\t%s\\n" "$st" "$new"',
   '  printf "##BEFORE\\n"',
   '  if [ "$code" != "A" ]; then',
-  '    git --no-pager show "$h^:$old" 2>/dev/null | base64 -w 76',
+  '    git --no-pager show "$h^:$old" 2>/dev/null | base64',
   '  fi',
   '  printf "##AFTER\\n"',
   '  if [ "$code" != "D" ]; then',
-  '    git --no-pager show "$h:$new" 2>/dev/null | base64 -w 76',
+  '    git --no-pager show "$h:$new" 2>/dev/null | base64',
   '  fi',
   'done',
 ].join('\n');
@@ -55,16 +55,16 @@ export const FILE_SNAPSHOT_SCRIPT = [
   'path=$2',
   'printf "##BEFORE\\n"',
   'if [ "$mode" = "staged" ]; then',
-  '  git --no-pager show "HEAD:$path" 2>/dev/null | base64 -w 76',
+  '  git --no-pager show "HEAD:$path" 2>/dev/null | base64',
   'else',
-  '  git --no-pager show ":$path" 2>/dev/null | base64 -w 76',
+  '  git --no-pager show ":$path" 2>/dev/null | base64',
   'fi',
   'printf "##AFTER\\n"',
   'if [ "$mode" = "staged" ]; then',
-  '  git --no-pager show ":$path" 2>/dev/null | base64 -w 76',
+  '  git --no-pager show ":$path" 2>/dev/null | base64',
   'else',
   '  if [ -f "$path" ]; then',
-  '    base64 -w 76 < "$path"',
+  '    base64 < "$path"',
   '  fi',
   'fi',
 ].join('\n');
@@ -90,39 +90,39 @@ export function buildWorktreeSnapshotScript(mode: WorktreeSnapshotMode): string 
     beforeLines = [
       '  printf "##BEFORE\\n"',
       '  if [ "$code" != "A" ]; then',
-      '    git --no-pager show "HEAD:$old" 2>/dev/null | base64 -w 76',
+      '    git --no-pager show "HEAD:$old" 2>/dev/null | base64',
       '  fi',
     ];
     afterLines = [
       '  printf "##AFTER\\n"',
       '  if [ "$code" != "D" ]; then',
-      '    git --no-pager show ":$new" 2>/dev/null | base64 -w 76',
+      '    git --no-pager show ":$new" 2>/dev/null | base64',
       '  fi',
     ];
   } else if (mode === 'changes') {
     beforeLines = [
       '  printf "##BEFORE\\n"',
       '  if [ "$code" != "A" ]; then',
-      '    git --no-pager show ":$old" 2>/dev/null | base64 -w 76',
+      '    git --no-pager show ":$old" 2>/dev/null | base64',
       '  fi',
     ];
     afterLines = [
       '  printf "##AFTER\\n"',
       '  if [ "$code" != "D" ] && [ -f "$new" ]; then',
-      '    base64 -w 76 < "$new"',
+      '    base64 < "$new"',
       '  fi',
     ];
   } else {
     beforeLines = [
       '  printf "##BEFORE\\n"',
       '  if [ "$code" != "A" ]; then',
-      '    git --no-pager show "HEAD:$old" 2>/dev/null | base64 -w 76',
+      '    git --no-pager show "HEAD:$old" 2>/dev/null | base64',
       '  fi',
     ];
     afterLines = [
       '  printf "##AFTER\\n"',
       '  if [ "$code" != "D" ] && [ -f "$new" ]; then',
-      '    base64 -w 76 < "$new"',
+      '    base64 < "$new"',
       '  fi',
     ];
   }
@@ -174,7 +174,11 @@ export function toUint8ArrayFromBase64(input: string) {
 
 function decodeCommitSnapshotBase64(value: string) {
   if (!value) return '';
-  return new TextDecoder().decode(toUint8ArrayFromBase64(value));
+  try {
+    return new TextDecoder().decode(toUint8ArrayFromBase64(value));
+  } catch {
+    return '';
+  }
 }
 
 export function parseCommitSnapshotOutput(rawOutput: string): CommitSnapshotResult {

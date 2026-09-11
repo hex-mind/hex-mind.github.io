@@ -149,10 +149,12 @@ function isPermissionRule(value: unknown): boolean {
 function isFileDiff(value: unknown): boolean {
   const record = asRecord(value);
   if (!record) return false;
+  const hasFile = Boolean(asString(record.file));
+  const hasBeforeAfter = typeof record.before === 'string' && typeof record.after === 'string';
+  const hasPatch = typeof record.patch === 'string';
   return (
-    Boolean(asString(record.file)) &&
-    typeof record.before === 'string' &&
-    typeof record.after === 'string' &&
+    hasFile &&
+    (hasBeforeAfter || hasPatch) &&
     asNumber(record.additions) !== undefined &&
     asNumber(record.deletions) !== undefined
   );

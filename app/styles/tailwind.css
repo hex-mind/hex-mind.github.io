@@ -325,25 +325,26 @@ html[data-theme='light'] .ib-user-editor-input {
   color: #111827 !important;
 }
 
-html[data-theme='light'] .ib-user-editor-button.cancel {
-  background: #ffffff !important;
-  border-color: #d1d5db !important;
-  color: #374151 !important;
+html[data-theme='light'] .ib-user-editor-button {
+  background: transparent !important;
+  border: 0 !important;
+  color: #6b7280 !important;
 }
 
-html[data-theme='light'] .ib-user-editor-button.cancel:hover {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
+html[data-theme='light'] .ib-user-editor-button:hover:not(:disabled) {
+  background: #ececf1 !important;
+  color: #202123 !important;
 }
 
 html[data-theme='light'] .ib-user-editor-button.send {
-  background: #2563eb !important;
-  border-color: #2563eb !important;
-  color: #ffffff !important;
+  background: transparent !important;
+  border: 0 !important;
+  color: #2563eb !important;
 }
 
 html[data-theme='light'] .ib-user-editor-button.send:hover:not(:disabled) {
-  background: #1d4ed8 !important;
+  background: #e8f0fe !important;
+  color: #1d4ed8 !important;
 }
 
 html[data-theme='light'] .session-revert-banner {
@@ -504,6 +505,46 @@ html[data-theme='light'] .floating-window-titlebar {
   border-bottom-color: #e5e7eb !important;
 }
 
+html[data-theme='light'] .code-content.is-diff .code-row.line-added {
+  background: rgba(26, 127, 55, 0.12) !important;
+}
+
+html[data-theme='light'] .code-content.is-diff .code-row.line-added .line {
+  box-shadow: inset 3px 0 0 #2da44e !important;
+  color: #116329 !important;
+}
+
+html[data-theme='light'] .code-content.is-diff .code-row.line-removed {
+  background: rgba(209, 36, 47, 0.12) !important;
+}
+
+html[data-theme='light'] .code-content.is-diff .code-row.line-removed .line {
+  box-shadow: inset 3px 0 0 #cf222e !important;
+  color: #82071e !important;
+}
+
+html[data-theme='light'] .code-content.is-diff .code-row.line-hunk {
+  background: rgba(9, 105, 218, 0.1) !important;
+}
+
+html[data-theme='light'] .code-content.is-diff .code-row.line-hunk .line {
+  box-shadow: inset 3px 0 0 #0969da !important;
+  color: #0550ae !important;
+}
+
+html[data-theme='light'] .code-content.is-diff .code-row.line-header {
+  background: #f6f8fa !important;
+}
+
+html[data-theme='light'] .code-content.is-diff .code-row.line-header .line {
+  box-shadow: inset 3px 0 0 #d0d7de !important;
+  color: #57606a !important;
+}
+
+html[data-theme='light'] .code-content .code-gutter {
+  color: #8c959f !important;
+}
+
 html[data-theme='light'] .history-item {
   background: rgba(255, 255, 255, 0.82) !important;
   border-color: #e5e7eb !important;
@@ -515,8 +556,7 @@ html[data-theme='light'] .history-meta {
   color: #6b7280 !important;
 }
 
-html[data-theme='light']
-  :is(.history-index, .history-question-text, .history-question-custom, .history-tool-badge) {
+html[data-theme='light'] :is(.history-index, .history-question-text, .history-question-custom) {
   color: #2f2f2f !important;
 }
 
@@ -1342,21 +1382,19 @@ html[data-theme='light'] .history-reasoning-badge {
   color: #6d28d9 !important;
 }
 
-html[data-theme='light'] .history-tool-badge.history-tool-bash {
-  background: #ccfbf1 !important;
-  color: #0f766e !important;
+html[data-theme='light'] .history-item-tool {
+  background: #ffffff !important;
+  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 45%, #d1d5db) !important;
 }
 
-html[data-theme='light'] .history-tool-badge.history-tool-write {
-  background: #ede9fe !important;
-  color: #6d28d9 !important;
+html[data-theme='light'] .history-item-tool .history-meta {
+  background: color-mix(in srgb, var(--tool-color, #4b7cec) 12%, #f7f7f8) !important;
+  border-bottom-color: color-mix(in srgb, var(--tool-color, #4b7cec) 22%, #e5e7eb) !important;
 }
 
-html[data-theme='light'] .history-tool-badge.history-tool-edit,
-html[data-theme='light'] .history-tool-badge.history-tool-multiedit,
-html[data-theme='light'] .history-tool-badge.history-tool-apply_patch {
-  background: #dbeafe !important;
-  color: #1d4ed8 !important;
+html[data-theme='light'] .history-tool-badge {
+  background: color-mix(in srgb, var(--tool-color, #4b7cec) 16%, #ffffff) !important;
+  color: color-mix(in srgb, var(--tool-color, #4b7cec) 70%, #1f2937) !important;
 }
 
 html[data-theme='light'] .history-tool-status.is-completed {
@@ -1376,7 +1414,8 @@ html[data-theme='light'] .history-item-question {
 }
 
 html[data-theme='light'] .history-item-tool:hover {
-  background: #f7f7f8 !important;
+  background: color-mix(in srgb, var(--tool-color, #4b7cec) 6%, #ffffff) !important;
+  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 60%, #d1d5db) !important;
 }
 
 html[data-theme='light'] .follow-resume-btn {

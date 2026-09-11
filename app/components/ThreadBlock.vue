@@ -75,19 +75,52 @@
               placement="top"
               title="Model"
             />
+            <Dropdown
+              v-model="editThinkingKey"
+              class="ib-user-editor-variant"
+              button-class="chrome-select-button ib-user-editor-variant-button"
+              popup-class="ib-user-editor-variant-popup"
+              placement="top"
+              menu-icon="lucide:chevron-up"
+              auto-close
+              title="Variant"
+            >
+              <template #value="{ value: key }">
+                <span :style="editThinkingValueStyle(key)">{{
+                  findEditThinkingChoice(key)?.label
+                }}</span>
+              </template>
+              <template #default>
+                <div class="ib-user-editor-variant-list">
+                  <DropdownItem
+                    v-for="option in editThinkingChoices"
+                    :key="option.key"
+                    :value="option.key"
+                  >
+                    {{ option.label }}
+                  </DropdownItem>
+                </div>
+              </template>
+            </Dropdown>
           </div>
           <div class="ib-user-editor-actions">
             <button
               type="button"
-              class="ib-user-editor-button attach"
+              class="ib-user-editor-button"
               :disabled="!editCanAttach"
               title="Attach"
               @click="triggerEditFileInput"
             >
-              <Icon icon="lucide:paperclip" :width="14" :height="14" />
+              <Icon icon="lucide:paperclip" :width="16" :height="16" />
             </button>
-            <button type="button" class="ib-user-editor-button cancel" @click="cancelEdit">
-              Cancel
+            <button
+              type="button"
+              class="ib-user-editor-button"
+              title="Cancel"
+              aria-label="Cancel"
+              @click="cancelEdit"
+            >
+              <Icon icon="lucide:x" :width="16" :height="16" />
             </button>
             <button
               type="button"
@@ -96,7 +129,7 @@
               :title="enterToSend ? 'Enter to send' : 'Ctrl+Enter to send'"
               @click="submitEdit(root)"
             >
-              Send
+              <Icon icon="lucide:send" :width="16" :height="16" />
             </button>
           </div>
         </div>
@@ -213,6 +246,8 @@
 import { Icon } from '@iconify/vue';
 import { computed, nextTick, onBeforeUnmount, ref, watch, Transition } from 'vue';
 import AgentPicker, { type AgentOption } from './AgentPicker.vue';
+import Dropdown from './Dropdown.vue';
+import DropdownItem from './Dropdown/Item.vue';
 import MessageViewer from './MessageViewer.vue';
 import ModelPicker from './ModelPicker.vue';
 import ThreadFooter from './ThreadFooter.vue';
@@ -246,9 +281,11 @@ const props = defineProps<{
     displayName: string;
     providerID?: string;
     providerLabel?: string;
+    variants?: Record<string, unknown>;
     attachmentCapable?: boolean;
   }>;
   selectedModel: string;
+  selectedThinking?: string;
   agentOptions: AgentOption[];
   selectedMode: string;
   resolveAgentColor?: (agent?: string) => string;
@@ -277,6 +314,7 @@ const emit = defineEmits<{
       text: string;
       model: string;
       agent: string;
+      variant?: string;
       attachments?: Array<{ filename: string; mime: string; dataUrl: string }>;
     },
   ): void;
@@ -296,6 +334,8 @@ const isEditing = ref(false);
 const editText = ref('');
 const editModel = ref('');
 const editMode = ref('');
+const editThinking = ref<string | undefined>(undefined);
+type EditThinkingChoice = { key: string; value: string | undefined; label: string };
 const editAttachments = ref<Array<{ id: string; filename: string; mime: string; dataUrl: string }>>(
   [],
 );
@@ -565,6 +605,53 @@ const editCanAttach = computed(() => {
   return selected?.attachmentCapable !== false;
 });
 
+const editThinkingOptions = computed(() => {
+  const selected = props.modelOptions.find((model) => model.id === editModel.value);
+  const keys = Object.keys(selected?.variants ?? {}).sort();
+  return [undefined, ...keys] as Array<string | undefined>;
+});
+
+const editThinkingChoices = computed<EditThinkingChoice[]>(() =>
+  editThinkingOptions.value.map((option) => ({
+    key: option ?? '__default',
+    value: option,
+    label: option === undefined ? 'default' : option,
+  })),
+);
+
+const editThinkingKey = computed({
+  get: () => {
+    const match = editThinkingChoices.value.find((choice) => choice.value === editThinking.value);
+    return match?.key ?? '__default';
+  },
+  set: (key: string) => {
+    const choice = editThinkingChoices.value.find((item) => item.key === key);
+    editThinking.value = choice?.value;
+  },
+});
+
+function findEditThinkingChoice(key: unknown): EditThinkingChoice | undefined {
+  if (key == null) return undefined;
+  return editThinkingChoices.value.find((choice) => choice.key === key);
+}
+
+function editThinkingValueStyle(key: unknown) {
+  const choice = findEditThinkingChoice(key);
+  if (!choice || choice.value === undefined) return undefined;
+  return { color: '#f59e0b' };
+}
+
+function clampEditThinking() {
+  if (!editThinkingOptions.value.includes(editThinking.value)) {
+    editThinking.value = undefined;
+  }
+}
+
+watch([editModel, editThinkingOptions], () => {
+  if (!isEditing.value) return;
+  clampEditThinking();
+});
+
 const canSubmitEdit = computed(
   () => editText.value.trim().length > 0 || editAttachments.value.length > 0,
 );
@@ -666,6 +753,14 @@ function resolveEditMode(root: MessageInfo) {
   return props.selectedMode;
 }
 
+function resolveEditModel(root: MessageInfo) {
+  if (root.role === 'user') {
+    const key = `${root.model.providerID}/${root.model.modelID}`;
+    if (props.modelOptions.some((model) => model.id === key)) return key;
+  }
+  return props.selectedModel;
+}
+
 function cycleEditMode(direction: 'next' | 'prev') {
   const options = props.agentOptions.map((agent) => agent.id);
   if (options.length === 0) return false;
@@ -714,8 +809,10 @@ function handleEditKeydown(root: MessageInfo, event: KeyboardEvent) {
 
 function startEdit(root: MessageInfo) {
   editText.value = getMessageContent(root);
-  editModel.value = props.selectedModel;
+  editModel.value = resolveEditModel(root);
   editMode.value = resolveEditMode(root);
+  editThinking.value = root.variant ?? getFinalAnswer(root)?.variant ?? props.selectedThinking;
+  clampEditThinking();
   editAttachments.value = getMessageAttachments(root).map((item) => ({
     id: item.id,
     filename: item.filename,
@@ -736,6 +833,7 @@ function cancelEdit() {
   editText.value = '';
   editModel.value = '';
   editMode.value = '';
+  editThinking.value = undefined;
   editAttachments.value = [];
 }
 
@@ -749,6 +847,7 @@ function submitEdit(root: MessageInfo) {
     text,
     model: editModel.value || props.selectedModel,
     agent: editMode.value || props.selectedMode,
+    variant: editThinking.value,
     attachments: editAttachments.value.map((item) => ({
       filename: item.filename,
       mime: item.mime,
@@ -759,6 +858,7 @@ function submitEdit(root: MessageInfo) {
   editText.value = '';
   editModel.value = '';
   editMode.value = '';
+  editThinking.value = undefined;
   editAttachments.value = [];
 }
 
@@ -979,30 +1079,63 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 
 .ib-user-editor-picker {
   min-width: 0;
-  max-width: min(280px, 55%);
+  max-width: min(220px, 42%);
+}
+
+.ib-user-editor-variant {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.ib-user-editor-variant-button {
+  height: 28px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.ib-user-editor-variant-popup {
+  max-height: 280px;
+  outline: none;
+}
+
+.ib-user-editor-variant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .ib-user-editor-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
 .ib-user-editor-button {
-  min-width: 68px;
-  padding: 6px 12px;
-  border: 1px solid #2b2b2b;
-  border-radius: 999px;
   background: transparent;
-  color: #cccccc;
+  color: #94a3b8;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
   font: inherit;
-  font-size: 12px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .ib-user-editor-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: rgba(51, 65, 85, 0.35);
+  color: #e2e8f0;
 }
 
 .ib-user-editor-file {
@@ -1083,22 +1216,13 @@ function getThreadUserRenderKey(root: MessageInfo): string {
   justify-content: center;
 }
 
-.ib-user-editor-button.attach {
-  min-width: 32px;
-  padding: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .ib-user-editor-button.send {
-  border-color: #0078d4;
-  background: #0078d4;
-  color: #ffffff;
+  color: #60a5fa;
 }
 
 .ib-user-editor-button.send:hover:not(:disabled) {
-  background: #1a86e0;
+  background: rgba(37, 99, 235, 0.35);
+  color: #93bbfd;
 }
 
 .ib-user-editor-button:disabled {
@@ -1113,7 +1237,8 @@ function getThreadUserRenderKey(root: MessageInfo): string {
   }
 
   .ib-user-editor-picker,
-  .ib-user-editor-agent {
+  .ib-user-editor-agent,
+  .ib-user-editor-variant {
     max-width: none;
     width: 100%;
   }

@@ -93,11 +93,12 @@ export type ResourceSource = {
 
 export type FilePartSource = FileSource | SymbolSource | ResourceSource;
 
-/** Snapshot.FileDiff */
+/** Snapshot.FileDiff — OpenCode may send `patch` or `before`/`after`. */
 export type FileDiff = {
   file: string;
-  before: string;
-  after: string;
+  before?: string;
+  after?: string;
+  patch?: string;
   additions: number;
   deletions: number;
   status?: 'added' | 'deleted' | 'modified';

@@ -21,6 +21,7 @@
                 :resolve-model-meta="resolveModelMeta"
                 :model-options="modelOptions"
                 :selected-model="selectedModel"
+                :selected-thinking="selectedThinking"
                 :agent-options="agentOptions"
                 :selected-mode="selectedMode"
                 :compute-context-percent="computeContextPercent"
@@ -110,8 +111,10 @@ const props = defineProps<{
     displayName: string;
     providerID?: string;
     providerLabel?: string;
+    variants?: Record<string, unknown>;
   }>;
   selectedModel: string;
+  selectedThinking?: string;
   agentOptions: Array<{ id: string; label: string; description?: string; color?: string }>;
   selectedMode: string;
   computeContextPercent?: (
@@ -140,6 +143,7 @@ const emit = defineEmits<{
       text: string;
       model: string;
       agent: string;
+      variant?: string;
       attachments?: Array<{ filename: string; mime: string; dataUrl: string }>;
     },
   ): void;

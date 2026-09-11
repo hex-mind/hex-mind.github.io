@@ -151,7 +151,8 @@ export function useGitDiffWindows(options: UseGitDiffWindowsOptions) {
     const hasBeforeAfter = diffs.some(
       (d) => typeof d.before === 'string' && typeof d.after === 'string',
     );
-    const combinedDiff = hasBeforeAfter ? '' : diffs.map((d) => d.diff).join('\n');
+    const combinedDiff = hasBeforeAfter ? '' : diffs.map((d) => d.diff).filter(Boolean).join('\n');
+    if (!hasBeforeAfter && !combinedDiff) return;
     const fileCount = diffs.length;
     const title = fileCount === 1 ? diffs[0].file : `${fileCount} files changed`;
     const firstFile = diffs[0]?.file ?? '';
@@ -175,7 +176,7 @@ export function useGitDiffWindows(options: UseGitDiffWindowsOptions) {
         diffAfter: hasBeforeAfter ? (diffs[0]?.after ?? '') : undefined,
         diffPatch: hasBeforeAfter ? undefined : combinedDiff,
         diffTabs,
-        gutterMode: hasBeforeAfter ? 'double' : 'none',
+        gutterMode: 'double',
         lang: fileCount === 1 ? guessLanguageFromPath(firstFile) : 'text',
         theme: shikiTheme.value,
       },

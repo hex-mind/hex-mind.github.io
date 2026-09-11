@@ -108,6 +108,7 @@
                     :resolve-model-meta="resolveModelMetaForPath"
                     :model-options="modelOptions"
                     :selected-model="selectedModel"
+                    :selected-thinking="selectedThinking"
                     :agent-options="agentOptions"
                     :selected-mode="selectedMode"
                     :compute-context-percent="computeContextPercent"
@@ -3160,7 +3161,7 @@ function renderEditDiffHtml(params: {
       after: params.after,
       patch: params.diff,
       lang: params.lang,
-      theme: 'github-dark',
+      theme: shikiTheme.value,
       gutterMode: 'double',
     });
 }
@@ -3402,6 +3403,7 @@ async function handleEditMessage(payload: {
   text: string;
   model: string;
   agent: string;
+  variant?: string;
   attachments?: Array<{ filename: string; mime: string; dataUrl: string }>;
 }) {
   if (!ensureConnectionReady('Editing message')) return;
@@ -3431,9 +3433,7 @@ async function handleEditMessage(payload: {
     if (payload.agent && payload.agent !== selectedMode.value) {
       handleSelectedModeUpdate(payload.agent);
     }
-    if (payload.model && payload.model !== selectedModel.value) {
-      applyModelVariantSelection(payload.model, undefined);
-    }
+    applyModelVariantSelection(payload.model || selectedModel.value, payload.variant);
     persistComposerDraftForCurrentContext();
     if (selectedSessionId.value === payload.sessionId) {
       await reloadSelectedSessionState();
