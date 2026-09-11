@@ -19,13 +19,6 @@
           :class="agentNameClass(id)"
           :style="agentValueStyle(id)"
         >
-          <Icon
-            v-if="agentIcon(id)"
-            class="agent-value-icon"
-            :icon="agentIcon(id)"
-            :width="12"
-            :height="12"
-          />
           {{ findAgent(id)?.label }}
         </span>
       </template>
@@ -38,13 +31,6 @@
               :class="agentNameClass(agent.id)"
               :style="agentOptionNameStyle(agent)"
             >
-              <Icon
-                v-if="agentIcon(agent.id)"
-                class="agent-value-icon"
-                :icon="agentIcon(agent.id)"
-                :width="12"
-                :height="12"
-              />
               {{ agent.label }}
             </span>
           </DropdownItem>
@@ -56,7 +42,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Icon } from '@iconify/vue';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
 import { useSettings } from '../composables/useSettings';
@@ -106,11 +91,6 @@ function agentNameClass(id: unknown) {
   return undefined;
 }
 
-function agentIcon(id: unknown) {
-  if (typeof id !== 'string') return undefined;
-  return namedRoleChrome(id)?.icon;
-}
-
 function resolveAgentStyle(name?: string, explicitColor?: string) {
   const chrome = namedRoleChrome(name);
   if (chrome) return { color: theme.value === 'light' ? chrome.light : chrome.dark };
@@ -154,17 +134,6 @@ function onSelect(value: unknown) {
 .agent-picker-popup {
   max-height: 280px;
   outline: none;
-}
-
-.agent-value-name,
-.agent-dropdown-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.agent-value-icon {
-  flex: 0 0 auto;
 }
 
 .agent-value-name {

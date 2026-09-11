@@ -71,16 +71,9 @@
         >
           <div class="history-meta">
             <span class="history-index">🔧</span>
-            <span class="history-tool-badge" :class="`history-tool-${entry.part.tool}`">
-              <Icon
-                v-if="toolBadgeIcon(entry.part.tool)"
-                class="history-tool-badge-icon"
-                :icon="toolBadgeIcon(entry.part.tool)"
-                :width="10"
-                :height="10"
-              />
-              {{ toolBadgeLabel(entry.part.tool) }}
-            </span>
+            <span class="history-tool-badge" :class="`history-tool-${entry.part.tool}`">{{
+              toolBadgeLabel(entry.part.tool)
+            }}</span>
             <span class="history-tool-status" :class="`is-${toolStatusLabel(entry.part)}`">{{
               toolStatusLabel(entry.part)
             }}</span>
@@ -95,11 +88,9 @@
 
 <script setup lang="ts">
 import MessageViewer from './MessageViewer.vue';
-import { Icon } from '@iconify/vue';
 import { useFloatingWindow } from '../composables/useFloatingWindow';
 import { toolColor } from './ToolWindow/utils';
 import { formatMessageTime } from '../utils/formatters';
-import { namedRoleChrome } from '../utils/theme';
 import type { QuestionInfo, ReasoningPart, ToolPart } from '../types/sse';
 
 type QuestionHistoryEntry = {
@@ -178,10 +169,6 @@ function toolBadgeLabel(tool: string): string {
     default:
       return tool.toUpperCase();
   }
-}
-
-function toolBadgeIcon(tool: string) {
-  return namedRoleChrome(tool)?.icon;
 }
 
 function toolSummary(part: ToolPart): string {
@@ -445,9 +432,6 @@ function toolStatusLabel(part: ToolPart): string {
 }
 
 .history-tool-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 10px;
@@ -455,10 +439,6 @@ function toolStatusLabel(part: ToolPart): string {
   letter-spacing: 0.5px;
   color: #e2e8f0;
   background: #334155;
-}
-
-.history-tool-badge-icon {
-  flex: 0 0 auto;
 }
 
 .history-tool-badge.history-tool-bash {

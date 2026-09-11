@@ -259,11 +259,11 @@ export const opencodeTheme: ThemeJson = {
 };
 
 const NAMED_ROLE_CHROME = {
-  build: { icon: 'lucide:hammer', light: '#1d4ed8', dark: '#60a5fa' },
-  plan: { icon: 'lucide:map', light: '#b45309', dark: '#f59e0b' },
-  shell: { icon: 'lucide:code', light: '#0f766e', dark: '#67e8f9' },
-  bash: { icon: 'lucide:code', light: '#0f766e', dark: '#67e8f9' },
-  write: { icon: 'lucide:file-pen', light: '#6d28d9', dark: '#c4b5fd' },
+  build: { light: '#1d4ed8', dark: '#60a5fa' },
+  plan: { light: '#b45309', dark: '#f59e0b' },
+  shell: { light: '#0f766e', dark: '#67e8f9' },
+  bash: { light: '#0f766e', dark: '#67e8f9' },
+  write: { light: '#6d28d9', dark: '#c4b5fd' },
 } as const;
 
 export function namedRoleChrome(name?: string) {

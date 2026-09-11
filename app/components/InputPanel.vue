@@ -106,16 +106,7 @@
                 :value="command.name"
               >
                 <div class="command-dropdown-item">
-                  <div class="command-name">
-                    <Icon
-                      v-if="commandIcon(command.name)"
-                      class="command-icon"
-                      :icon="commandIcon(command.name)"
-                      :width="13"
-                      :height="13"
-                    />
-                    /{{ command.name }}
-                  </div>
+                  <div class="command-name">/{{ command.name }}</div>
                   <div v-if="command.description" class="command-desc">
                     {{ command.description }}
                   </div>
@@ -249,7 +240,6 @@ import AgentPicker from './AgentPicker.vue';
 import ModelPicker from './ModelPicker.vue';
 import { useMessages } from '../composables/useMessages';
 import { useSettings } from '../composables/useSettings';
-import { namedRoleChrome } from '../utils/theme';
 type ModelOption = {
   id: string;
   modelID: string;
@@ -365,11 +355,6 @@ function agentNameClass(id?: string) {
   if (key === 'build') return 'is-build';
   if (key === 'plan') return 'is-plan';
   return undefined;
-}
-
-function commandIcon(name: string) {
-  if (name.trim().toLowerCase() === 'shell') return 'lucide:terminal';
-  return namedRoleChrome(name)?.icon;
 }
 
 function historyEntryColor(entry: HistoryEntry) {
@@ -1045,16 +1030,9 @@ defineExpose({ focus, reset });
   min-width: 0;
 }
 .command-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   font-size: 12px;
   color: #e2e8f0;
   line-height: 1.2;
-}
-.command-icon {
-  flex: 0 0 auto;
-  color: #67e8f9;
 }
 .command-desc {
   font-size: 10px;
