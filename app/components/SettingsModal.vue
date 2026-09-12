@@ -49,6 +49,13 @@
           </label>
         </div>
         <div class="setting-row">
+          <div class="setting-label">Show message details</div>
+          <label class="toggle-switch">
+            <input v-model="showThreadDetails" type="checkbox" class="toggle-input" />
+            <span class="toggle-track" />
+          </label>
+        </div>
+        <div class="setting-row">
           <div class="setting-label">GitHub</div>
           <a
             class="setting-link"
@@ -100,7 +107,7 @@ const emit = defineEmits<{
 }>();
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
-const { enterToSend, theme } = useSettings();
+const { enterToSend, showThreadDetails, theme } = useSettings();
 const ctrlEnterToSend = computed({
   get: () => !enterToSend.value,
   set: (value: boolean) => {

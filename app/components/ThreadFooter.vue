@@ -17,6 +17,9 @@
         <Icon icon="lucide:gauge" :width="10" :height="10" />
         {{ contextPercent }}%
       </span>
+      <span v-if="tokens" class="ib-meta-item">
+        {{ tokens }}
+      </span>
     </span>
     <span class="ib-footer-actions">
       <button
@@ -72,6 +75,7 @@ defineProps<{
   timestamp: string;
   elapsed: string;
   contextPercent: number | null;
+  tokens?: string;
   hasDiffs: boolean;
   canCopyAnswer: boolean;
   copied: boolean;

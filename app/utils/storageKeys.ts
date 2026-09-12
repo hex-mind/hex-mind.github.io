@@ -4,6 +4,7 @@ export const StorageKeys = {
   settings: {
     enterToSend: 'settings.enterToSend.v2',
     suppressAutoWindows: 'settings.suppressAutoWindows.v1',
+    showThreadDetails: 'settings.showThreadDetails.v1',
     theme: 'settings.theme.v1',
   },
   state: {

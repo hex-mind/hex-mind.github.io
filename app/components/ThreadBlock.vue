@@ -228,7 +228,8 @@
       v-if="!isRevertedPreview"
       :timestamp="formatThreadTimestamp(root)"
       :elapsed="formatThreadElapsed(root)"
-      :context-percent="getThreadContextPercent(root)"
+      :context-percent="showThreadDetails ? getThreadContextPercent(root) : null"
+      :tokens="showThreadDetails ? getThreadTokensLabel(root) : ''"
       :has-diffs="hasThreadDiffs(root)"
       :can-copy-answer="canCopyAnswer(root)"
       :copied="copied"
@@ -264,7 +265,7 @@ import type {
   ThreadTarget as ThreadTargetType,
 } from '../types/message';
 import type { MessageInfo, QuestionInfo, ToolPart } from '../types/sse';
-import { formatElapsedTime, formatMessageError, formatMessageTime } from '../utils/formatters';
+import { formatElapsedTime, formatMessageError, formatMessageTime, formatTokenCount } from '../utils/formatters';
 import { confirmAction } from '../composables/useConfirm';
 import { useSettings } from '../composables/useSettings';
 
@@ -327,7 +328,7 @@ const emit = defineEmits<{
 }>();
 
 const msg = useMessages();
-const { enterToSend } = useSettings();
+const { enterToSend, showThreadDetails } = useSettings();
 const copied = ref(false);
 const questionCopied = ref(false);
 const isEditing = ref(false);
@@ -913,8 +914,7 @@ function formatThreadElapsed(root: MessageInfo): string {
   return formatElapsedTime(getMessageTime(root), getCompletedTime(final));
 }
 
-function getThreadContextPercent(root: MessageInfo): number | null {
-  if (!props.computeContextPercent) return null;
+function getLastThreadUsage(root: MessageInfo): MessageUsage | undefined {
   const thread = getThread(root.id);
   let lastUsage: MessageUsage | undefined;
 
@@ -925,6 +925,12 @@ function getThreadContextPercent(root: MessageInfo): number | null {
       lastUsage = usage;
     }
   }
+  return lastUsage;
+}
+
+function getThreadContextPercent(root: MessageInfo): number | null {
+  if (!props.computeContextPercent) return null;
+  const lastUsage = getLastThreadUsage(root);
 
   if (!lastUsage) return null;
   const value = props.computeContextPercent(
@@ -934,6 +940,12 @@ function getThreadContextPercent(root: MessageInfo): number | null {
   );
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
   return value;
+}
+
+function getThreadTokensLabel(root: MessageInfo): string {
+  const usage = getLastThreadUsage(root);
+  if (!usage) return '';
+  return `↑${formatTokenCount(usage.tokens.input)} ↓${formatTokenCount(usage.tokens.output)}`;
 }
 
 function getThreadUserRenderKey(root: MessageInfo): string {

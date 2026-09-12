@@ -5,10 +5,15 @@ export type UiTheme = 'dark' | 'light';
 
 const enterToSend = ref(storageGet(StorageKeys.settings.enterToSend) !== 'false');
 const suppressAutoWindows = ref(storageGet(StorageKeys.settings.suppressAutoWindows) === 'true');
+const showThreadDetails = ref(storageGet(StorageKeys.settings.showThreadDetails) === 'true');
 const theme = ref<UiTheme>(storageGet(StorageKeys.settings.theme) === 'light' ? 'light' : 'dark');
 
 watch(enterToSend, (value) => {
   storageSet(StorageKeys.settings.enterToSend, String(value));
+});
+
+watch(showThreadDetails, (value) => {
+  storageSet(StorageKeys.settings.showThreadDetails, String(value));
 });
 
 watch(suppressAutoWindows, (value) => {
@@ -32,6 +37,9 @@ if (typeof window !== 'undefined') {
     if (event.key === storageKey(StorageKeys.settings.suppressAutoWindows)) {
       suppressAutoWindows.value = event.newValue === 'true';
     }
+    if (event.key === storageKey(StorageKeys.settings.showThreadDetails)) {
+      showThreadDetails.value = event.newValue === 'true';
+    }
     if (event.key === storageKey(StorageKeys.settings.theme)) {
       theme.value = event.newValue === 'light' ? 'light' : 'dark';
     }
@@ -39,5 +47,5 @@ if (typeof window !== 'undefined') {
 }
 
 export function useSettings() {
-  return { enterToSend, suppressAutoWindows, theme };
+  return { enterToSend, suppressAutoWindows, showThreadDetails, theme };
 }

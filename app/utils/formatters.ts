@@ -43,6 +43,13 @@ export function formatSessionTitle(...parts: (string | undefined)[]): string {
   return stripped || raw;
 }
 
+export function formatTokenCount(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return '0';
+  if (value < 1000) return String(Math.round(value));
+  if (value < 1_000_000) return `${(value / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+}
+
 export function clamp(value: number, min: number, max: number) {
   if (value < min) return min;
   if (value > max) return max;
