@@ -1,6 +1,5 @@
 import { computed, isRef, ref, type Ref } from 'vue';
 import * as opencodeApi from '../utils/opencode';
-import { isRevertApplied, isUnrevertApplied } from '../utils/revertSync';
 import { waitForState } from '../utils/waitForState';
 import type { ProjectState, SessionState } from '../types/worker-state';
 
@@ -197,12 +196,12 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     return withPending(async () => {
       const projectId = requireProjectId(payload.projectId);
       const before = findSession(getProjects()[projectId], payload.sessionId);
-      const beforeRevertId = before?.revert?.messageID;
+      const beforeUpdated = before?.timeUpdated ?? 0;
       await opencodeApi.revertSession(payload.sessionId, payload.messageId, payload.directory);
       await waitWithRetry(
         (state) => {
           const current = findSession(state[projectId], payload.sessionId);
-          return isRevertApplied(current?.revert?.messageID, payload.messageId, beforeRevertId);
+          return Boolean(current && (current.timeUpdated ?? 0) > beforeUpdated);
         },
         30_000,
         false,
@@ -217,6 +216,8 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
   }): Promise<SessionInfo> {
     return withPending(async () => {
       const projectId = requireProjectId(payload.projectId);
+      const before = findSession(getProjects()[projectId], payload.sessionId);
+      const beforeUpdated = before?.timeUpdated ?? 0;
       const session = (await opencodeApi.unrevertSession(
         payload.sessionId,
         payload.directory,
@@ -224,7 +225,7 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
       await waitWithRetry(
         (state) => {
           const current = findSession(state[projectId], payload.sessionId);
-          return Boolean(current) && isUnrevertApplied(current?.revert?.messageID);
+          return Boolean(current && (current.timeUpdated ?? 0) > beforeUpdated);
         },
         30_000,
         false,

@@ -2047,6 +2047,7 @@ async function handleRevertMessage(payload: { sessionId: string; messageId: stri
       projectId: selectedProjectId.value,
       directory: activeDirectory.value.trim() || undefined,
     });
+    if (selectedSessionId.value === payload.sessionId) void reloadSelectedSessionState();
     sendStatus.value = 'Reverted.';
   } catch (error) {
     sessionError.value = `Session revert failed: ${toErrorMessage(error)}`;
@@ -2065,6 +2066,7 @@ async function handleUndoRevert() {
       projectId: selectedProjectId.value,
       directory: activeDirectory.value.trim() || undefined,
     });
+    void reloadSelectedSessionState();
     sendStatus.value = 'Undone.';
   } catch (error) {
     sessionError.value = `Session undo failed: ${toErrorMessage(error)}`;
