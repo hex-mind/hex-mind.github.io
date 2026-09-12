@@ -2048,7 +2048,6 @@ async function handleRevertMessage(payload: { sessionId: string; messageId: stri
       directory: activeDirectory.value.trim() || undefined,
     });
     sendStatus.value = 'Reverted.';
-    if (selectedSessionId.value === payload.sessionId) void reloadSelectedSessionState();
   } catch (error) {
     sessionError.value = `Session revert failed: ${toErrorMessage(error)}`;
   }

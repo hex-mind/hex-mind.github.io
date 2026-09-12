@@ -1,5 +1,6 @@
 import { computed, isRef, ref, type Ref } from 'vue';
 import * as opencodeApi from '../utils/opencode';
+import { isRevertApplied, isUnrevertApplied } from '../utils/revertSync';
 import { waitForState } from '../utils/waitForState';
 import type { ProjectState, SessionState } from '../types/worker-state';
 
@@ -49,7 +50,11 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
 
   const getProjects = (): ProjectsMap => (isRef(projects) ? projects.value : projects);
 
-  async function waitWithRetry(predicate: (projects: ProjectsMap) => boolean, timeoutMs = 30_000) {
+  async function waitWithRetry(
+    predicate: (projects: ProjectsMap) => boolean,
+    timeoutMs = 30_000,
+    reloadOnTimeout = true,
+  ) {
     try {
       await waitForState(getProjects, predicate, timeoutMs);
       return;
@@ -58,7 +63,7 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
         await waitForState(getProjects, predicate, timeoutMs);
         return;
       } catch {
-        window.location.reload();
+        if (reloadOnTimeout) window.location.reload();
         throw new Error('State synchronization failed after retry. Reload requested.');
       }
     }
@@ -192,12 +197,16 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
     return withPending(async () => {
       const projectId = requireProjectId(payload.projectId);
       const before = findSession(getProjects()[projectId], payload.sessionId);
-      const beforeUpdated = before?.timeUpdated ?? 0;
+      const beforeRevertId = before?.revert?.messageID;
       await opencodeApi.revertSession(payload.sessionId, payload.messageId, payload.directory);
-      await waitWithRetry((state) => {
-        const current = findSession(state[projectId], payload.sessionId);
-        return Boolean(current && (current.timeUpdated ?? 0) > beforeUpdated);
-      });
+      await waitWithRetry(
+        (state) => {
+          const current = findSession(state[projectId], payload.sessionId);
+          return isRevertApplied(current?.revert?.messageID, payload.messageId, beforeRevertId);
+        },
+        30_000,
+        false,
+      );
     });
   }
 
@@ -208,16 +217,18 @@ export function useOpenCodeApi(projects: ProjectsMap | Ref<ProjectsMap>) {
   }): Promise<SessionInfo> {
     return withPending(async () => {
       const projectId = requireProjectId(payload.projectId);
-      const before = findSession(getProjects()[projectId], payload.sessionId);
-      const beforeUpdated = before?.timeUpdated ?? 0;
       const session = (await opencodeApi.unrevertSession(
         payload.sessionId,
         payload.directory,
       )) as SessionInfo;
-      await waitWithRetry((state) => {
-        const current = findSession(state[projectId], payload.sessionId);
-        return Boolean(current && (current.timeUpdated ?? 0) > beforeUpdated);
-      });
+      await waitWithRetry(
+        (state) => {
+          const current = findSession(state[projectId], payload.sessionId);
+          return Boolean(current) && isUnrevertApplied(current?.revert?.messageID);
+        },
+        30_000,
+        false,
+      );
       return session;
     });
   }
