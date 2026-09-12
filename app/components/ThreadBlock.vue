@@ -557,8 +557,8 @@ function showThreadDiff(root: MessageInfo) {
 }
 
 function canRevertThread(root: MessageInfo): boolean {
-  if (props.sessionRevert) return false;
-  return root.role === 'user' && Boolean(root.sessionID);
+  if (root.role !== 'user' || !root.sessionID) return false;
+  return props.sessionRevert?.messageID !== root.id;
 }
 
 function answerTextForThread(root: MessageInfo) {
