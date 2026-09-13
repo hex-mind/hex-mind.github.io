@@ -1,7 +1,9 @@
-import { reactive, watch, watchEffect } from 'vue';
+import { onBeforeUnmount, reactive, watch, watchEffect } from 'vue';
 import type { Ref } from 'vue';
 import type { MessageInfo } from '../types/sse';
 import { renderWorkerHtml } from '../utils/workerRenderer';
+
+const ASSISTANT_RENDER_INTERVAL_MS = 80;
 
 type UseAssistantPreRendererOptions = {
   visibleRoots: Ref<MessageInfo[]>;
@@ -22,6 +24,9 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
   const submitSeqMap = new Map<string, number>();
   const appliedSeqMap = new Map<string, number>();
   const lastSubmitted = new Map<string, { answerId: string; content: string; theme: string }>();
+  const pendingByRoot = new Map<string, { answerId: string; content: string }>();
+  const lastPostedAt = new Map<string, number>();
+  const trailingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   let filesSnapshot: string[] = options.filesWithBasenames.value;
   watch(
@@ -35,6 +40,7 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
   function submitAssistantRender(rootId: string, answerId: string, content: string) {
     const seq = (submitSeqMap.get(rootId) ?? 0) + 1;
     submitSeqMap.set(rootId, seq);
+    lastPostedAt.set(rootId, Date.now());
 
     const requestId = `assistant-${rootId}-${seq}`;
     void renderWorkerHtml({
@@ -45,6 +51,7 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
       gutterMode: 'none',
       files: filesSnapshot,
     }).then((html) => {
+      if (seq !== submitSeqMap.get(rootId)) return;
       const applied = appliedSeqMap.get(rootId) ?? 0;
       if (seq <= applied) return;
       appliedSeqMap.set(rootId, seq);
@@ -52,6 +59,35 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
       deferredKeyCache.set(rootId, answerId);
       options.onRendered(options.getThreadAssistantRenderKeyById(rootId, answerId));
     });
+  }
+
+  function flushAssistantRender(rootId: string) {
+    const pending = pendingByRoot.get(rootId);
+    if (!pending) return;
+    pendingByRoot.delete(rootId);
+    submitAssistantRender(rootId, pending.answerId, pending.content);
+  }
+
+  function enqueueAssistantRender(rootId: string, answerId: string, content: string) {
+    pendingByRoot.set(rootId, { answerId, content });
+    const wait = ASSISTANT_RENDER_INTERVAL_MS - (Date.now() - (lastPostedAt.get(rootId) ?? 0));
+    if (wait <= 0) {
+      const timer = trailingTimers.get(rootId);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        trailingTimers.delete(rootId);
+      }
+      flushAssistantRender(rootId);
+      return;
+    }
+    if (trailingTimers.has(rootId)) return;
+    trailingTimers.set(
+      rootId,
+      setTimeout(() => {
+        trailingTimers.delete(rootId);
+        flushAssistantRender(rootId);
+      }, wait),
+    );
   }
 
   function getAssistantHtml(rootId: string): string | undefined {
@@ -85,8 +121,14 @@ export function useAssistantPreRenderer(options: UseAssistantPreRendererOptions)
         content,
         theme,
       });
-      submitAssistantRender(root.id, answerId, content);
+      enqueueAssistantRender(root.id, answerId, content);
     }
+  });
+
+  onBeforeUnmount(() => {
+    for (const timer of trailingTimers.values()) clearTimeout(timer);
+    trailingTimers.clear();
+    pendingByRoot.clear();
   });
 
   return {

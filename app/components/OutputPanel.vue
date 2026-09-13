@@ -15,7 +15,6 @@
                 v-show="!initialRenderTrackingActive"
                 :root="root"
                 :theme="theme"
-                :files-with-basenames="filesWithBasenames"
                 :is-reverted-preview="isRevertedPreview(root)"
                 :resolve-agent-color="resolveAgentColor"
                 :resolve-model-meta="resolveModelMeta"
@@ -45,8 +44,8 @@
 
             <StatusBar
               v-show="!initialRenderTrackingActive && showStatusBar"
-              :thinking-display-text="thinkingDisplayText"
-              :thinking-status="thinkingStatus"
+              :is-thinking="isThinking"
+              :busy-descendant-count="busyDescendantCount"
               :status-text="statusText"
               :is-status-error="isStatusError"
               :is-retry-status="!!isRetryStatus"
@@ -84,7 +83,6 @@ import { useFileTree } from '../composables/useFileTree';
 import { useInitialRenderTracking } from '../composables/useInitialRenderTracking';
 import { useMessages } from '../composables/useMessages';
 import { useAssistantPreRenderer } from '../composables/useAssistantPreRenderer';
-import { useThinkingAnimation } from '../composables/useThinkingAnimation';
 import type {
   HistoryWindowEntry,
   MessageDiffEntry,
@@ -237,10 +235,8 @@ const { getAssistantHtml, getDeferredTransitionKey } = useAssistantPreRenderer({
   onRendered: handleMessageRendered,
 });
 
-const { thinkingDisplayText, thinkingStatus } = useThinkingAnimation(
-  computed(() => props.isThinking),
-  computed(() => props.busyDescendantCount ?? 0),
-);
+const isThinking = computed(() => props.isThinking);
+const busyDescendantCount = computed(() => props.busyDescendantCount ?? 0);
 const statusText = computed(() => props.statusText);
 const isStatusError = computed(() => props.isStatusError);
 const isRetryStatus = computed(() => props.isRetryStatus);

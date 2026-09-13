@@ -49,11 +49,7 @@
               <div class="attachment-name">{{ item.filename }}</div>
               <div class="attachment-type">{{ item.mime }}</div>
             </div>
-            <button
-              type="button"
-              class="attachment-remove"
-              @click="removeEditAttachment(item.id)"
-            >
+            <button type="button" class="attachment-remove" @click="removeEditAttachment(item.id)">
               <Icon icon="lucide:x" :width="12" :height="12" />
             </button>
           </div>
@@ -146,7 +142,7 @@
               :code="getMessageContent(root)"
               :lang="'markdown'"
               :theme="theme"
-              :files="filesWithBasenames"
+              :files="userFileBasenames"
               @rendered="emit('message-rendered', getThreadUserRenderKey(root))"
             />
             <div v-if="getMessageAttachments(root).length > 0" class="output-entry-attachments">
@@ -253,6 +249,7 @@ import MessageViewer from './MessageViewer.vue';
 import ModelPicker from './ModelPicker.vue';
 import ThreadFooter from './ThreadFooter.vue';
 import ThreadTarget from './ThreadTarget.vue';
+import { useFileTree } from '../composables/useFileTree';
 import { useMessages } from '../composables/useMessages';
 import type {
   HistoryEntry,
@@ -265,16 +262,31 @@ import type {
   ThreadTarget as ThreadTargetType,
 } from '../types/message';
 import type { MessageInfo, QuestionInfo, ToolPart } from '../types/sse';
-import { formatElapsedTime, formatMessageError, formatMessageTime, formatTokenCount } from '../utils/formatters';
+import {
+  formatElapsedTime,
+  formatMessageError,
+  formatMessageTime,
+  formatTokenCount,
+} from '../utils/formatters';
 import { confirmAction } from '../composables/useConfirm';
 import { useSettings } from '../composables/useSettings';
 
 const HISTORY_TOOL_NAMES = new Set(['bash', 'write', 'edit', 'multiedit', 'apply_patch']);
 
+function fileBasenamesAtSetup(paths: string[]): string[] {
+  const set = new Set<string>();
+  for (const path of paths) {
+    const segments = path.split('/');
+    for (let i = 0; i < segments.length; i++) {
+      set.add(segments.slice(i).join('/'));
+    }
+  }
+  return Array.from(set);
+}
+
 const props = defineProps<{
   root: MessageInfo;
   theme: string;
-  filesWithBasenames: string[];
   isRevertedPreview: boolean;
   modelOptions: Array<{
     id: string;
@@ -328,6 +340,8 @@ const emit = defineEmits<{
 }>();
 
 const msg = useMessages();
+const { files } = useFileTree();
+const userFileBasenames = fileBasenamesAtSetup(files.value);
 const { enterToSend, showThreadDetails } = useSettings();
 const copied = ref(false);
 const questionCopied = ref(false);
@@ -727,7 +741,9 @@ function handleEditPaste(event: ClipboardEvent) {
     const file = item.getAsFile();
     if (!file) continue;
     const mime = file.type || item.type || '';
-    files.push(mime && mime !== file.type ? new File([file], file.name || 'image', { type: mime }) : file);
+    files.push(
+      mime && mime !== file.type ? new File([file], file.name || 'image', { type: mime }) : file,
+    );
   }
   if (files.length === 0) return;
   event.preventDefault();
@@ -769,8 +785,12 @@ function cycleEditMode(direction: 'next' | 'prev') {
   const index = options.indexOf(current);
   const nextIndex =
     direction === 'next'
-      ? (index < 0 ? 0 : (index + 1) % options.length)
-      : (index < 0 ? options.length - 1 : (index - 1 + options.length) % options.length);
+      ? index < 0
+        ? 0
+        : (index + 1) % options.length
+      : index < 0
+        ? options.length - 1
+        : (index - 1 + options.length) % options.length;
   const next = options[nextIndex];
   if (!next) return false;
   editMode.value = next;

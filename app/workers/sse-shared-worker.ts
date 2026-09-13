@@ -947,12 +947,10 @@ async function bootstrapState(state: ConnectionState): Promise<void> {
         (directory) => !synced.has(directory),
       );
       if (next.length === 0) return;
-      await Promise.all(
-        next.map(async (directory) => {
-          synced.add(directory);
-          await syncDirectoryState(directory);
-        }),
-      );
+      await mapPool(next, DIRECTORY_SYNC_CONCURRENCY, async (directory) => {
+        synced.add(directory);
+        await syncDirectoryState(directory);
+      });
     };
 
     builder.applyProjects(projects as Parameters<typeof builder.applyProjects>[0]);
@@ -979,17 +977,15 @@ async function bootstrapState(state: ConnectionState): Promise<void> {
       if (directory) state.syncedDirectories.add(directory);
     });
 
-    await Promise.all(
-      Array.from(synced).map(async (directory) => {
-        if (!directory) return;
-        const raw = await getVcsInfo(directory).catch(() => null);
-        const vcsInfo = asRecord(raw);
-        if (!vcsInfo) return;
-        const branch = asString(vcsInfo.branch);
-        if (!branch) return;
-        builder.applyVcsInfo(directory, { branch });
-      }),
-    );
+    await mapPool(Array.from(synced), DIRECTORY_SYNC_CONCURRENCY, async (directory) => {
+      if (!directory) return;
+      const raw = await getVcsInfo(directory).catch(() => null);
+      const vcsInfo = asRecord(raw);
+      if (!vcsInfo) return;
+      const branch = asString(vcsInfo.branch);
+      if (!branch) return;
+      builder.applyVcsInfo(directory, { branch });
+    });
 
     builder.getDefaultProjectId();
     state.stateBuilder = builder;
@@ -1126,8 +1122,9 @@ function attachPort(
             extra.push(...resolved);
             mergeKnownDirectories(state, extra);
           }
-          if (extra.length > 0) {
-            await loadKnownDirectories(state, extra);
+          const unsynced = extra.filter((directory) => !state.syncedDirectories.has(directory));
+          if (unsynced.length > 0) {
+            await loadKnownDirectories(state, unsynced.slice(0, LAZY_DIRECTORY_LIMIT));
           }
         })().catch((error) => {
           console.error('[sse-worker] loadKnownDirectories failed', error);
@@ -1170,6 +1167,7 @@ function handleMessage(port: MessagePort, event: MessageEvent<TabToWorkerMessage
     const directory = normalizeDirectory(message.directory);
     if (!directory) return;
     mergeKnownDirectories(state, [directory]);
+    if (state.syncedDirectories.has(directory)) return;
 
     void loadKnownDirectories(state, [directory]).catch((error) => {
       console.error(`[sse-worker] loadKnownDirectories failed (${directory})`, error);

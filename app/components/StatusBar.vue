@@ -14,17 +14,24 @@
 </template>
 
 <script setup lang="ts">
+import { computed, toRef } from 'vue';
 import StatusDot from './StatusDot.vue';
+import { useThinkingAnimation } from '../composables/useThinkingAnimation';
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
-    thinkingDisplayText: string;
-    thinkingStatus?: string;
+    isThinking: boolean;
+    busyDescendantCount?: number;
     statusText: string;
     isStatusError: boolean;
     isRetryStatus: boolean;
   }>(),
-  { thinkingStatus: 'idle' },
+  { busyDescendantCount: 0 },
+);
+
+const { thinkingDisplayText, thinkingStatus } = useThinkingAnimation(
+  toRef(props, 'isThinking'),
+  computed(() => props.busyDescendantCount ?? 0),
 );
 </script>
 

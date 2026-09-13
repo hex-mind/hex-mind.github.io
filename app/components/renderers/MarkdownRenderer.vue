@@ -121,7 +121,7 @@ watch(
 );
 
 watch(
-  () => [props.code, props.lang, props.theme, props.files],
+  () => [props.code, props.lang, props.theme],
   () => {
     if (props.html != null) return;
     startRender();

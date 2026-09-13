@@ -71,6 +71,7 @@ type GitStatus = {
 
 type UseFileTreeOptions = {
   activeDirectory: Ref<string>;
+  enabled?: Ref<boolean>;
 };
 
 let boundOptions: UseFileTreeOptions | null = null;
@@ -791,17 +792,34 @@ function initializeFileTree(options: UseFileTreeOptions) {
   fileTreeWatchBound = true;
   usePtyOneshot({ activeDirectory: options.activeDirectory });
   watch(
-    () => getOptions().activeDirectory.value,
-    (directory, previous) => {
+    () => ({
+      directory: getOptions().activeDirectory.value,
+      enabled: getOptions().enabled?.value !== false,
+    }),
+    ({ directory, enabled }, previous) => {
       const activePath = directory.trim();
-      const previousPath = (previous ?? '').trim();
-      if (
-        activePath &&
-        previousPath &&
-        normalizeDirectory(activePath) === normalizeDirectory(previousPath)
-      ) {
+      const previousPath = (previous?.directory ?? '').trim();
+      const sameDir =
+        Boolean(activePath) &&
+        Boolean(previousPath) &&
+        normalizeDirectory(activePath) === normalizeDirectory(previousPath);
+
+      if (!enabled) {
+        if (!sameDir) {
+          clearScheduledDirectoryReloads();
+          treeNodes.value = [];
+          expandedTreePathSet.value = new Set();
+          selectedTreePath.value = '';
+          treeError.value = '';
+          files.value = [];
+          setGitStatus(null);
+          branchEntries.value = [];
+        }
+        treeLoading.value = false;
         return;
       }
+
+      if (sameDir && previous?.enabled) return;
 
       clearScheduledDirectoryReloads();
 

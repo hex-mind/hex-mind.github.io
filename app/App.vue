@@ -342,10 +342,7 @@ import { useSessionSelection } from './composables/useSessionSelection';
 import { useSubagentWindows } from './composables/useSubagentWindows';
 import { useGitDiffWindows } from './composables/useGitDiffWindows';
 import { useShellWindows } from './composables/useShellWindows';
-import {
-  useComposerDrafts,
-  type Attachment,
-} from './composables/useComposerDrafts';
+import { useComposerDrafts, type Attachment } from './composables/useComposerDrafts';
 import { renderWorkerHtml } from './utils/workerRenderer';
 import type { PtyInfo, ReasoningPart, ToolPart } from './types/sse';
 import type { MessageTokens } from './types/message';
@@ -360,6 +357,7 @@ import { formatSessionTitle, clamp, toErrorMessage } from './utils/formatters';
 import type { SessionTarget } from './types/session';
 import { pickLocalDirectory } from './utils/pickLocalDirectory';
 import { rememberInstanceDirectories } from './utils/instanceDirectories';
+import { createLruMap } from './utils/requestGuards';
 import { formatSessionGraphDump } from './utils/debugDump';
 import { waitForState } from './utils/waitForState';
 import { toUint8ArrayFromBase64 } from './utils/gitSnapshots';
@@ -373,12 +371,7 @@ import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
 import { useBookmarkedSessions } from './composables/useBookmarkedSessions';
 import { usePinnedSessions } from './composables/usePinnedSessions';
-import {
-  StorageKeys,
-  storageGet,
-  storageRemove,
-  storageSet,
-} from './utils/storageKeys';
+import { StorageKeys, storageGet, storageRemove, storageSet } from './utils/storageKeys';
 
 const credentials = useCredentials();
 const { suppressAutoWindows, theme: uiTheme } = useSettings();
@@ -567,6 +560,7 @@ type CommandInfo = {
 const providers = ref<ProviderInfo[]>([]);
 const agents = ref<AgentInfo[]>([]);
 const commands = ref<CommandInfo[]>([]);
+const commandsByDirectory = createLruMap<CommandInfo[]>(16);
 const modelOptions = ref<
   Array<{
     id: string;
@@ -757,6 +751,7 @@ const isSending = ref(false);
 const isAborting = ref(false);
 const isBootstrapping = ref(false);
 const uiInitState = ref<'loading' | 'ready' | 'error' | 'login'>('loading');
+const uiReady = computed(() => uiInitState.value === 'ready');
 const initLoadingMessage = ref('Connecting to server...');
 const initErrorMessage = ref('');
 const connectionState = ref<'connecting' | 'bootstrapping' | 'ready' | 'reconnecting' | 'error'>(
@@ -930,7 +925,7 @@ const {
   branchEntries,
   branchListLoading,
   refreshBranchEntries,
-} = useFileTree({ activeDirectory: workingDirectory });
+} = useFileTree({ activeDirectory: workingDirectory, enabled: uiReady });
 
 const treeDirectoryName = computed(() => {
   const raw = workingDirectory.value.trim();
@@ -1186,9 +1181,7 @@ const isThinking = computed(() => {
   const selected = selectedSessionId.value;
   const ownStatus = selected ? getSessionStatus(selected) : undefined;
   return Boolean(
-    ownStatus === 'busy' ||
-    ownStatus === 'retry' ||
-    busyDescendantSessionIds.value.length > 0,
+    ownStatus === 'busy' || ownStatus === 'retry' || busyDescendantSessionIds.value.length > 0,
   );
 });
 const canAbort = computed(() =>
@@ -2047,7 +2040,7 @@ async function handleRevertMessage(payload: { sessionId: string; messageId: stri
       projectId: selectedProjectId.value,
       directory: activeDirectory.value.trim() || undefined,
     });
-    if (selectedSessionId.value === payload.sessionId) void reloadSelectedSessionState();
+    if (selectedSessionId.value === payload.sessionId) void reloadSelectedSessionState(true);
     sendStatus.value = 'Reverted.';
   } catch (error) {
     sessionError.value = `Session revert failed: ${toErrorMessage(error)}`;
@@ -2066,7 +2059,7 @@ async function handleUndoRevert() {
       projectId: selectedProjectId.value,
       directory: activeDirectory.value.trim() || undefined,
     });
-    void reloadSelectedSessionState();
+    void reloadSelectedSessionState(true);
     sendStatus.value = 'Undone.';
   } catch (error) {
     sessionError.value = `Session undo failed: ${toErrorMessage(error)}`;
@@ -2114,7 +2107,6 @@ async function bootstrapSelections() {
     } else {
       await initializeSessionSelection();
     }
-
   } finally {
     isBootstrapping.value = false;
   }
@@ -2233,6 +2225,12 @@ async function fetchAgents() {
 }
 
 async function fetchCommands(directory?: string) {
+  const key = directory ?? '';
+  const cached = commandsByDirectory.get(key);
+  if (cached) {
+    commands.value = cached;
+    return;
+  }
   if (commandsLoading.value) return;
   commandsLoading.value = true;
   try {
@@ -2240,6 +2238,7 @@ async function fetchCommands(directory?: string) {
     const list = Array.isArray(data) ? data : [];
     list.sort((a, b) => a.name.localeCompare(b.name));
     commands.value = list;
+    commandsByDirectory.set(key, list);
   } catch {
     // Keep last successful command list.
   } finally {
@@ -2631,7 +2630,7 @@ async function sendMessage() {
     clearComposerDraftAfterSend(sendingFromWelcome);
   } catch (error) {
     sendStatus.value = `Send failed: ${toErrorMessage(error)}`;
-    if (revertMessageId) void reloadSelectedSessionState();
+    if (revertMessageId) void reloadSelectedSessionState(true);
   } finally {
     isSending.value = false;
   }
@@ -2738,13 +2737,10 @@ function focusInput() {
 
 async function abortSessionTree(sessionId: string) {
   const directory = activeDirectory.value.trim();
-  const extraIds =
-    sessionId === selectedSessionId.value ? busyDescendantSessionIds.value : [];
+  const extraIds = sessionId === selectedSessionId.value ? busyDescendantSessionIds.value : [];
   await Promise.all([
     opencodeApi.abortSession(sessionId, directory || undefined),
-    ...extraIds.map((sid) =>
-      opencodeApi.abortSession(sid, directory || undefined).catch(() => {}),
-    ),
+    ...extraIds.map((sid) => opencodeApi.abortSession(sid, directory || undefined).catch(() => {})),
   ]);
 }
 
@@ -2790,12 +2786,9 @@ watch(
   { immediate: true },
 );
 
-watch(
-  inputEl,
-  () => {
-    updateFloatingExtentObserver();
-  },
-);
+watch(inputEl, () => {
+  updateFloatingExtentObserver();
+});
 
 watch(
   sessions,
@@ -2821,10 +2814,28 @@ watch(
   { immediate: true },
 );
 
-async function reloadSelectedSessionState() {
+let lastLoadedSessionId = '';
+let lastLoadedSessionDirectory = '';
+
+async function reloadSelectedSessionState(forceRefresh = false) {
   if (isBootstrapping.value) return;
+  const previousId = lastLoadedSessionId;
+  const previousDirectory = lastLoadedSessionDirectory;
+  const sessionId = selectedSessionId.value;
+  const directory = getSelectedWorktreeDirectory();
+  const switching = previousId !== sessionId || previousDirectory !== directory;
+  if (previousId) {
+    msg.stashHistory(previousId, previousDirectory);
+  }
   fw.closeAll({ exclude: (key) => key.startsWith('shell:') });
-  msg.reset();
+  const restored =
+    !forceRefresh && switching && sessionId ? msg.restoreHistory(sessionId, directory) : false;
+  if (!restored) {
+    msg.reset();
+  }
+  if (forceRefresh && sessionId) {
+    msg.dropHistory(sessionId, directory);
+  }
   resetFollow();
   reasoning.reset();
   subagentWindows.reset();
@@ -2833,18 +2844,23 @@ async function reloadSelectedSessionState() {
   todosBySessionId.value = {};
   todoLoadingBySessionId.value = {};
   todoErrorBySessionId.value = {};
-  if (selectedSessionId.value) {
-    const sessionId = selectedSessionId.value;
-    await fetchHistory(sessionId);
+  lastLoadedSessionId = sessionId;
+  lastLoadedSessionDirectory = directory;
+  if (sessionId) {
+    if (restored) {
+      void fetchHistory(sessionId);
+    } else {
+      await fetchHistory(sessionId);
+    }
     if (msg.roots.value.length === 0) {
       scrollOutputPanelToBottom(false);
     }
     if (uiInitState.value === 'ready') {
       await restoreShellSessions();
     }
-    const directory = activeDirectory.value || undefined;
-    void fetchPendingPermissions(directory);
-    void fetchPendingQuestions(directory);
+    const permissionDirectory = activeDirectory.value || undefined;
+    void fetchPendingPermissions(permissionDirectory);
+    void fetchPendingQuestions(permissionDirectory);
   }
   nextTick(() => inputPanelRef.value?.focus());
 }
@@ -2971,8 +2987,9 @@ watch([sidePanelActiveTab, workingDirectory, gitStatus], () => {
 });
 
 watch(
-  allowedSessionIds,
+  [allowedSessionIds, uiReady],
   () => {
+    if (!uiReady.value) return;
     void reloadTodosForAllowedSessions();
   },
   { immediate: true },
@@ -3044,7 +3061,13 @@ msg.bindScope(mainSessionScope);
 reasoning.bindScope(sessionScope);
 subagentWindows.bindScope(sessionScope);
 
-watch(selectedSessionId, reloadSelectedSessionState, { immediate: true });
+watch(
+  selectedSessionId,
+  () => {
+    void reloadSelectedSessionState();
+  },
+  { immediate: true },
+);
 
 watch([selectedProjectId, selectedSessionId], syncActiveSelectionToWorker, { immediate: true });
 
@@ -3438,7 +3461,7 @@ async function handleEditMessage(payload: {
     applyModelVariantSelection(payload.model || selectedModel.value, payload.variant);
     persistComposerDraftForCurrentContext();
     if (selectedSessionId.value === payload.sessionId) {
-      await reloadSelectedSessionState();
+      await reloadSelectedSessionState(true);
       if (selectedSessionId.value === payload.sessionId) {
         msg.removeRootsFrom(payload.messageId);
       }
@@ -4247,9 +4270,7 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: 0;
   margin: var(--workbench-inset) 0 0;
-  --composer-dock-height: calc(
-    16px + var(--input-panel-height, var(--input-panel-default))
-  );
+  --composer-dock-height: calc(16px + var(--input-panel-height, var(--input-panel-default)));
 }
 
 .app-main-column.is-composer-hidden,

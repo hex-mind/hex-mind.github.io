@@ -1,5 +1,6 @@
 import { computed, readonly, shallowRef, triggerRef } from 'vue';
 import type { ShallowRef } from 'vue';
+import { createLruMap, historyCacheKey } from '../utils/requestGuards';
 import type {
   MessageAttachment,
   MessageDiffEntry,
@@ -126,6 +127,19 @@ function byTimeThenId(a: MessageInfo, b: MessageInfo): number {
   if (aTime !== bTime) return aTime - bTime;
   return a.id.localeCompare(b.id);
 }
+
+function isAssistantComplete(info: MessageInfo): boolean {
+  if (info.role !== 'assistant') return true;
+  return info.time.completed !== undefined || Boolean(info.finish) || Boolean(info.error);
+}
+
+function shouldPreferHistoryInfo(current: MessageInfo, incoming: MessageInfo): boolean {
+  if (current.id !== incoming.id) return false;
+  return isAssistantComplete(incoming) && !isAssistantComplete(current);
+}
+
+type HistorySnapshot = Array<{ info: MessageInfo; parts: MessagePart[] }>;
+const historyCache = createLruMap<HistorySnapshot>(8);
 
 // Module-level singleton state
 const acc = useDeltaAccumulator();
@@ -409,8 +423,12 @@ function loadHistory(entries: unknown[]) {
     const hasMessage = messages.value.has(info.id);
     const messageRef = ensureMessage(info.id, false);
     if (!hasMessage) collectionChanged = true;
+    const incomingInfo = accumulated?.info ?? info;
     if (!messageRef.value.info) {
-      messageRef.value.info = accumulated?.info ?? info;
+      messageRef.value.info = incomingInfo;
+      triggerRef(messageRef);
+    } else if (shouldPreferHistoryInfo(messageRef.value.info, incomingInfo)) {
+      messageRef.value.info = incomingInfo;
       triggerRef(messageRef);
     }
     if (!Array.isArray(partsList)) continue;
@@ -468,6 +486,42 @@ function reset() {
   triggerRef(messages);
 }
 
+function exportHistorySnapshot(): HistorySnapshot {
+  const entries: HistorySnapshot = [];
+  for (const messageRef of messages.value.values()) {
+    const info = messageRef.value.info;
+    if (!info) continue;
+    const partList: MessagePart[] = [];
+    for (const partRef of messageRef.value.parts) {
+      partList.push(partRef.value);
+    }
+    entries.push({ info, parts: partList });
+  }
+  return entries;
+}
+
+function stashHistory(sessionId: string, directory: string) {
+  const id = sessionId.trim();
+  if (!id || messages.value.size === 0) return;
+  historyCache.set(historyCacheKey(id, directory), exportHistorySnapshot());
+}
+
+function restoreHistory(sessionId: string, directory: string): boolean {
+  const id = sessionId.trim();
+  if (!id) return false;
+  const snapshot = historyCache.get(historyCacheKey(id, directory));
+  if (!snapshot) return false;
+  reset();
+  loadHistory(snapshot);
+  return true;
+}
+
+function dropHistory(sessionId: string, directory: string) {
+  const id = sessionId.trim();
+  if (!id) return;
+  historyCache.drop(historyCacheKey(id, directory));
+}
+
 export function useMessages() {
   return {
     messages: readonly(messages),
@@ -487,6 +541,9 @@ export function useMessages() {
     loadHistory,
     removeRootsFrom,
     reset,
+    stashHistory,
+    restoreHistory,
+    dropHistory,
     bindScope,
   };
 }

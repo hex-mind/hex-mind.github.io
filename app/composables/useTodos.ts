@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import type { ComputedRef, Ref } from 'vue';
 import * as opencodeApi from '../utils/opencode';
+import { addedKeys } from '../utils/requestGuards';
 
 export type TodoItem = {
   content: string;
@@ -55,15 +56,28 @@ export function useTodos(options: {
       return;
     }
     const directory = options.activeDirectory.value.trim() || undefined;
+    const previous = todosBySessionId.value;
+    const nextTodos: Record<string, TodoItem[]> = {};
+    const nextErrors: Record<string, string> = {};
+    for (const id of sessionIds) {
+      if (id in previous) nextTodos[id] = previous[id] ?? [];
+      const error = todoErrorBySessionId.value[id];
+      if (error) nextErrors[id] = error;
+    }
+    const added = addedKeys(Object.keys(previous), sessionIds);
+    if (added.length === 0) {
+      todosBySessionId.value = nextTodos;
+      todoErrorBySessionId.value = nextErrors;
+      todoLoadingBySessionId.value = {};
+      return;
+    }
     const loading: Record<string, boolean> = {};
-    sessionIds.forEach((id) => {
+    added.forEach((id) => {
       loading[id] = true;
     });
     todoLoadingBySessionId.value = loading;
-    const nextTodos: Record<string, TodoItem[]> = {};
-    const nextErrors: Record<string, string> = {};
     await Promise.all(
-      sessionIds.map(async (id) => {
+      added.map(async (id) => {
         try {
           const data = await opencodeApi.getSessionTodos(id, directory);
           nextTodos[id] = normalizeTodoItems(data);
