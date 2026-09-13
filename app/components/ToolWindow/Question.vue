@@ -543,8 +543,21 @@ function emitReject() {
 }
 
 .question-button.is-reply {
-  border-color: color-mix(in srgb, var(--q-accent) 70%, transparent);
-  background: color-mix(in srgb, var(--q-accent) 26%, rgba(20, 22, 28, 0.8));
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.question-button.is-reply:not(:disabled):hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+}
+
+.question-button.is-reply:disabled {
+  opacity: 1;
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 html[data-theme='light'] .question-window {

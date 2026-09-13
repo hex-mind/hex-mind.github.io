@@ -576,6 +576,10 @@ html[data-theme='light'] .history-content .history-item-tool:hover {
   border-color: #e5e7eb !important;
 }
 
+html[data-theme='light'] .history-content .history-item.is-build {
+  border-color: transparent !important;
+}
+
 html[data-theme='light'] .history-content .history-meta,
 html[data-theme='light'] .history-content .history-item-reasoning .history-meta,
 html[data-theme='light'] .history-content .history-item-tool .history-meta,
@@ -1026,9 +1030,9 @@ html[data-theme='light'] .permission-button.is-always {
 }
 
 html[data-theme='light'] .question-button.is-reply {
-  background: #eef2ff !important;
-  border-color: #c7d2fe !important;
-  color: #3730a3 !important;
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
 }
 
 html[data-theme='light'] .permission-button.is-once {
@@ -1050,9 +1054,16 @@ html[data-theme='light'] .permission-button.is-always:not(:disabled):hover {
 }
 
 html[data-theme='light'] .question-button.is-reply:not(:disabled):hover {
-  background: #e0e7ff !important;
-  border-color: #a5b4fc !important;
-  color: #3730a3 !important;
+  background: #1e40af !important;
+  border-color: #1e40af !important;
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] .question-button.is-reply:disabled {
+  opacity: 1 !important;
+  background: #93c5fd !important;
+  border-color: #93c5fd !important;
+  color: #ffffff !important;
 }
 
 html[data-theme='light'] .permission-button.is-once:not(:disabled):hover {

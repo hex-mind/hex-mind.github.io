@@ -2,7 +2,11 @@
   <div class="history-content">
     <div class="history-list">
       <template v-for="entry in props.entries" :key="entry.key">
-        <div v-if="entry.kind === 'message'" class="history-item">
+        <div
+          v-if="entry.kind === 'message'"
+          class="history-item"
+          :class="entry.agent ? agentNameClass(entry.agent) : undefined"
+        >
           <div class="history-meta">
             <span class="history-index">💬</span>
             <span v-if="entry.agent" class="history-agent" :class="agentNameClass(entry.agent)">{{
