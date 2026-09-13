@@ -76,7 +76,16 @@
           @click="handleToolClick(entry.part)"
         >
           <div class="history-meta">
-            <span class="history-index">🔧</span>
+            <span class="history-index">
+              <Icon
+                v-if="entry.part.tool === 'bash'"
+                class="history-tool-icon"
+                icon="lucide:terminal"
+                :width="13"
+                :height="13"
+              />
+              <template v-else>🔧</template>
+            </span>
             <span class="history-tool-badge" :class="`history-tool-${entry.part.tool}`">{{
               toolBadgeLabel(entry.part.tool)
             }}</span>
@@ -93,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import MessageViewer from './MessageViewer.vue';
 import { useFloatingWindow } from '../composables/useFloatingWindow';
 import { toolColor } from './ToolWindow/utils';
@@ -262,8 +272,14 @@ function toolStatusLabel(part: ToolPart): string {
 }
 
 .history-index {
+  display: inline-flex;
+  align-items: center;
   font-weight: 600;
   color: #e2e8f0;
+}
+
+.history-tool-icon {
+  color: #67e8f9;
 }
 
 .history-time {
