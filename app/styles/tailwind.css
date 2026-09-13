@@ -1384,17 +1384,17 @@ html[data-theme='light'] .history-reasoning-badge {
 
 html[data-theme='light'] .history-item-tool {
   background: #ffffff !important;
-  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 45%, #d1d5db) !important;
+  border-color: #d1d5db !important;
 }
 
 html[data-theme='light'] .history-item-tool .history-meta {
-  background: color-mix(in srgb, var(--tool-color, #4b7cec) 12%, #f7f7f8) !important;
-  border-bottom-color: color-mix(in srgb, var(--tool-color, #4b7cec) 22%, #e5e7eb) !important;
+  background: #f4f4f5 !important;
+  border-bottom-color: #e5e7eb !important;
 }
 
 html[data-theme='light'] .history-tool-badge {
-  background: color-mix(in srgb, var(--tool-color, #4b7cec) 16%, #ffffff) !important;
-  color: color-mix(in srgb, var(--tool-color, #4b7cec) 70%, #1f2937) !important;
+  background: #e5e7eb !important;
+  color: #374151 !important;
 }
 
 html[data-theme='light'] .history-tool-status.is-completed {
