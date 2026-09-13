@@ -563,11 +563,31 @@ html[data-theme='light'] .history-popup .history-item {
 html[data-theme='light'] .history-content .history-item,
 html[data-theme='light'] .history-content .history-item-reasoning,
 html[data-theme='light'] .history-content .history-item-tool,
-html[data-theme='light'] .history-content .history-item-question,
-html[data-theme='light'] .history-content .history-item-reasoning:hover,
+html[data-theme='light'] .history-content .history-item-question {
+  background: transparent !important;
+  border-color: #e5e7eb !important;
+}
+
+html[data-theme='light'] .history-content .history-item-reasoning {
+  border-color: color-mix(in srgb, #6c32f3 35%, #d1d5db) !important;
+}
+
+html[data-theme='light'] .history-content .history-item-question {
+  border-color: color-mix(in srgb, #4b7cec 35%, #d1d5db) !important;
+}
+
+html[data-theme='light'] .history-content .history-item-tool {
+  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 35%, #d1d5db) !important;
+}
+
+html[data-theme='light'] .history-content .history-item-reasoning:hover {
+  background: transparent !important;
+  border-color: color-mix(in srgb, #6c32f3 55%, #d1d5db) !important;
+}
+
 html[data-theme='light'] .history-content .history-item-tool:hover {
   background: transparent !important;
-  border-color: transparent !important;
+  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 55%, #d1d5db) !important;
 }
 
 html[data-theme='light'] .history-content .history-meta,
@@ -575,8 +595,20 @@ html[data-theme='light'] .history-content .history-item-reasoning .history-meta,
 html[data-theme='light'] .history-content .history-item-tool .history-meta,
 html[data-theme='light'] .history-content .history-meta-question {
   background: transparent !important;
-  border-bottom-color: transparent !important;
+  border-bottom-color: #e5e7eb !important;
   color: #6b7280 !important;
+}
+
+html[data-theme='light'] .history-content .history-item-reasoning .history-meta {
+  border-bottom-color: transparent !important;
+}
+
+html[data-theme='light'] .history-content .history-item-tool .history-meta {
+  border-bottom-color: color-mix(in srgb, var(--tool-color, #4b7cec) 22%, #e5e7eb) !important;
+}
+
+html[data-theme='light'] .history-content .history-meta-question {
+  border-bottom-color: color-mix(in srgb, #4b7cec 22%, #e5e7eb) !important;
 }
 
 html[data-theme='light']
