@@ -115,6 +115,13 @@ const api: FloatingWindowAPI = {
 
 provide(FLOATING_WINDOW_KEY, api);
 
+const isDarkChrome = computed(() => {
+  const key = props.entry.key;
+  return (
+    key === 'thread-history' || key.startsWith('reasoning:') || key.startsWith('history-reasoning:')
+  );
+});
+
 const windowStyle = computed(() => {
   const color = props.entry.color || '#4b7cec';
   return {
@@ -438,6 +445,7 @@ function onResizeEnd(e: PointerEvent) {
     :style="windowStyle"
     @pointerdown.capture="onFocus"
     :data-floating-key="entry.key"
+    :data-chrome="isDarkChrome ? 'dark' : undefined"
   >
     <div class="floating-window-titlebar" @pointerdown="onDragStart">
       <span class="title">{{ entry.title || 'Tool' }}</span>
