@@ -135,10 +135,10 @@ export function shouldRenderToolWindow(tool: string) {
 
 /** One accent per window role, sampled from the HEX logo. */
 export const WINDOW_COLOR = {
-  cyan: '#5ecbf5',
-  blue: '#4b7cec',
-  purple: '#6c32f3',
-  magenta: '#9622f5',
+  cyan: '#0f766e',
+  blue: '#1d4ed8',
+  purple: '#6d28d9',
+  magenta: '#6d28d9',
 } as const;
 
 export function toolColor(tool: string): string {
@@ -150,8 +150,9 @@ export function toolColor(tool: string): string {
     case 'codesearch':
     case 'read':
     case 'list':
-      return WINDOW_COLOR.cyan;
+    case 'write':
     case 'bash':
+      return WINDOW_COLOR.cyan;
     case 'question':
       return WINDOW_COLOR.blue;
     case 'task':
@@ -160,8 +161,7 @@ export function toolColor(tool: string): string {
     case 'edit':
     case 'multiedit':
     case 'apply_patch':
-    case 'write':
-      return WINDOW_COLOR.magenta;
+      return WINDOW_COLOR.blue;
     default:
       return WINDOW_COLOR.blue;
   }

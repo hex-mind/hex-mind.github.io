@@ -3361,6 +3361,7 @@ function handleShowThreadHistory(payload: { entries: ThreadHistoryEntry[] }) {
     closable: true,
     resizable: true,
     focusOnOpen: true,
+    color: '#64748b',
     variant: 'message',
     expiry: Infinity,
     width: winW,

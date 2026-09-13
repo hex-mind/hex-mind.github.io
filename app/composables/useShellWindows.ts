@@ -397,7 +397,7 @@ export function useShellWindows(options: UseShellWindowsOptions) {
       closable: true,
       resizable: true,
       scroll: 'none',
-      color: WINDOW_COLOR.blue,
+      color: WINDOW_COLOR.cyan,
       title: pty.title || 'Shell',
       width,
       height,
