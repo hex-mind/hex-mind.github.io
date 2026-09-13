@@ -495,7 +495,7 @@ html[data-theme='light'] .modal-backdrop::backdrop {
 
 html[data-theme='light'] .floating-window {
   background: #ffffff !important;
-  border-color: color-mix(in srgb, var(--window-color, #4b7cec) 45%, #d1d5db) !important;
+  border-color: color-mix(in srgb, var(--window-color, #4b7cec) 28%, #d1d5db) !important;
   color: #2f2f2f !important;
 }
 
@@ -1384,7 +1384,7 @@ html[data-theme='light'] .history-reasoning-badge {
 
 html[data-theme='light'] .history-item-tool {
   background: #ffffff !important;
-  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 45%, #d1d5db) !important;
+  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 28%, #d1d5db) !important;
 }
 
 html[data-theme='light'] .history-item-tool .history-meta {
@@ -1398,7 +1398,7 @@ html[data-theme='light'] .history-tool-badge {
 }
 
 html[data-theme='light'] .history-tool-status.is-completed {
-  color: #15803d !important;
+  color: #166534 !important;
 }
 
 html[data-theme='light'] .history-tool-status.is-error {
