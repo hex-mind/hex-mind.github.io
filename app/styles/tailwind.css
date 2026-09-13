@@ -1413,14 +1413,9 @@ html[data-theme='light'] .history-item-question {
   border-color: #c7d2fe !important;
 }
 
-/* Neutral hover — tool-color wash turns EDIT/SHELL cards blue and hides path text. */
 html[data-theme='light'] .history-item-tool:hover {
   background: #f3f4f6 !important;
   border-color: #9ca3af !important;
-}
-
-html[data-theme='light'] .history-item-tool:hover .history-meta {
-  background: #ececf1 !important;
 }
 
 html[data-theme='light'] .follow-resume-btn {
