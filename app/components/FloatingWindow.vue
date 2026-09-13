@@ -122,6 +122,19 @@ const isFlatChrome = computed(() => {
   );
 });
 
+const isShellWindow = computed(() => {
+  const key = props.entry.key;
+  const title = props.entry.title || '';
+  return key.startsWith('shell:') || /\[SHELL\]/i.test(title);
+});
+
+const titleIcon = computed(() => (isShellWindow.value ? 'lucide:terminal' : undefined));
+
+const displayTitle = computed(() => {
+  const title = props.entry.title || 'Tool';
+  return isShellWindow.value ? title.replace(/^🔧\s*/, '') : title;
+});
+
 const windowStyle = computed(() => {
   const color = props.entry.color || '#4b7cec';
   return {
@@ -448,7 +461,10 @@ function onResizeEnd(e: PointerEvent) {
     :data-chrome="isFlatChrome ? 'flat' : undefined"
   >
     <div class="floating-window-titlebar" @pointerdown="onDragStart">
-      <span class="title">{{ entry.title || 'Tool' }}</span>
+      <span class="title">
+        <Icon v-if="titleIcon" class="title-icon" :icon="titleIcon" :width="12" :height="12" />
+        <span class="title-text">{{ displayTitle }}</span>
+      </span>
       <button v-if="entry.closable" class="close-btn" @click.stop="onClose">×</button>
     </div>
     <div class="floating-window-body-wrapper">
@@ -566,7 +582,21 @@ function onResizeEnd(e: PointerEvent) {
 }
 
 .floating-window-titlebar .title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-window-titlebar .title-icon {
+  flex-shrink: 0;
+}
+
+.floating-window-titlebar .title-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }

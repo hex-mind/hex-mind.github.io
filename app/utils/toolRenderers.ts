@@ -31,6 +31,8 @@ export type ToolRenderersHelpers = {
 
 function toolEmoji(tool: string): string {
   switch (tool) {
+    case 'bash':
+      return '';
     case 'websearch':
     case 'webfetch':
     case 'codesearch':
@@ -43,7 +45,8 @@ function toolEmoji(tool: string): string {
 function toolPrefix(tool: string, label: string, detail?: string): string {
   const icon = toolEmoji(tool);
   const d = detail?.trim();
-  return d ? `${icon} [${label}] ${d}` : `${icon} [${label}]`;
+  const body = d ? `[${label}] ${d}` : `[${label}]`;
+  return icon ? `${icon} ${body}` : body;
 }
 
 export function extractPatch(
