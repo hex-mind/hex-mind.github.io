@@ -4,7 +4,7 @@ import { StorageKeys, storageGet, storageKey, storageSet } from '../utils/storag
 export type UiTheme = 'dark' | 'light';
 
 const enterToSend = ref(storageGet(StorageKeys.settings.enterToSend) !== 'false');
-const suppressAutoWindows = ref(storageGet(StorageKeys.settings.suppressAutoWindows) === 'true');
+const suppressAutoWindows = ref(storageGet(StorageKeys.settings.suppressAutoWindows) !== 'false');
 const showThreadDetails = ref(storageGet(StorageKeys.settings.showThreadDetails) === 'true');
 const theme = ref<UiTheme>(storageGet(StorageKeys.settings.theme) === 'light' ? 'light' : 'dark');
 
@@ -35,7 +35,7 @@ if (typeof window !== 'undefined') {
       enterToSend.value = event.newValue !== 'false';
     }
     if (event.key === storageKey(StorageKeys.settings.suppressAutoWindows)) {
-      suppressAutoWindows.value = event.newValue === 'true';
+      suppressAutoWindows.value = event.newValue !== 'false';
     }
     if (event.key === storageKey(StorageKeys.settings.showThreadDetails)) {
       showThreadDetails.value = event.newValue === 'true';

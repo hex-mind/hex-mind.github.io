@@ -395,18 +395,13 @@ type FileContentResponse = {
 
 const fw = useFloatingWindows();
 
-// Close auto-opened floating windows when suppress is toggled ON.
-// Tool auto windows: closable === false AND finite expiry (not Infinity).
-// Reasoning/subagent windows: closable === false AND key starts with 'reasoning:' or 'subagent:'.
-// Permission/question (closable: false, expiry: Infinity) are excluded.
+// Close reasoning/subagent windows when hide is toggled ON.
 watch(suppressAutoWindows, (suppressed) => {
   if (!suppressed) return;
   for (const entry of fw.entries.value) {
     if (
       !entry.closable &&
-      (entry.expiresAt < Number.MAX_SAFE_INTEGER ||
-        entry.key.startsWith('reasoning:') ||
-        entry.key.startsWith('subagent:'))
+      (entry.key.startsWith('reasoning:') || entry.key.startsWith('subagent:'))
     ) {
       void fw.close(entry.key);
     }
@@ -3895,7 +3890,6 @@ onMounted(() => {
   globalEventUnsubscribers.push(
     sessionScope.on('message.part.updated', ({ part }) => {
       if (part.type !== 'tool') return;
-      if (suppressAutoWindows.value) return;
       openToolPartAsWindow(part);
     }),
   );
