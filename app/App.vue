@@ -696,7 +696,7 @@ const reasoning = useReasoningWindows({
   selectedSessionId,
   fw,
   reasoningComponent: ReasoningContent,
-  theme: () => 'github-dark',
+  theme: () => shikiTheme.value,
   reasoningCloseDelayMs: REASONING_CLOSE_DELAY_MS,
   resolveModelName: (providerID, modelID) => {
     const key = `${providerID}/${modelID}`;
@@ -2991,7 +2991,7 @@ watch(uiTheme, (theme) => {
       fw.updateOptions(entry.key, {
         props: {
           ...entry.props,
-          theme: 'github-dark',
+          theme: shikiTheme.value,
         },
       });
     }
@@ -3304,7 +3304,7 @@ function handleOpenHistoryReasoning(payload: { part: ReasoningPart }) {
     component: ReasoningContent,
     props: {
       entries: [{ id: payload.part.id, text: payload.part.text }],
-      theme: 'github-dark',
+      theme: shikiTheme.value,
     },
     title: '🧐 Thought',
     scroll: 'manual',
@@ -3351,7 +3351,7 @@ function handleShowThreadHistory(payload: { entries: ThreadHistoryEntry[] }) {
     component: ThreadHistoryContent,
     props: {
       entries,
-      theme: 'github-dark',
+      theme: shikiTheme.value,
       onToolClick: (part: ToolPart) => handleOpenHistoryTool({ part }),
       onReasoningClick: (part: ReasoningPart) => handleOpenHistoryReasoning({ part }),
     },
