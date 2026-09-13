@@ -1083,6 +1083,44 @@ defineExpose({ focus, reset });
   border-color: #3c3c3c;
 }
 
+/* Light: neutral hover so build/edit agent cards stay readable. */
+html[data-theme='light'] :deep(.history-popup) .ui-dropdown-item {
+  background: #f7f7f8;
+  border-color: #ececf1;
+  color: #202123;
+}
+
+html[data-theme='light'] :deep(.history-popup) .ui-dropdown-item[aria-selected='true'],
+html[data-theme='light'] :deep(.history-popup) .ui-dropdown-item:hover {
+  background: #ececf1;
+  border-color: #d1d5db;
+}
+
+html[data-theme='light'] .history-item-text {
+  color: #202123;
+}
+
+html[data-theme='light'] .history-target-model {
+  color: #202123;
+}
+
+html[data-theme='light'] .history-target-provider,
+html[data-theme='light'] .history-target-separator {
+  color: #6b7280;
+}
+
+html[data-theme='light'] .history-target-variant {
+  color: #b45309;
+}
+
+html[data-theme='light'] .history-target-agent.is-build {
+  color: #1d4ed8;
+}
+
+html[data-theme='light'] .history-target-agent.is-plan {
+  color: #b45309;
+}
+
 .history-item {
   border-left: 3px solid #2b2b2b;
   padding-left: 8px;

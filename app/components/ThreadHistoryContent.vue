@@ -489,4 +489,125 @@ function toolStatusLabel(part: ToolPart): string {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Light: keep hover neutral. Scoped dark hover (navy mix) otherwise wins the
+   cascade over global light !important and washes path/status text. */
+html[data-theme='light'] .history-item {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+html[data-theme='light'] .history-meta {
+  background: #f4f4f5;
+  border-bottom-color: #e5e7eb;
+  color: #6b7280;
+}
+
+html[data-theme='light'] .history-index {
+  color: #2f2f2f;
+}
+
+html[data-theme='light'] .history-item-tool {
+  background: #ffffff;
+  border-color: #d1d5db;
+}
+
+html[data-theme='light'] .history-item-tool:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+html[data-theme='light'] .history-item-tool .history-meta {
+  background: #f4f4f5;
+  border-bottom-color: #e5e7eb;
+}
+
+html[data-theme='light'] .history-item-tool:hover .history-meta {
+  background: #ececf1;
+}
+
+html[data-theme='light'] .history-tool-badge {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+html[data-theme='light'] .history-tool-badge.history-tool-bash {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+html[data-theme='light'] .history-tool-badge.history-tool-write {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+html[data-theme='light'] .history-tool-badge.history-tool-edit,
+html[data-theme='light'] .history-tool-badge.history-tool-multiedit,
+html[data-theme='light'] .history-tool-badge.history-tool-apply_patch {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+html[data-theme='light'] .history-tool-content {
+  color: #4b5563;
+}
+
+html[data-theme='light'] .history-tool-status.is-completed {
+  color: #15803d;
+}
+
+html[data-theme='light'] .history-tool-status.is-error {
+  color: #dc2626;
+}
+
+html[data-theme='light'] .history-tool-status.is-running {
+  color: #b45309;
+}
+
+html[data-theme='light'] .history-item-reasoning {
+  border-color: #ddd6fe;
+}
+
+html[data-theme='light'] .history-item-reasoning:hover {
+  background: #faf5ff;
+  border-color: #c4b5fd;
+}
+
+html[data-theme='light'] .history-item-reasoning .history-meta {
+  background: #f5f3ff;
+}
+
+html[data-theme='light'] .history-reasoning-badge {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+html[data-theme='light'] .history-item-question {
+  border-color: #c7d2fe;
+}
+
+html[data-theme='light'] .history-meta-question {
+  background: #eef2ff;
+  border-bottom-color: #c7d2fe;
+}
+
+html[data-theme='light'] .history-question-badge {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+html[data-theme='light'] .history-question-text,
+html[data-theme='light'] .history-question-custom {
+  color: #2f2f2f;
+}
+
+html[data-theme='light'] .history-question-header,
+html[data-theme='light'] .history-question-option {
+  color: #6b7280;
+}
+
+html[data-theme='light'] .history-question-option.is-selected {
+  color: #1f2937;
+  background: rgba(75, 124, 236, 0.1);
+}
 </style>
