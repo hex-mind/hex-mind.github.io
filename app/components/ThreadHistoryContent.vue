@@ -5,7 +5,9 @@
         <div v-if="entry.kind === 'message'" class="history-item">
           <div class="history-meta">
             <span class="history-index">💬</span>
-            <span v-if="entry.agent" class="history-agent">{{ entry.agent }}</span>
+            <span v-if="entry.agent" class="history-agent" :class="agentNameClass(entry.agent)">{{
+              entry.agent
+            }}</span>
             <span class="history-time">{{ formatMessageTime(entry.time) }}</span>
           </div>
           <div class="history-content-wrapper">
@@ -152,6 +154,13 @@ function getCustomAnswer(entry: QuestionHistoryEntry, questionIndex: number): st
   if (!question) return '';
   const optionLabels = new Set(question.options.map((o) => o.label));
   return answer.filter((v) => !optionLabels.has(v)).join(', ');
+}
+
+function agentNameClass(agent: string) {
+  const key = agent.trim().toLowerCase();
+  if (key === 'build') return 'is-build';
+  if (key === 'plan') return 'is-plan';
+  return undefined;
 }
 
 function toolBadgeLabel(tool: string): string {

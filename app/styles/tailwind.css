@@ -507,12 +507,14 @@ html[data-theme='light'] .floating-window-titlebar {
 
 html[data-theme='light'] .floating-window[data-chrome='flat'] {
   background: #f7f7f8 !important;
+  border-color: #9ca3af !important;
   color: #2f2f2f !important;
 }
 
 html[data-theme='light'] .floating-window[data-chrome='flat'] .floating-window-titlebar {
   background: transparent !important;
   color: #374151 !important;
+  border-bottom-color: #d1d5db !important;
 }
 
 html[data-theme='light'] .code-content.is-diff .code-row.line-added {
@@ -564,30 +566,30 @@ html[data-theme='light'] .history-content .history-item,
 html[data-theme='light'] .history-content .history-item-reasoning,
 html[data-theme='light'] .history-content .history-item-tool,
 html[data-theme='light'] .history-content .history-item-question {
-  background: transparent !important;
-  border-color: #e5e7eb !important;
+  background: #ffffff !important;
+  border-color: #d1d5db !important;
 }
 
 html[data-theme='light'] .history-content .history-item-reasoning {
-  border-color: color-mix(in srgb, #6c32f3 35%, #d1d5db) !important;
+  border-color: color-mix(in srgb, #6c32f3 40%, #d1d5db) !important;
 }
 
 html[data-theme='light'] .history-content .history-item-question {
-  border-color: color-mix(in srgb, #4b7cec 35%, #d1d5db) !important;
+  border-color: color-mix(in srgb, #4b7cec 40%, #d1d5db) !important;
 }
 
 html[data-theme='light'] .history-content .history-item-tool {
-  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 35%, #d1d5db) !important;
+  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 40%, #d1d5db) !important;
 }
 
 html[data-theme='light'] .history-content .history-item-reasoning:hover {
-  background: transparent !important;
-  border-color: color-mix(in srgb, #6c32f3 55%, #d1d5db) !important;
+  background: #ffffff !important;
+  border-color: color-mix(in srgb, #6c32f3 60%, #d1d5db) !important;
 }
 
 html[data-theme='light'] .history-content .history-item-tool:hover {
-  background: transparent !important;
-  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 55%, #d1d5db) !important;
+  background: #ffffff !important;
+  border-color: color-mix(in srgb, var(--tool-color, #4b7cec) 60%, #d1d5db) !important;
 }
 
 html[data-theme='light'] .history-content .history-meta,
@@ -618,8 +620,13 @@ html[data-theme='light']
 }
 
 html[data-theme='light'] .history-content .history-agent {
-  background: #1e293b !important;
-  color: #cbd5e1 !important;
+  background: #e5e7eb !important;
+  color: #4b5563 !important;
+}
+
+html[data-theme='light'] .history-content .history-agent.is-build {
+  background: #e5e7eb !important;
+  color: #6b7280 !important;
 }
 
 html[data-theme='light']
