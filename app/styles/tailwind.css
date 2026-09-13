@@ -641,28 +641,33 @@ html[data-theme='light'] .history-content .history-question-option.is-selected {
 }
 
 html[data-theme='light'] .history-content .history-reasoning-badge {
-  background: rgba(88, 28, 135, 0.5) !important;
-  color: #d8b4fe !important;
+  background: #f4f1ff !important;
+  color: #6d28d9 !important;
+  box-shadow: inset 0 0 0 1px #ddd6fe;
 }
 
 html[data-theme='light'] .history-content .history-question-badge {
-  background: rgba(30, 41, 88, 0.7) !important;
-  color: #93b4ff !important;
+  background: #eef3ff !important;
+  color: #3b5bcc !important;
+  box-shadow: inset 0 0 0 1px #d7e0ff;
 }
 
 html[data-theme='light'] .history-content .history-tool-badge {
-  background: #334155 !important;
-  color: #e2e8f0 !important;
+  background: #f3f4f6 !important;
+  color: #4b5563 !important;
+  box-shadow: inset 0 0 0 1px #e5e7eb;
 }
 
 html[data-theme='light'] .history-content .history-tool-badge.history-tool-bash {
-  background: rgba(22, 78, 99, 0.7) !important;
-  color: #67e8f9 !important;
+  background: #eefbfa !important;
+  color: #0f766e !important;
+  box-shadow: inset 0 0 0 1px #cceeed;
 }
 
 html[data-theme='light'] .history-content .history-tool-badge.history-tool-write {
-  background: rgba(21, 94, 117, 0.5) !important;
-  color: #a5f3fc !important;
+  background: #f0fafa !important;
+  color: #0e7490 !important;
+  box-shadow: inset 0 0 0 1px #cfeeee;
 }
 
 html[data-theme='light']
@@ -672,8 +677,9 @@ html[data-theme='light']
     .history-tool-badge.history-tool-multiedit,
     .history-tool-badge.history-tool-apply_patch
   ) {
-  background: rgba(30, 58, 138, 0.5) !important;
-  color: #bfdbfe !important;
+  background: #eef4ff !important;
+  color: #1d4ed8 !important;
+  box-shadow: inset 0 0 0 1px #d5e3ff;
 }
 
 html[data-theme='light'] .shell-content,
