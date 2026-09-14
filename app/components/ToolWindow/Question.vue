@@ -538,8 +538,13 @@ function emitReject() {
 }
 
 .question-button.is-reject {
-  border-color: rgba(248, 113, 113, 0.6);
-  background: rgba(127, 29, 29, 0.35);
+  border-color: rgba(248, 113, 113, 0.75);
+  background: rgba(220, 38, 38, 0.42);
+}
+
+.question-button.is-reject:not(:disabled):hover {
+  background: rgba(220, 38, 38, 0.58);
+  border-color: rgba(252, 165, 165, 0.9);
 }
 
 .question-button.is-reply {
