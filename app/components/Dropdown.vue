@@ -36,20 +36,22 @@
         />
       </button>
     </slot>
-    <div
-      ref="menu"
-      class="ui-dropdown-menu"
-      :class="[{ 'is-open': isActive }, props.popupClass]"
-      :style="[menuPositionStyle, props.popupStyle]"
-      :inert="!isActive || undefined"
-      role="listbox"
-      title=""
-      tabindex="-1"
-      @click.stop
-      @keydown="onKeyDown"
-    >
-      <slot :close="close" :search-results="searchResults" :search-loading="searchLoading" />
-    </div>
+    <Teleport to="body" :disabled="!props.teleport">
+      <div
+        ref="menu"
+        class="ui-dropdown-menu"
+        :class="[{ 'is-open': isActive }, props.popupClass]"
+        :style="[menuPositionStyle, props.popupStyle]"
+        :inert="!isActive || undefined"
+        role="listbox"
+        title=""
+        tabindex="-1"
+        @click.stop
+        @keydown="onKeyDown"
+      >
+        <slot :close="close" :search-results="searchResults" :search-loading="searchLoading" />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -96,12 +98,15 @@ const props = withDefaults(
     autoHighlight?: boolean;
     placement?: 'top' | 'bottom';
     align?: 'start' | 'end';
+    /** Render the menu on document.body so page chrome cannot cover it. */
+    teleport?: boolean;
   }>(),
   {
     autoFocus: true,
     autoHighlight: true,
     placement: 'bottom',
     align: 'start',
+    teleport: false,
   },
 );
 
@@ -527,7 +532,9 @@ defineExpose({ moveHighlight, selectHighlighted, updateSearch, clearHighlight })
   scroll-padding: 6px;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
   overflow: auto;
-  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  z-index: 400;
   outline: none;
 }
 

@@ -4119,7 +4119,7 @@ onBeforeUnmount(() => {
 .app-header {
   flex: 0 0 auto;
   position: relative;
-  z-index: 30;
+  z-index: 40;
 }
 
 .app-output {
@@ -4136,7 +4136,7 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 16px;
   margin-inline: auto;
-  /* Below .app-header (30): welcome is vertically centered and would cover the path menu. */
+  /* Below .app-header so the welcome composer cannot cover header chrome. */
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -4227,6 +4227,7 @@ onBeforeUnmount(() => {
 
 .app-body {
   position: relative;
+  z-index: 0;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
