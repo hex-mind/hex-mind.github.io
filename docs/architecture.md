@@ -18,7 +18,7 @@ Browser tab (Vue)
 OpenCode  (opencode serve, default :4096)
 ```
 
-Vite serves `app/`. Production can be GitHub Pages (`hex-mind.github.io`) or `server.js` static/proxy. The browser still calls OpenCode directly (plus Chrome loopback permission for hosted HTTPS).
+Vite serves `app/`. Production can be GitHub Pages (`hex-mind.github.io`) or `server.js` static serve. The browser still calls OpenCode directly (plus Chrome loopback permission for hosted HTTPS).
 
 ## Directory vs session
 
