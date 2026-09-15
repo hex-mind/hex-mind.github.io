@@ -122,6 +122,7 @@
                     @show-thread-history="handleShowThreadHistory"
                     @edit-message="handleEditMessage"
                     @open-image="handleOpenImage"
+                    @open-attachment="handleOpenAttachment"
                     @open-file="openFileViewer"
                     @content-resized="handleOutputPanelContentResized"
                     @initial-render-complete="handleOutputPanelInitialRenderComplete"
@@ -176,6 +177,7 @@
                 @add-attachments="handleAddAttachments"
                 @remove-attachment="removeAttachment"
                 @open-image="handleOpenImage"
+                @open-attachment="handleOpenAttachment"
               />
             </footer>
           </div>
@@ -342,10 +344,7 @@ import { useSessionSelection } from './composables/useSessionSelection';
 import { useSubagentWindows } from './composables/useSubagentWindows';
 import { useGitDiffWindows } from './composables/useGitDiffWindows';
 import { useShellWindows } from './composables/useShellWindows';
-import {
-  useComposerDrafts,
-  type Attachment,
-} from './composables/useComposerDrafts';
+import { useComposerDrafts, type Attachment } from './composables/useComposerDrafts';
 import { renderWorkerHtml } from './utils/workerRenderer';
 import type { PtyInfo, ReasoningPart, ToolPart } from './types/sse';
 import type { MessageTokens } from './types/message';
@@ -369,23 +368,24 @@ import {
   FILE_VIEWER_WINDOW_HEIGHT,
   fileViewerWindowChrome,
 } from './utils/fileViewerWindow';
+import {
+  composerAttachmentMime,
+  decodeDataUrlToUtf8,
+  isAllowedComposerAttachment,
+  isImageAttachment,
+  isMarkdownAttachment,
+} from './utils/attachments';
 import { useCredentials } from './composables/useCredentials';
 import { useSettings } from './composables/useSettings';
 import { useBookmarkedSessions } from './composables/useBookmarkedSessions';
 import { usePinnedSessions } from './composables/usePinnedSessions';
-import {
-  StorageKeys,
-  storageGet,
-  storageRemove,
-  storageSet,
-} from './utils/storageKeys';
+import { StorageKeys, storageGet, storageRemove, storageSet } from './utils/storageKeys';
 
 const credentials = useCredentials();
 const { suppressAutoWindows, theme: uiTheme } = useSettings();
 const FOLLOW_THRESHOLD_PX = 24;
 const REASONING_CLOSE_DELAY_MS = 3000;
 const SUBAGENT_CLOSE_DELAY_MS = 3000;
-const ATTACHMENT_MIME_ALLOWLIST = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
 type FileContentResponse = {
   content?: string;
@@ -1186,9 +1186,7 @@ const isThinking = computed(() => {
   const selected = selectedSessionId.value;
   const ownStatus = selected ? getSessionStatus(selected) : undefined;
   return Boolean(
-    ownStatus === 'busy' ||
-    ownStatus === 'retry' ||
-    busyDescendantSessionIds.value.length > 0,
+    ownStatus === 'busy' || ownStatus === 'retry' || busyDescendantSessionIds.value.length > 0,
   );
 });
 const canAbort = computed(() =>
@@ -1729,19 +1727,25 @@ function readFileAsDataUrl(file: File) {
 }
 
 async function handleAddAttachments(files: File[]) {
-  const accepted = files.filter((file) => ATTACHMENT_MIME_ALLOWLIST.has(file.type));
+  const accepted = files.filter((file) => isAllowedComposerAttachment(file));
   if (accepted.length === 0) {
     sendStatus.value = 'Unsupported attachment type.';
     return;
   }
   try {
     const next = await Promise.all(
-      accepted.map(async (file) => ({
-        id: generateAttachmentId(),
-        filename: file.name || 'image',
-        mime: file.type || 'application/octet-stream',
-        dataUrl: await readFileAsDataUrl(file),
-      })),
+      accepted.map(async (file) => {
+        const mime = composerAttachmentMime(file);
+        const filename =
+          file.name || (isMarkdownAttachment(mime, file.name) ? 'notes.md' : 'image');
+        const normalized = mime !== file.type ? new File([file], filename, { type: mime }) : file;
+        return {
+          id: generateAttachmentId(),
+          filename,
+          mime,
+          dataUrl: await readFileAsDataUrl(normalized),
+        };
+      }),
     );
     attachments.value = [...attachments.value, ...next];
     persistComposerDraftForCurrentContext();
@@ -2114,7 +2118,6 @@ async function bootstrapSelections() {
     } else {
       await initializeSessionSelection();
     }
-
   } finally {
     isBootstrapping.value = false;
   }
@@ -2738,13 +2741,10 @@ function focusInput() {
 
 async function abortSessionTree(sessionId: string) {
   const directory = activeDirectory.value.trim();
-  const extraIds =
-    sessionId === selectedSessionId.value ? busyDescendantSessionIds.value : [];
+  const extraIds = sessionId === selectedSessionId.value ? busyDescendantSessionIds.value : [];
   await Promise.all([
     opencodeApi.abortSession(sessionId, directory || undefined),
-    ...extraIds.map((sid) =>
-      opencodeApi.abortSession(sid, directory || undefined).catch(() => {}),
-    ),
+    ...extraIds.map((sid) => opencodeApi.abortSession(sid, directory || undefined).catch(() => {})),
   ]);
 }
 
@@ -2790,12 +2790,9 @@ watch(
   { immediate: true },
 );
 
-watch(
-  inputEl,
-  () => {
-    updateFloatingExtentObserver();
-  },
-);
+watch(inputEl, () => {
+  updateFloatingExtentObserver();
+});
 
 watch(
   sessions,
@@ -3397,6 +3394,36 @@ function handleOpenImage(payload: { url: string; filename: string }) {
     height: 600,
     expiry: Infinity,
   });
+}
+
+function handleOpenMarkdown(payload: { url: string; filename: string }) {
+  const { url, filename } = payload;
+  const key = `markdown-viewer:${url}`;
+  if (fw.has(key)) {
+    fw.bringToFront(key);
+    return;
+  }
+  const pos = getFileViewerPosition(0.18, 0.14);
+  fw.open(key, {
+    component: ContentViewer,
+    props: {
+      path: filename,
+      fileContent: decodeDataUrlToUtf8(url),
+      lang: 'markdown',
+      theme: shikiTheme.value,
+    },
+    ...fileViewerWindowChrome(pos),
+    title: filename || 'Markdown',
+  });
+}
+
+function handleOpenAttachment(payload: { url: string; filename: string; mime?: string }) {
+  const mime = payload.mime ?? '';
+  if (isMarkdownAttachment(mime, payload.filename) && !isImageAttachment(mime, payload.filename)) {
+    handleOpenMarkdown(payload);
+    return;
+  }
+  handleOpenImage(payload);
 }
 
 async function handleEditMessage(payload: {
@@ -4247,9 +4274,7 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: 0;
   margin: var(--workbench-inset) 0 0;
-  --composer-dock-height: calc(
-    16px + var(--input-panel-height, var(--input-panel-default))
-  );
+  --composer-dock-height: calc(16px + var(--input-panel-height, var(--input-panel-default)));
 }
 
 .app-main-column.is-composer-hidden,

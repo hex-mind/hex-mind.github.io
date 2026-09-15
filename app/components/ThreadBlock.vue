@@ -32,28 +32,39 @@
           ref="editFileInputRef"
           class="ib-user-editor-file"
           type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
+          :accept="COMPOSER_ACCEPT"
           multiple
           @change="handleEditFileChange"
         />
         <div v-if="editAttachments.length > 0" class="attachment-list">
           <div v-for="item in editAttachments" :key="item.id" class="attachment-item">
             <img
-              v-if="item.mime.startsWith('image/')"
+              v-if="isImageAttachment(item.mime, item.filename)"
               class="attachment-thumb clickable"
               :src="item.dataUrl"
               :alt="item.filename"
               @click="emit('open-image', { url: item.dataUrl, filename: item.filename })"
             />
+            <button
+              v-else-if="isMarkdownAttachment(item.mime, item.filename)"
+              type="button"
+              class="attachment-file-icon"
+              :title="item.filename"
+              @click="
+                emit('open-attachment', {
+                  url: item.dataUrl,
+                  filename: item.filename,
+                  mime: item.mime,
+                })
+              "
+            >
+              <Icon icon="lucide:file-text" :width="18" :height="18" />
+            </button>
             <div class="attachment-meta">
               <div class="attachment-name">{{ item.filename }}</div>
               <div class="attachment-type">{{ item.mime }}</div>
             </div>
-            <button
-              type="button"
-              class="attachment-remove"
-              @click="removeEditAttachment(item.id)"
-            >
+            <button type="button" class="attachment-remove" @click="removeEditAttachment(item.id)">
               <Icon icon="lucide:x" :width="12" :height="12" />
             </button>
           </div>
@@ -108,7 +119,7 @@
               type="button"
               class="ib-user-editor-button"
               :disabled="!editCanAttach"
-              title="Attach"
+              title="Attach image or Markdown"
               @click="triggerEditFileInput"
             >
               <Icon icon="lucide:paperclip" :width="16" :height="16" />
@@ -150,15 +161,32 @@
               @rendered="emit('message-rendered', getThreadUserRenderKey(root))"
             />
             <div v-if="getMessageAttachments(root).length > 0" class="output-entry-attachments">
-              <img
-                v-for="item in getMessageAttachments(root)"
-                :key="item.id"
-                class="output-entry-attachment clickable"
-                :src="item.url"
-                :alt="item.filename"
-                loading="lazy"
-                @click="emit('open-image', { url: item.url, filename: item.filename })"
-              />
+              <template v-for="item in getMessageAttachments(root)" :key="item.id">
+                <img
+                  v-if="isImageAttachment(item.mime, item.filename)"
+                  class="output-entry-attachment clickable"
+                  :src="item.url"
+                  :alt="item.filename"
+                  loading="lazy"
+                  @click="emit('open-image', { url: item.url, filename: item.filename })"
+                />
+                <button
+                  v-else
+                  type="button"
+                  class="output-entry-file clickable"
+                  :title="item.filename"
+                  @click="
+                    emit('open-attachment', {
+                      url: item.url,
+                      filename: item.filename,
+                      mime: item.mime,
+                    })
+                  "
+                >
+                  <Icon icon="lucide:file-text" :width="16" :height="16" />
+                  <span>{{ item.filename }}</span>
+                </button>
+              </template>
             </div>
           </div>
         </div>
@@ -205,15 +233,32 @@
             v-if="getMessageAttachments(getFinalAnswer(root)).length > 0"
             class="output-entry-attachments"
           >
-            <img
-              v-for="item in getMessageAttachments(getFinalAnswer(root))"
-              :key="item.id"
-              class="output-entry-attachment clickable"
-              :src="item.url"
-              :alt="item.filename"
-              loading="lazy"
-              @click="emit('open-image', { url: item.url, filename: item.filename })"
-            />
+            <template v-for="item in getMessageAttachments(getFinalAnswer(root))" :key="item.id">
+              <img
+                v-if="isImageAttachment(item.mime, item.filename)"
+                class="output-entry-attachment clickable"
+                :src="item.url"
+                :alt="item.filename"
+                loading="lazy"
+                @click="emit('open-image', { url: item.url, filename: item.filename })"
+              />
+              <button
+                v-else
+                type="button"
+                class="output-entry-file clickable"
+                :title="item.filename"
+                @click="
+                  emit('open-attachment', {
+                    url: item.url,
+                    filename: item.filename,
+                    mime: item.mime,
+                  })
+                "
+              >
+                <Icon icon="lucide:file-text" :width="16" :height="16" />
+                <span>{{ item.filename }}</span>
+              </button>
+            </template>
           </div>
         </div>
       </Transition>
@@ -254,6 +299,13 @@ import ModelPicker from './ModelPicker.vue';
 import ThreadFooter from './ThreadFooter.vue';
 import ThreadTarget from './ThreadTarget.vue';
 import { useMessages } from '../composables/useMessages';
+import {
+  COMPOSER_ACCEPT,
+  composerAttachmentMime,
+  isAllowedComposerAttachment,
+  isImageAttachment,
+  isMarkdownAttachment,
+} from '../utils/attachments';
 import type {
   HistoryEntry,
   HistoryWindowEntry,
@@ -265,7 +317,12 @@ import type {
   ThreadTarget as ThreadTargetType,
 } from '../types/message';
 import type { MessageInfo, QuestionInfo, ToolPart } from '../types/sse';
-import { formatElapsedTime, formatMessageError, formatMessageTime, formatTokenCount } from '../utils/formatters';
+import {
+  formatElapsedTime,
+  formatMessageError,
+  formatMessageTime,
+  formatTokenCount,
+} from '../utils/formatters';
 import { confirmAction } from '../composables/useConfirm';
 import { useSettings } from '../composables/useSettings';
 
@@ -323,6 +380,7 @@ const emit = defineEmits<{
   (event: 'undo-revert'): void;
   (event: 'show-message-diff', payload: { messageKey: string; diffs: MessageDiffEntry[] }): void;
   (event: 'open-image', payload: { url: string; filename: string }): void;
+  (event: 'open-attachment', payload: { url: string; filename: string; mime: string }): void;
   (event: 'show-thread-history', payload: { entries: HistoryWindowEntry[] }): void;
   (event: 'message-rendered', renderKey: string): void;
 }>();
@@ -342,7 +400,6 @@ const editAttachments = ref<Array<{ id: string; filename: string; mime: string; 
 );
 const editTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const editFileInputRef = ref<HTMLInputElement | null>(null);
-const EDIT_IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 let copiedResetTimer: number | undefined;
 let questionCopiedResetTimer: number | undefined;
 
@@ -676,22 +733,18 @@ function readEditFileAsDataUrl(file: File) {
 }
 
 async function addEditAttachments(files: File[]) {
-  const accepted = files.filter((file) => {
-    const mime = (file.type || '').toLowerCase();
-    if (EDIT_IMAGE_MIMES.has(mime) || mime.startsWith('image/')) return true;
-    return /\.(png|jpe?g|gif|webp)$/i.test(file.name || '');
-  });
+  const accepted = files.filter((file) => isAllowedComposerAttachment(file));
   if (accepted.length === 0) return;
   const next = await Promise.all(
     accepted.map(async (file) => {
+      const mime = composerAttachmentMime(file);
+      const filename = file.name || (isMarkdownAttachment(mime, file.name) ? 'notes.md' : 'image');
       const buffer = await file.arrayBuffer();
-      const copy = new File([buffer], file.name || 'image', {
-        type: file.type || 'application/octet-stream',
-      });
+      const copy = new File([buffer], filename, { type: mime });
       return {
         id: createEditAttachmentId(),
-        filename: copy.name,
-        mime: copy.type,
+        filename,
+        mime,
         dataUrl: await readEditFileAsDataUrl(copy),
       };
     }),
@@ -727,7 +780,9 @@ function handleEditPaste(event: ClipboardEvent) {
     const file = item.getAsFile();
     if (!file) continue;
     const mime = file.type || item.type || '';
-    files.push(mime && mime !== file.type ? new File([file], file.name || 'image', { type: mime }) : file);
+    files.push(
+      mime && mime !== file.type ? new File([file], file.name || 'image', { type: mime }) : file,
+    );
   }
   if (files.length === 0) return;
   event.preventDefault();
@@ -769,8 +824,12 @@ function cycleEditMode(direction: 'next' | 'prev') {
   const index = options.indexOf(current);
   const nextIndex =
     direction === 'next'
-      ? (index < 0 ? 0 : (index + 1) % options.length)
-      : (index < 0 ? options.length - 1 : (index - 1 + options.length) % options.length);
+      ? index < 0
+        ? 0
+        : (index + 1) % options.length
+      : index < 0
+        ? options.length - 1
+        : (index - 1 + options.length) % options.length;
   const next = options[nextIndex];
   if (!next) return false;
   editMode.value = next;
@@ -1195,6 +1254,21 @@ function getThreadUserRenderKey(root: MessageInfo): string {
   cursor: pointer;
 }
 
+.ib-user-editor .attachment-file-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 6px;
+  border: 1px solid #2b2b2b;
+  background: #1f1f1f;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
 .ib-user-editor .attachment-meta {
   display: flex;
   flex-direction: column;
@@ -1367,5 +1441,29 @@ function getThreadUserRenderKey(root: MessageInfo): string {
 
 .output-entry-attachment.clickable {
   cursor: pointer;
+}
+
+.output-entry-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #2b2b2b;
+  background: #1f1f1f;
+  color: #e2e8f0;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.output-entry-file span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

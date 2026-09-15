@@ -17,6 +17,7 @@ import type {
 } from '../types/sse';
 import type { SessionScope } from './useGlobalEvents';
 import { useDeltaAccumulator } from './useDeltaAccumulator';
+import { isImageAttachment, isMarkdownAttachment } from '../utils/attachments';
 
 type MessageEntry = {
   info?: MessageInfo;
@@ -307,7 +308,12 @@ function getImageAttachments(id: string): MessageAttachment[] | undefined {
   const result: MessageAttachment[] = [];
   let index = 0;
   for (const part of files) {
-    if (!part.mime.startsWith('image/')) continue;
+    if (
+      !isImageAttachment(part.mime, part.filename ?? '') &&
+      !isMarkdownAttachment(part.mime, part.filename ?? '')
+    ) {
+      continue;
+    }
     result.push({
       id: part.id,
       url: part.url,

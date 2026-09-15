@@ -67,12 +67,27 @@
       <div v-if="attachments.length > 0" class="attachment-list">
         <div v-for="item in attachments" :key="item.id" class="attachment-item">
           <img
-            v-if="item.mime.startsWith('image/')"
+            v-if="isImageAttachment(item.mime, item.filename)"
             class="attachment-thumb clickable"
             :src="item.dataUrl"
             :alt="item.filename"
             @click="$emit('open-image', { url: item.dataUrl, filename: item.filename })"
           />
+          <button
+            v-else-if="isMarkdownAttachment(item.mime, item.filename)"
+            type="button"
+            class="attachment-file-icon"
+            :title="item.filename"
+            @click="
+              $emit('open-attachment', {
+                url: item.dataUrl,
+                filename: item.filename,
+                mime: item.mime,
+              })
+            "
+          >
+            <Icon icon="lucide:file-text" :width="18" :height="18" />
+          </button>
           <div class="attachment-meta">
             <div class="attachment-name">{{ item.filename }}</div>
             <div class="attachment-type">{{ item.mime }}</div>
@@ -200,7 +215,7 @@
             type="button"
             class="input-button attach-button"
             :disabled="props.disabled || props.canAttach === false"
-            title="Attach"
+            title="Attach image or Markdown"
             @click="triggerFileInput"
           >
             <Icon icon="lucide:paperclip" :width="16" :height="16" />
@@ -240,6 +255,7 @@ import AgentPicker from './AgentPicker.vue';
 import ModelPicker from './ModelPicker.vue';
 import { useMessages } from '../composables/useMessages';
 import { useSettings } from '../composables/useSettings';
+import { COMPOSER_ACCEPT, isImageAttachment, isMarkdownAttachment } from '../utils/attachments';
 type ModelOption = {
   id: string;
   modelID: string;
@@ -295,6 +311,7 @@ const emit = defineEmits<{
   (event: 'add-attachments', files: File[]): void;
   (event: 'remove-attachment', id: string): void;
   (event: 'open-image', payload: { url: string; filename: string }): void;
+  (event: 'open-attachment', payload: { url: string; filename: string; mime: string }): void;
 }>();
 
 const messageValue = computed({
@@ -305,7 +322,7 @@ const messageValue = computed({
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const modelDropdownRef = ref<HTMLElement | null>(null);
-const acceptMime = 'image/png,image/jpeg,image/gif,image/webp';
+const acceptMime = COMPOSER_ACCEPT;
 
 function textareaMaxHeightPx() {
   return Math.round(Math.min(window.innerHeight * 0.4, 360));
@@ -963,6 +980,21 @@ defineExpose({ focus, reset });
 }
 
 .attachment-thumb.clickable {
+  cursor: pointer;
+}
+
+.attachment-file-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 6px;
+  border: 1px solid #2b2b2b;
+  background: #1f1f1f;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   cursor: pointer;
 }
 

@@ -33,6 +33,7 @@
                 @undo-revert="emit('undo-revert')"
                 @show-message-diff="emit('show-message-diff', $event)"
                 @open-image="emit('open-image', $event)"
+                @open-attachment="emit('open-attachment', $event)"
                 @show-thread-history="emit('show-thread-history', $event)"
                 @message-rendered="handleMessageRendered"
               />
@@ -151,6 +152,7 @@ const emit = defineEmits<{
   (event: 'undo-revert'): void;
   (event: 'show-message-diff', payload: { messageKey: string; diffs: MessageDiffEntry[] }): void;
   (event: 'open-image', payload: { url: string; filename: string }): void;
+  (event: 'open-attachment', payload: { url: string; filename: string; mime: string }): void;
   (event: 'show-thread-history', payload: { entries: HistoryWindowEntry[] }): void;
   (event: 'open-file', path: string, lines?: string): void;
   (event: 'show-commit', hash: string): void;

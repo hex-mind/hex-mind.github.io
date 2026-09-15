@@ -39,7 +39,7 @@ A lot of thought went into not getting in your way — see [docs/architecture.md
 - **Live session graph.** A `SharedWorker` holds one SSE connection and builds the project → worktree/sandbox → session tree. Recent, bookmarks, and the top bar all read from that single source of truth instead of refetching.
 - **Streaming chat.** Assistant responses render as they arrive via SSE deltas, with Shiki syntax highlighting and per-message follow-up composer.
 - **Floating tool windows.** Shell/terminal (xterm), file diffs, file viewers, grep/glob results, web fetches & searches, sub-agent runs, reasoning traces, permission prompts, and question dialogs — each in a resizable window you can arrange.
-- **Compose with context.** Pick the model and agent inline, attach images/PDFs, and reference `@file` paths that are resolved at submit time.
+- **Compose with context.** Pick the model and agent inline, attach images or Markdown, and reference `@file` paths that are resolved at submit time.
 - **Git panel.** On-demand status with **Staged** / **Changes** split, file-level diffs, "view diff for all", a branch picker that switches/creates/merges, and one-shot PTY snapshots — never a slow `git status` on every paint.
 - **Permissions & questions.** Inline allow/deny for agent actions and multiple-choice question dialogs with a custom free-text answer.
 - **Organize sessions.** Recent history, bookmarks, pinning, rename, archive, and delete (Shift reveals archive/delete on archived sessions).
