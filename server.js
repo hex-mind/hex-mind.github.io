@@ -1,42 +1,61 @@
 #!/usr/bin/env node
-import { serveStatic } from '@hono/node-server/serve-static';
-import { serve } from '@hono/node-server';
-import { Hono } from 'hono';
-import { join } from 'node:path';
-import { proxy } from 'hono/proxy';
+import { createServer } from 'node:http';
+import { createReadStream, statSync } from 'node:fs';
+import { extname, join } from 'node:path';
 
-const app = new Hono();
+const root = join(import.meta.dirname, 'dist');
 
-if (process.argv[2] === 'proxy') {
-  const baseURL = process.argv[3] ?? 'https://hex-mind.github.io/hex';
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2',
+};
 
-  console.log('Proxy to ' + baseURL);
-
-  app.use('*', (c) => {
-    const url = new URL(baseURL);
-    url.pathname = url.pathname.replace(/\/$/, '') + c.req.path;
-
-    const q = c.req.queries();
-    for (const k in q) {
-      for (const v of q?.[k] ?? []) {
-        url.searchParams.append(k, v);
-      }
+const server = createServer((req, res) => {
+  try {
+    // WHATWG URL normalizes literal ".." away, but decodeURIComponent can
+    // re-introduce it (%2e%2e%2f) — so the ".." check must run after decoding.
+    const path = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+    if (/(?:^|[/\\])\.\.(?:$|[/\\])/.test(path)) {
+      res.writeHead(403).end();
+      return;
     }
-
-    return proxy(url, {
-      ...c.req,
+    let file = join(root, path);
+    let stats = statSync(file, { throwIfNoEntry: false });
+    if (stats?.isDirectory()) {
+      file = join(file, 'index.html');
+      stats = statSync(file, { throwIfNoEntry: false });
+    }
+    if (!stats?.isFile()) {
+      res.writeHead(404).end('Not Found');
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': MIME[extname(file)] ?? 'application/octet-stream',
+      'Content-Length': stats.size,
     });
-  });
-} else {
-  app.use('*', serveStatic({ root: join(import.meta.dirname, 'dist/') }));
-}
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    const stream = createReadStream(file);
+    stream.on('error', () => res.destroy());
+    stream.pipe(res);
+  } catch {
+    // Malformed input (bad %encoding, null bytes, …) — reject, never crash.
+    if (!res.headersSent) res.writeHead(400);
+    res.end();
+  }
+});
 
-serve(
-  {
-    fetch: app.fetch,
-    port: process.env.HEX_PORT || 3000,
-  },
-  (info) => {
-    console.log(`Listening on http://localhost:${info.port}`);
-  },
-);
+const port = process.env.HEX_PORT || 3000;
+server.listen(port, () => {
+  console.log(`Listening on http://localhost:${server.address().port}`);
+});

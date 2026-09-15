@@ -131,7 +131,7 @@ On managed devices you may only be able to edit user-level environment variables
 | Markdown            | **markdown-it**                                                           |
 | Icons               | **Iconify** (`lucide:`)                                                   |
 | Rendering           | Worker-based markdown/render pipeline                                     |
-| Server / static     | **Hono** + `@hono/node-server` (`server.js`, optional static/proxy serve) |
+| Server / static     | **`node:http`** (`server.js` static serve, zero runtime deps)             |
 | Real-time           | **SSE** over a **SharedWorker** (one connection per OpenCode base URL)    |
 | Package manager     | **pnpm**                                                                  |
 | CI / deploy         | GitHub Actions → GitHub Pages & npm publish                               |
@@ -163,7 +163,6 @@ Serve the built app with the bundled server:
 
 ```bash
 node server.js           # static serve of dist/ (HEX_PORT, default 3000)
-node server.js proxy     # proxy the hosted build (default hex-mind.github.io/hex)
 ```
 
 Contributors: read [AGENTS.md](AGENTS.md) **before** touching UI, startup, layout, or git-panel code — it encodes the product rules and performance invariants you must not regress. Per-skill docs live in [`.opencode/skills/`](.opencode/skills/).

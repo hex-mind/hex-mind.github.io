@@ -59,7 +59,7 @@
           <div class="setting-label">GitHub</div>
           <a
             class="setting-link"
-            href="https://github.com/hex-mind/hex-mind.github.io"
+            href="https://github.com/hex-mind/Hex#hex"
             target="_blank"
             rel="noopener noreferrer"
           >

@@ -15,6 +15,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, reactive, watch } from 'vue';
 import { renderWorkerHtml } from '../../utils/workerRenderer';
+import 'katex/dist/katex.min.css';
 
 const props = defineProps<{
   code?: string;
@@ -367,6 +368,28 @@ onBeforeUnmount(() => {
 .message-content :deep(.markdown-host del) {
   text-decoration: line-through;
   opacity: 0.6;
+}
+
+.message-content :deep(.katex) {
+  font-size: 1.05em;
+  color: inherit;
+}
+
+.message-content :deep(.katex-display) {
+  display: block;
+  margin: 0.45em 0 0.6em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.1em 0;
+  text-align: left;
+}
+
+.message-content :deep(.katex-display > .katex) {
+  text-align: left;
+}
+
+.message-content :deep(.katex-error) {
+  color: #f87171;
 }
 
 .message-content :deep(.markdown-host code:not(pre code)) {
