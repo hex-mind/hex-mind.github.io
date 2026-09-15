@@ -33,6 +33,7 @@
             title="Select path"
             auto-close
             :auto-highlight="false"
+            teleport
             @select="onTreeSelect"
           >
           <template #label>

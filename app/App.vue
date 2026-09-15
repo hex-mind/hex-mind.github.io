@@ -4119,7 +4119,7 @@ onBeforeUnmount(() => {
 .app-header {
   flex: 0 0 auto;
   position: relative;
-  z-index: 30;
+  z-index: 40;
 }
 
 .app-output {
@@ -4136,7 +4136,7 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 16px;
   margin-inline: auto;
-  z-index: 30;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: stretch;

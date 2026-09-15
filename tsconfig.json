@@ -14,5 +14,6 @@
     "noUnusedParameters": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["app/**/*.ts", "app/**/*.vue", "vite.config.ts"]
+  "include": ["app/**/*.ts", "app/**/*.vue", "vite.config.ts"],
+  "exclude": ["app/utils/markdownKatex.selfcheck.ts"]
 }

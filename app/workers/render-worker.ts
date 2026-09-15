@@ -3,6 +3,7 @@ import { fromHighlighter, type MarkdownItShikiSetupOptions } from '@shikijs/mark
 import { bundledLanguages, createHighlighter } from 'shiki/bundle/web';
 import { bundledLanguages as allBundledLanguages } from 'shiki/langs';
 import { transformerNotationDiff } from '@shikijs/transformers';
+import { markdownKatexPlugin } from '../utils/markdownKatex';
 
 type RenderRequest = {
   id: string;
@@ -885,6 +886,7 @@ function getMarkdownIt(highlighter: Highlighter, theme: string) {
     cachedMdShikiOptions = shikiOptions;
     cachedMd = new MarkdownIt({ html: false, linkify: false, breaks: true });
     cachedMd.use(fromHighlighter(highlighter, shikiOptions));
+    cachedMd.use(markdownKatexPlugin);
     cachedMd.use(taskListEmojiPlugin);
     const defaultLinkOpen =
       cachedMd.renderer.rules.link_open ??

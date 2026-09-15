@@ -36,20 +36,22 @@
         />
       </button>
     </slot>
-    <div
-      ref="menu"
-      class="ui-dropdown-menu"
-      :class="[{ 'is-open': isActive }, props.popupClass]"
-      :style="[menuPositionStyle, props.popupStyle]"
-      :inert="!isActive || undefined"
-      role="listbox"
-      title=""
-      tabindex="-1"
-      @click.stop
-      @keydown="onKeyDown"
-    >
-      <slot :close="close" :search-results="searchResults" :search-loading="searchLoading" />
-    </div>
+    <Teleport to="body" :disabled="!props.teleport">
+      <div
+        ref="menu"
+        class="ui-dropdown-menu"
+        :class="[{ 'is-open': isActive }, props.popupClass]"
+        :style="[menuPositionStyle, props.popupStyle]"
+        :inert="!isActive || undefined"
+        role="listbox"
+        title=""
+        tabindex="-1"
+        @click.stop
+        @keydown="onKeyDown"
+      >
+        <slot :close="close" :search-results="searchResults" :search-loading="searchLoading" />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -96,12 +98,14 @@ const props = withDefaults(
     autoHighlight?: boolean;
     placement?: 'top' | 'bottom';
     align?: 'start' | 'end';
+    teleport?: boolean;
   }>(),
   {
     autoFocus: true,
     autoHighlight: true,
     placement: 'bottom',
     align: 'start',
+    teleport: false,
   },
 );
 

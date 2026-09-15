@@ -28,10 +28,6 @@
     "build": "vite build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "dependencies": {
-    "@hono/node-server": "^1.19.9",
-    "hono": "^4.12.3"
-  },
   "devDependencies": {
     "@iconify/vue": "^5.0.0",
     "@kikuchan/hexdump": "0.1.0-alpha.9",
@@ -42,6 +38,7 @@
     "@types/node": "^25.2.3",
     "@vitejs/plugin-vue": "^6.0.4",
     "@xterm/xterm": "^6.0.0",
+    "katex": "^0.18.7",
     "markdown-it": "^14.1.1",
     "oxfmt": "^0.32.0",
     "oxlint": "^1.47.0",
