@@ -4136,7 +4136,8 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 16px;
   margin-inline: auto;
-  z-index: 30;
+  /* Below .app-header (30): welcome is vertically centered and would cover the path menu. */
+  z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: stretch;
