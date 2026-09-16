@@ -41,7 +41,7 @@ Startup must stay cheap. Do not put these back on the splash critical path:
 1. Worker bootstrap only syncs OpenCode’s current `GET /project` worktrees/sandboxes (plus the default instance). Remembered paths load **after** `state.bootstrap`, capped (`LAZY_DIRECTORY_LIMIT`).
 2. `uiInitState = 'ready'` after SSE + path + project/session **selection**. Session history, providers, agents, commands, permissions, and questions are background.
 3. Files tree paints **root listing first**, then scans in the background. Expanding a folder loads that folder. Do not BFS the whole tree before `treeLoading` clears.
-4. Git status is **on-demand** on the Git tab (open tab, refresh, or a git command from that panel). Use one-shot PTY porcelain (`git status --porcelain=v1` + numstat), never `/file/status` for Staged/Changes, and never on splash or directory change from Files. Branch lists may still use a one-shot PTY when the user opens the branch picker. See `docs/prd-git-panel.md`.
+4. Git status is **on-demand** on the Git tab (open tab, refresh, or a git command from that panel). Use one-shot PTY `git` argv (`git status --porcelain=v1 -b` + numstat), never `/file/status` for Staged/Changes, never `env`/`bash`/`/bin/sh` wrappers, and never on splash or directory change from Files. Branch lists may still use a one-shot PTY when the user opens the branch picker. See `docs/prd-git-panel.md`.
 5. File-index updates (`useFileTree` `files`) must not force a full assistant markdown re-render. `useAssistantPreRenderer` watches thread content and theme only; `@file` basenames are a snapshot at submit time.
 
 `rememberInstanceDirectories` is for reconnect/lazy sync, not a reason to fan out 80 OpenCode instances during splash.
@@ -55,7 +55,7 @@ Startup must stay cheap. Do not put these back on the splash critical path:
 | `app/utils/stateBuilder.ts` | Session-graph mutations (worker SSOT) |
 | `app/types/worker-state.ts` | Session-graph types |
 | `app/utils/opencode.ts` | REST client for OpenCode |
-| `app/utils/gitSnapshots.ts` | One-shot PTY scripts + parsers for git/commit diffs |
+| `app/utils/gitStatus.ts` | Git porcelain/numstat parsers + PTY git argv helpers |
 | `app/composables/useGitDiffWindows.ts` | Git / commit / message diff floating windows |
 | `app/utils/fileViewerWindow.ts` | Shared file-viewer window size + chrome |
 | `app/utils/debugDump.ts` | `/debug session` graph dump |
@@ -73,7 +73,7 @@ Startup must stay cheap. Do not put these back on the splash critical path:
 - Protocol HTTP → `opencode.ts`
 - Session graph → worker / `stateBuilder`
 - Files / git status → `useFileTree`
-- Git snapshot scripts/parsers → `gitSnapshots.ts`
+- Git status/diff parsers → `gitStatus.ts`
 - Isolated UI state → a composable (`use*.ts`) or a child component
 
 Still in `App.vue` (extract later if you touch that area): composer send/slash/debug, panel sashes, and tool-window routing.

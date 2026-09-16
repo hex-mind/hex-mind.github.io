@@ -363,6 +363,7 @@ export function createPty(payload: {
   command?: string;
   args?: string[];
   title?: string;
+  env?: Record<string, string>;
 }) {
   return sendJson('/pty', 'POST', {
     params: { directory: payload.directory },
@@ -371,6 +372,7 @@ export function createPty(payload: {
       args: payload.args,
       cwd: payload.cwd,
       title: payload.title,
+      env: payload.env,
     },
   }) as Promise<unknown>;
 }

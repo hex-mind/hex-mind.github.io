@@ -15,5 +15,5 @@
     "types": ["node", "vite/client"]
   },
   "include": ["app/**/*.ts", "app/**/*.vue", "vite.config.ts"],
-  "exclude": ["app/utils/markdownKatex.selfcheck.ts"]
+  "exclude": ["app/utils/markdownKatex.selfcheck.ts", "app/utils/gitStatus.check.ts"]
 }

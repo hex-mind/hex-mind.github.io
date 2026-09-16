@@ -26,6 +26,8 @@ export function useTodos(options: {
   const todoLoadingBySessionId = ref<Record<string, boolean>>({});
   const todoErrorBySessionId = ref<Record<string, string>>({});
   let todoReloadRequestId = 0;
+  let lastFetchedIdsKey = '';
+  let todoEpoch = 0;
 
   function normalizeTodoItem(value: unknown): TodoItem | null {
     if (!value || typeof value !== 'object') return null;
@@ -44,10 +46,28 @@ export function useTodos(options: {
       .filter((item): item is TodoItem => Boolean(item));
   }
 
+  function applyTodoUpdated(sessionID: string, todos: unknown) {
+    todoEpoch += 1;
+    todosBySessionId.value = {
+      ...todosBySessionId.value,
+      [sessionID]: normalizeTodoItems(todos),
+    };
+    if (todoErrorBySessionId.value[sessionID]) {
+      const nextErrors = { ...todoErrorBySessionId.value };
+      delete nextErrors[sessionID];
+      todoErrorBySessionId.value = nextErrors;
+    }
+  }
+
   async function reloadTodosForAllowedSessions() {
-    const requestId = ++todoReloadRequestId;
     const sessionId = options.selectedSessionId.value;
     const sessionIds = sessionId ? Array.from(options.allowedSessionIds.value) : [];
+    const idsKey = [...sessionIds].sort().join('\n');
+    if (sessionIds.length > 0 && idsKey === lastFetchedIdsKey) return;
+
+    const requestId = ++todoReloadRequestId;
+    lastFetchedIdsKey = idsKey;
+    const epochAtStart = todoEpoch;
     if (sessionIds.length === 0) {
       todosBySessionId.value = {};
       todoLoadingBySessionId.value = {};
@@ -75,6 +95,7 @@ export function useTodos(options: {
     );
     if (requestId !== todoReloadRequestId) return;
     todoLoadingBySessionId.value = {};
+    if (epochAtStart !== todoEpoch) return;
     todoErrorBySessionId.value = nextErrors;
     todosBySessionId.value = nextTodos;
   }
@@ -84,6 +105,7 @@ export function useTodos(options: {
     todoLoadingBySessionId,
     todoErrorBySessionId,
     normalizeTodoItems,
+    applyTodoUpdated,
     reloadTodosForAllowedSessions,
   };
 }

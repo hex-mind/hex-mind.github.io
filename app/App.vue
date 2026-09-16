@@ -53,7 +53,7 @@
             :tree-directory-name="treeDirectoryName"
             :tree-branch-entries="branchEntries"
             :tree-branch-list-loading="branchListLoading"
-            :run-shell-command="runTreeShellCommand"
+            :run-git-command="runTreeGitCommand"
             @toggle-collapse="toggleSidePanelCollapsed"
             @select-tab="selectSidePanelTab"
             @select-bookmark="handleTopPanelSessionSelect"
@@ -909,7 +909,7 @@ const {
   todosBySessionId,
   todoLoadingBySessionId,
   todoErrorBySessionId,
-  normalizeTodoItems,
+  applyTodoUpdated,
   reloadTodosForAllowedSessions,
 } = useTodos({ selectedSessionId, allowedSessionIds, activeDirectory });
 
@@ -949,7 +949,7 @@ const {
   restoreShellSessions,
   disposeShellWindows,
   openShellFromInput,
-  runTreeShellCommand,
+  runTreeGitCommand,
   handlePtyEvent,
   lingerAndRemoveShellWindow,
   handleWindowClose: handleShellWindowClose,
@@ -3000,6 +3000,7 @@ watch(uiTheme, (theme) => {
 
 const { openGitDiff, openAllGitDiff, handleShowMessageDiff, handleShowCommit } = useGitDiffWindows({
   fw,
+  workingDirectory,
   runOneShotPtyCommand,
   shikiTheme,
   getFileViewerPosition,
@@ -3861,15 +3862,7 @@ onMounted(() => {
   );
   globalEventUnsubscribers.push(
     sessionScope.on('todo.updated', ({ sessionID, todos }) => {
-      todosBySessionId.value = {
-        ...todosBySessionId.value,
-        [sessionID]: normalizeTodoItems(todos),
-      };
-      if (todoErrorBySessionId.value[sessionID]) {
-        const nextErrors = { ...todoErrorBySessionId.value };
-        delete nextErrors[sessionID];
-        todoErrorBySessionId.value = nextErrors;
-      }
+      applyTodoUpdated(sessionID, todos);
     }),
   );
   globalEventUnsubscribers.push(

@@ -4,6 +4,7 @@ import ShellContent from '../components/ToolWindow/Shell.vue';
 import { WINDOW_COLOR } from '../components/ToolWindow/utils';
 import type { PtyInfo } from '../types/sse';
 import * as opencodeApi from '../utils/opencode';
+import { GIT_PAGER_ENV, buildOneShotPtySpawn } from '../utils/gitStatus';
 import type { UiTheme } from './useSettings';
 import type { useFloatingWindows } from './useFloatingWindows';
 
@@ -161,14 +162,15 @@ export function useShellWindows(options: UseShellWindowsOptions) {
     return data.map(parsePtyInfo).filter((pty): pty is PtyInfo => Boolean(pty));
   }
 
-  async function createPtySession(command?: string, args?: string[]) {
+  async function createPtySession(command?: string, args?: string[], title = 'Shell') {
     const directory = workingDirectory.value || undefined;
     const data = await opencodeApi.createPty({
       directory,
       command,
       args,
       cwd: directory,
-      title: 'Shell',
+      title,
+      env: title.startsWith('git ') ? GIT_PAGER_ENV : undefined,
     });
     return parsePtyInfo(data);
   }
@@ -471,10 +473,12 @@ export function useShellWindows(options: UseShellWindowsOptions) {
     if (session) session.closeOnSuccess = true;
   }
 
-  async function runTreeShellCommand(command: string) {
-    const script = command.trim();
-    if (!script) return;
-    const pty = await createPtySession('/bin/sh', ['-c', script]);
+  async function runTreeGitCommand(args: string[]) {
+    const gitArgs = args.map((arg) => arg.trim()).filter(Boolean);
+    if (gitArgs.length === 0) return;
+    const directory = workingDirectory.value || undefined;
+    const spawn = buildOneShotPtySpawn(directory, 'git', gitArgs);
+    const pty = await createPtySession(spawn.command, spawn.args, `git ${gitArgs.join(' ')}`);
     if (!pty) return;
     ensureShellWindow(pty);
     const session = shellSessionsByPtyId.get(pty.id);
@@ -545,7 +549,7 @@ export function useShellWindows(options: UseShellWindowsOptions) {
     restoreShellSessions,
     disposeShellWindows,
     openShellFromInput,
-    runTreeShellCommand,
+    runTreeGitCommand,
     handlePtyEvent,
     lingerAndRemoveShellWindow,
     handleWindowClose,
