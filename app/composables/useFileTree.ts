@@ -107,8 +107,12 @@ function getOptions(): UseFileTreeOptions {
   return boundOptions;
 }
 
+function withForwardSlashes(value: string) {
+  return value.replace(/\\/g, '/');
+}
+
 function normalizeRelativePath(path: string) {
-  const trimmed = path.trim();
+  const trimmed = withForwardSlashes(path).trim();
   if (!trimmed || trimmed === '.') return '.';
   const withoutPrefix = trimmed
     .replace(/^\.\//, '')
@@ -119,8 +123,8 @@ function normalizeRelativePath(path: string) {
 }
 
 function toRelativePath(path: string, directory: string) {
-  const normalizedDirectory = normalizeDirectory(directory);
-  const normalizedPath = normalizeDirectory(path);
+  const normalizedDirectory = withForwardSlashes(normalizeDirectory(directory));
+  const normalizedPath = withForwardSlashes(normalizeDirectory(path));
   if (normalizedPath === normalizedDirectory) return '.';
   const prefix = `${normalizedDirectory}/`;
   if (normalizedPath.startsWith(prefix)) {
@@ -234,8 +238,8 @@ function clearScheduledDirectoryReloads() {
 }
 
 function isPathInsideDirectory(path: string, directory: string) {
-  const normalizedDirectory = normalizeDirectory(directory);
-  const normalizedPath = normalizeDirectory(path);
+  const normalizedDirectory = withForwardSlashes(normalizeDirectory(directory));
+  const normalizedPath = withForwardSlashes(normalizeDirectory(path));
   if (!normalizedDirectory || !normalizedPath) return false;
   return (
     normalizedPath === normalizedDirectory || normalizedPath.startsWith(`${normalizedDirectory}/`)

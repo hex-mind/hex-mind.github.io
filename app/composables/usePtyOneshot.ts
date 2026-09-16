@@ -70,6 +70,11 @@ function isCursorMetaString(value: string) {
   }
 }
 
+function isPtyAlreadyGone(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /request failed \(404\)/i.test(message);
+}
+
 function extractOneShotExitCode(output: string): { output: string; exitCode: number | null } {
   const normalized = output.replace(/\r/g, '');
   const lines = normalized.split('\n');
@@ -123,14 +128,32 @@ async function runOneShotPtyCommand(command: string, args: string[]): Promise<st
 
     const finish = (output: string) => stripPtyNoise(output);
 
-    const settle = (handler: () => void) => {
+    const closeSocket = () => {
+      if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+    };
+
+    const settle = (handler: () => void, killPty = false) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
       handler();
-      void opencodeApi.deletePty(pty.id, directory).catch((error) => {
-        console.error('[pty-oneshot] failed to delete PTY:', pty.id, error);
-      });
+      // Command already finished (or the socket already dropped): OpenCode has
+      // removed the session. DELETE 404s in DevTools even if we swallow the error.
+      if (!killPty) {
+        closeSocket();
+        return;
+      }
+      void opencodeApi
+        .deletePty(pty.id, directory)
+        .catch((error) => {
+          if (isPtyAlreadyGone(error)) return;
+          console.error('[pty-oneshot] failed to delete PTY:', pty.id, error);
+        })
+        .finally(() => {
+          closeSocket();
+        });
     };
 
     const resolveIfComplete = () => {
@@ -144,14 +167,12 @@ async function runOneShotPtyCommand(command: string, args: string[]): Promise<st
         );
       }
       settle(() => resolve(finish(parsed.output)));
-      socket.close();
       return true;
     };
 
     const timeoutId = setTimeout(() => {
       console.error('[pty-oneshot] command timed out:', command, args);
-      settle(() => reject(new Error('PTY command timed out')));
-      socket.close();
+      settle(() => reject(new Error('PTY command timed out')), true);
     }, PTY_ONESHOT_TIMEOUT_MS);
 
     socket.binaryType = 'arraybuffer';
@@ -188,7 +209,7 @@ async function runOneShotPtyCommand(command: string, args: string[]): Promise<st
     });
     socket.addEventListener('error', () => {
       console.error('[pty-oneshot] command socket error:', command, args);
-      settle(() => reject(new Error('PTY command socket failed')));
+      settle(() => reject(new Error('PTY command socket failed')), true);
     });
   });
 }

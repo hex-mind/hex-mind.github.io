@@ -300,7 +300,9 @@ export function useAutoScroller(
     }
   }
 
-  function notifyContentChange(smooth = true) {
+  // Content growth snaps to bottom. Native smooth is only for resumeFollow (the button);
+  // restarting it on every chunk aborts the easing curve and looks stuck.
+  function notifyContentChange(smooth = false) {
     scheduleAutoScroll(smooth);
   }
 
