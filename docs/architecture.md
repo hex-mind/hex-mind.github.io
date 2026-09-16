@@ -63,7 +63,7 @@ Recents (side panel): **Pinned** first, then Today / 7 days / 30 days / Older. C
 
 `useFileTree` lists `GET /file?path=.` for the working directory, paints the root, then walks children in the background to fill the `@file` index (limit 1000). Expanding a row loads that directory only.
 
-Git status is **on-demand** on the Git tab (open / refresh / git commands from that panel), using one-shot PTY porcelain. See [prd-git-panel.md](./prd-git-panel.md). The branch picker still runs a one-shot PTY `git branch` **when the menu opens**. Interactive terminals are real PTY sessions; one-shot PTY remains for commit snapshots and branch switch commands from the tree.
+Git status is **on-demand** on the Git tab (open / refresh / git commands from that panel), using one-shot PTY `git` argv (porcelain + numstat). See [prd-git-panel.md](./prd-git-panel.md). The branch picker still runs a one-shot PTY `git branch` **when the menu opens**. Interactive terminals are real PTY sessions; git panel commands spawn `git` directly so they work on Windows as well as macOS/Linux.
 
 OpenCode `GET /file` returns HTTP 500 for missing paths. Pickers must list an existing parent (usually home) instead of using the missing path as `directory`.
 
@@ -88,4 +88,4 @@ If `SharedWorker` is missing, the tab falls back to a direct SSE connection. Sam
 
 `App.vue` is already the composition root. New protocol calls go in `opencode.ts`. New session-graph rules go in the worker / `stateBuilder`. New files/git listing goes in `useFileTree`. Git snapshot scripts and parsers go in `gitSnapshots.ts`. Keep splash awaits limited to the four steps above.
 
-Git diffs from the Git tab still *open* windows from `App.vue` (floating-window + PTY wiring), but the bash scripts they run live in `gitSnapshots.ts`.
+Git diffs from the Git tab still *open* windows from `App.vue` (floating-window + PTY wiring). Status/diff/branch commands spawn `git` argv via `usePtyOneshot` / `useShellWindows`; parsers live in `gitStatus.ts`.

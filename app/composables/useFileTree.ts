@@ -2,8 +2,24 @@ import { computed, ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import type { FileWatcherUpdatedPacket } from '../types/sse';
 import * as opencodeApi from '../utils/opencode';
+import {
+  GIT_COMMON_ARGS,
+  parseGitBranchList,
+  parseGitStatusOutput,
+  type GitBranchInfo,
+  type GitDiffStats,
+  type GitFileStatus,
+} from '../utils/gitStatus';
 import { normalizeDirectory } from '../utils/path';
 import { usePtyOneshot } from './usePtyOneshot';
+
+export type {
+  GitBranchInfo,
+  GitDiffStats,
+  GitDiffStatsEntry,
+  GitFileStatus,
+  GitStatusCode,
+} from '../utils/gitStatus';
 
 export type TreeNode = {
   name: string;
@@ -20,33 +36,6 @@ export type FileNode = {
   path: string;
   type?: string;
   ignored?: boolean;
-};
-
-export type GitStatusCode = '' | 'M' | 'A' | 'D' | 'R' | 'C' | '?';
-
-export type GitFileStatus = {
-  path: string;
-  index: GitStatusCode;
-  worktree: GitStatusCode;
-  origPath?: string;
-};
-
-export type GitBranchInfo = {
-  branch: string;
-  upstream?: string;
-  ahead: number;
-  behind: number;
-  headShort?: string;
-};
-
-export type GitDiffStatsEntry = {
-  additions: number;
-  deletions: number;
-};
-
-export type GitDiffStats = {
-  staged: GitDiffStatsEntry;
-  unstaged: GitDiffStatsEntry;
 };
 
 export type BranchEntry = {
@@ -110,9 +99,6 @@ const SKIP_BACKGROUND_DIR_NAMES = new Set([
 const scheduledDirectoryReloads = new Map<string, ReturnType<typeof setTimeout>>();
 let gitStatusGeneration = 0;
 let branchListGeneration = 0;
-
-const BRANCH_LIST_FORMAT =
-  '%(refname)\t%(refname:short)\t%(HEAD)\t%(worktreepath)\t%(objectname:short)\t%(subject)\t%(upstream:short)';
 
 function getOptions(): UseFileTreeOptions {
   if (!boundOptions) {
@@ -325,131 +311,9 @@ function scheduleDirectoryReload(path: string) {
   );
 }
 
-const GIT_STATUS_SCRIPT = [
-  'export GIT_PAGER=cat',
-  'export GIT_TERMINAL_PROMPT=0',
-  'printf "##GIT\\n"',
-  'if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then',
-  '  printf "1\\n"',
-  '  printf "##BRANCH\\n"',
-  '  git -c core.quotepath=false symbolic-ref --short -q HEAD || printf "(detached)\\n"',
-  'else',
-  '  printf "0\\n"',
-  '  printf "##BRANCH\\n"',
-  'fi',
-  'printf "##STATUS\\n"',
-  'git --no-pager -c core.quotepath=false status --porcelain=v1 2>/dev/null',
-  'printf "##UNSTAGED\\n"',
-  'git --no-pager -c core.quotepath=false diff --numstat 2>/dev/null',
-  'printf "##STAGED\\n"',
-  'git --no-pager -c core.quotepath=false diff --cached --numstat 2>/dev/null',
-].join('\n');
-
-function gitCodeFromPorcelain(char: string): GitStatusCode {
-  if (char === ' ' || char === '') return '';
-  if (
-    char === 'M' ||
-    char === 'A' ||
-    char === 'D' ||
-    char === 'R' ||
-    char === 'C' ||
-    char === '?'
-  ) {
-    return char;
-  }
-  if (char === 'T' || char === 'U') return 'M';
-  return '';
-}
-
-function unquoteGitPath(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    try {
-      return JSON.parse(
-        trimmed.replace(/\\([0-7]{3})/g, (_, oct) => String.fromCharCode(Number.parseInt(oct, 8))),
-      );
-    } catch {
-      return trimmed.slice(1, -1);
-    }
-  }
-  return trimmed;
-}
-
-function parsePorcelainLine(line: string): GitFileStatus | null {
-  if (line.length < 4) return null;
-  if (line.startsWith('!!') || line.startsWith('##')) return null;
-  const index = gitCodeFromPorcelain(line[0] ?? '');
-  const worktree = gitCodeFromPorcelain(line[1] ?? '');
-  let rest = line.slice(3);
-  let origPath: string | undefined;
-  const arrow = ' -> ';
-  const arrowAt = rest.indexOf(arrow);
-  if (arrowAt >= 0) {
-    origPath = unquoteGitPath(rest.slice(0, arrowAt));
-    rest = rest.slice(arrowAt + arrow.length);
-  }
-  const path = unquoteGitPath(rest).replace(/\/+$/, '');
-  if (!path) return null;
-  return origPath ? { path, index, worktree, origPath } : { path, index, worktree };
-}
-
-function parseNumstatSection(text: string): { additions: number; deletions: number } {
-  let additions = 0;
-  let deletions = 0;
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    const parts = line.split('\t');
-    if (parts.length < 3) continue;
-    const added = parts[0] === '-' ? 0 : Number.parseInt(parts[0] ?? '', 10);
-    const removed = parts[1] === '-' ? 0 : Number.parseInt(parts[1] ?? '', 10);
-    if (Number.isFinite(added)) additions += added;
-    if (Number.isFinite(removed)) deletions += removed;
-  }
-  return { additions, deletions };
-}
-
-function normalizeGitBranchName(raw: string): string {
-  const name = raw.trim();
-  if (!name || name === 'HEAD') return '(detached)';
-  return name;
-}
-
-function parseGitStatusOutput(output: string): {
-  inside: boolean;
-  branch: string;
-  files: GitFileStatus[];
-  diffStats: GitDiffStats;
-} {
-  const normalized = output.replace(/\r/g, '');
-  const sections: Record<string, string[]> = {};
-  let current: string | undefined;
-  for (const line of normalized.split('\n')) {
-    const header = /^##([A-Z][A-Z0-9]*)$/.exec(line);
-    if (header?.[1]) {
-      current = header[1];
-      if (!sections[current]) sections[current] = [];
-      continue;
-    }
-    if (current) sections[current].push(line);
-  }
-  const take = (name: string) => (sections[name] ?? []).join('\n').replace(/\n+$/, '');
-  const gitMark = take('GIT').split('\n')[0]?.trim();
-  const inside = gitMark ? gitMark === '1' : Boolean(take('BRANCH') || take('STATUS'));
-  const branch = normalizeGitBranchName(take('BRANCH').split('\n')[0] ?? '');
-  const files = take('STATUS')
-    .split('\n')
-    .map((line) => parsePorcelainLine(line))
-    .filter((entry): entry is GitFileStatus => Boolean(entry))
-    .sort((a, b) => a.path.localeCompare(b.path));
-  return {
-    inside,
-    branch,
-    files,
-    diffStats: {
-      staged: parseNumstatSection(take('STAGED')),
-      unstaged: parseNumstatSection(take('UNSTAGED')),
-    },
-  };
+function runGit(args: string[]) {
+  const { runOneShotPtyCommand } = usePtyOneshot();
+  return runOneShotPtyCommand('git', [...GIT_COMMON_ARGS, ...args]);
 }
 
 function setGitStatus(next: GitStatus | null) {
@@ -474,13 +338,12 @@ async function refreshGitStatusOnly() {
   }
 
   const generation = ++gitStatusGeneration;
-  const { runOneShotPtyCommand } = usePtyOneshot();
   try {
-    const output = await runOneShotPtyCommand('bash', ['-c', GIT_STATUS_SCRIPT]);
+    const statusOutput = await runGit(['status', '--porcelain=v1', '-b']);
     if (generation !== gitStatusGeneration) return;
     if (getOptions().activeDirectory.value.trim() !== directory) return;
 
-    const parsed = parseGitStatusOutput(output);
+    const parsed = parseGitStatusOutput(statusOutput);
     if (!parsed.inside) {
       setGitStatus({
         branch: { branch: '', ahead: 0, behind: 0 },
@@ -492,14 +355,19 @@ async function refreshGitStatusOnly() {
       });
       return;
     }
+
+    const [unstagedNumstat, stagedNumstat] = await Promise.all([
+      runGit(['diff', '--numstat']),
+      runGit(['diff', '--cached', '--numstat']),
+    ]);
+    if (generation !== gitStatusGeneration) return;
+    if (getOptions().activeDirectory.value.trim() !== directory) return;
+
+    const withStats = parseGitStatusOutput(statusOutput, unstagedNumstat, stagedNumstat);
     setGitStatus({
-      branch: {
-        branch: parsed.branch,
-        ahead: 0,
-        behind: 0,
-      },
-      files: parsed.files,
-      diffStats: parsed.diffStats,
+      branch: withStats.branch,
+      files: withStats.files,
+      diffStats: withStats.diffStats,
     });
   } catch {
     if (generation !== gitStatusGeneration) return;
@@ -516,71 +384,41 @@ async function refreshGitStatus() {
   }
 }
 
+async function runGitOnPaths(args: string[], paths: string[]) {
+  const unique = [...new Set(paths.map((path) => path.trim()).filter(Boolean))];
+  if (!unique.length) return;
+  await runGit([...args, '--', ...unique]);
+  await refreshGitStatusOnly();
+}
+
+async function stagePaths(paths: string[]) {
+  await runGitOnPaths(['add'], paths);
+}
+
+async function unstagePaths(paths: string[]) {
+  await runGitOnPaths(['restore', '--staged'], paths);
+}
+
 function parseBranchEntries(output: string): BranchEntry[] {
-  const entries: BranchEntry[] = [];
-  const lines = output.split(/\r?\n/);
-
-  lines.forEach((line) => {
-    if (!line) return;
-    const parts = line.split('\t');
-    if (parts.length < 7) return;
-    const [refname = '', refnameShort = '', head = '', worktreePath = '', hash = '', ...rest] =
-      parts;
-    const upstream = rest.at(-1)?.trim() ?? '';
-    const subject = rest.slice(0, -1).join('\t').trim();
-
-    const headMark = head.trim();
-    const isCurrent = headMark === '*';
-    const isWorktree = worktreePath.trim().length > 0;
-
-    if (refname.startsWith('refs/heads/')) {
-      const displayName = refname.slice('refs/heads/'.length);
-      if (!displayName) return;
-      entries.push({
-        refname,
-        refnameShort,
-        displayName,
-        hash,
-        subject,
-        isCurrent,
-        isWorktree,
-        isLocal: true,
-        remote: '',
-        upstream,
-        hasLocalCounterpart: false,
-      });
-      return;
-    }
-
-    if (!refname.startsWith('refs/remotes/')) return;
-    const remoteRelative = refname.slice('refs/remotes/'.length);
-    const splitIndex = remoteRelative.indexOf('/');
-    if (splitIndex <= 0) return;
-    const remote = remoteRelative.slice(0, splitIndex);
-    const displayName = remoteRelative.slice(splitIndex + 1);
-    if (!displayName || displayName === 'HEAD') return;
-    entries.push({
-      refname,
-      refnameShort,
-      displayName,
-      hash,
-      subject,
-      isCurrent,
-      isWorktree,
-      isLocal: false,
-      remote,
-      upstream,
-      hasLocalCounterpart: false,
-    });
-  });
+  const entries: BranchEntry[] = parseGitBranchList(output).map((entry) => ({
+    ...entry,
+    hash: '',
+    subject: '',
+    upstream: '',
+    hasLocalCounterpart: false,
+  }));
 
   const localNames = new Set(
     entries.filter((entry) => entry.isLocal).map((entry) => entry.displayName),
   );
+  for (const entry of entries) {
+    if (!entry.isLocal) entry.hasLocalCounterpart = localNames.has(entry.displayName);
+  }
 
-  entries.forEach((entry) => {
-    if (entry.isLocal) return;
-    entry.hasLocalCounterpart = localNames.has(entry.displayName);
+  entries.sort((a, b) => {
+    if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
+    if (a.isLocal !== b.isLocal) return a.isLocal ? -1 : 1;
+    return a.displayName.localeCompare(b.displayName);
   });
 
   return entries;
@@ -596,19 +434,14 @@ async function refreshBranchEntries() {
 
   const generation = ++branchListGeneration;
   branchListLoading.value = true;
-  const { runOneShotPtyCommand } = usePtyOneshot();
   try {
-    const output = await runOneShotPtyCommand('git', [
-      '--no-pager',
-      '-c',
-      'color.ui=false',
+    const output = await runGit([
       '-c',
       'color.branch=false',
       'branch',
       '--no-color',
       '-a',
       '--sort=-committerdate',
-      `--format=${BRANCH_LIST_FORMAT}`,
     ]);
     if (generation !== branchListGeneration) return;
     branchEntries.value = parseBranchEntries(output);
@@ -842,6 +675,8 @@ export function useFileTree(options?: UseFileTreeOptions) {
     files,
     reloadTree,
     refreshGitStatus,
+    stagePaths,
+    unstagePaths,
     toggleTreeDirectory,
     selectTreeFile,
     feed,

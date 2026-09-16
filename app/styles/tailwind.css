@@ -1228,6 +1228,10 @@ html[data-theme='light'] .tree-row {
   color: #374151 !important;
 }
 
+html[data-theme='light'] .tree-file-path {
+  color: #9ca3af !important;
+}
+
 html[data-theme='light'] .tree-row:hover {
   background: #f1f1f3 !important;
 }
@@ -1239,22 +1243,53 @@ html[data-theme='light'] .tree-row.is-selected {
 
 html[data-theme='light'] .tree-status.is-modified {
   color: #a16207 !important;
-  border-color: #d6b656 !important;
+}
+
+html[data-theme='light'] .tree-row.row-modified .tree-name {
+  color: #a16207 !important;
 }
 
 html[data-theme='light'] .tree-status:is(.is-added, .is-untracked) {
   color: #15803d !important;
-  border-color: #86efac !important;
+}
+
+html[data-theme='light'] .tree-row.row-added .tree-name,
+html[data-theme='light'] .tree-row.row-untracked .tree-name {
+  color: #15803d !important;
 }
 
 html[data-theme='light'] .tree-status.is-deleted-status {
   color: #dc2626 !important;
-  border-color: #fca5a5 !important;
+}
+
+html[data-theme='light'] .tree-row.row-deleted .tree-name {
+  color: #dc2626 !important;
 }
 
 html[data-theme='light'] .tree-status:is(.is-renamed, .is-copied) {
   color: #0f766e !important;
-  border-color: #5eead4 !important;
+}
+
+html[data-theme='light'] .tree-row.row-renamed .tree-name,
+html[data-theme='light'] .tree-row.row-copied .tree-name {
+  color: #0f766e !important;
+}
+
+html[data-theme='light'] .tree-diff-add {
+  color: #15803d !important;
+}
+
+html[data-theme='light'] .tree-diff-del {
+  color: #dc2626 !important;
+}
+
+html[data-theme='light'] .tree-stage-btn {
+  color: #6b7280 !important;
+}
+
+html[data-theme='light'] .tree-stage-btn:hover {
+  color: #111827 !important;
+  background: #e5e7eb !important;
 }
 
 html[data-theme='light'] .tree-tab.is-active,

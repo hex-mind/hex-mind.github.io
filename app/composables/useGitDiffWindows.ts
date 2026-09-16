@@ -2,14 +2,8 @@ import type { Ref } from 'vue';
 import DiffViewer from '../components/viewers/DiffViewer.vue';
 import { guessLanguageFromPath } from '../components/ToolWindow/utils';
 import type { MessageDiffEntry } from '../types/message';
-import {
-  COMMIT_SNAPSHOT_SCRIPT,
-  FILE_SNAPSHOT_SCRIPT,
-  buildWorktreeSnapshotScript,
-  parseCommitSnapshotOutput,
-  parseFileSnapshotOutput,
-  type WorktreeSnapshotMode,
-} from '../utils/gitSnapshots';
+import type { WorktreeSnapshotMode } from '../utils/gitSnapshots';
+import { GIT_COMMON_ARGS, gitNullDevice } from '../utils/gitStatus';
 import { fileViewerWindowChrome } from '../utils/fileViewerWindow';
 import type { useFloatingWindows } from './useFloatingWindows';
 
@@ -17,13 +11,22 @@ type Fw = ReturnType<typeof useFloatingWindows>;
 
 type UseGitDiffWindowsOptions = {
   fw: Fw;
+  workingDirectory: Ref<string>;
   runOneShotPtyCommand: (command: string, args: string[]) => Promise<string>;
   shikiTheme: Ref<string>;
   getFileViewerPosition: (factorX?: number, factorY?: number) => { x: number; y: number };
 };
 
+function isUsefulDiff(output: string) {
+  return /^(diff |index |@@ |--- |\+\+\+ )/m.test(output);
+}
+
 export function useGitDiffWindows(options: UseGitDiffWindowsOptions) {
-  const { fw, runOneShotPtyCommand, shikiTheme, getFileViewerPosition } = options;
+  const { fw, workingDirectory, runOneShotPtyCommand, shikiTheme, getFileViewerPosition } = options;
+
+  function runGit(args: string[]) {
+    return runOneShotPtyCommand('git', [...GIT_COMMON_ARGS, ...args]);
+  }
 
   async function openSnapshotDiff(
     key: string,
@@ -53,91 +56,52 @@ export function useGitDiffWindows(options: UseGitDiffWindowsOptions) {
     }
   }
 
-  async function openGitDiff(payload: { path: string; staged: boolean }) {
-    const { path, staged } = payload;
-    const key = `git-diff:${staged ? 'staged' : 'changes'}:${path}`;
-    const mode = staged ? 'staged' : 'unstaged';
-    const loaded = await openSnapshotDiff(
-      key,
-      `Loading ${mode} diff for ${path}...`,
-      `${path} (${mode})`,
-      () =>
-        runOneShotPtyCommand('bash', [
-          '--noprofile',
-          '--norc',
-          '-c',
-          FILE_SNAPSHOT_SCRIPT,
-          '_',
-          mode,
-          path,
-        ]),
-    );
+  async function openPatchDiff(key: string, title: string, loading: string, run: () => Promise<string>) {
+    const loaded = await openSnapshotDiff(key, loading, title, run);
     if (!loaded) return;
-    const snapshot = parseFileSnapshotOutput(loaded.output);
-    await fw.open(key, {
-      component: DiffViewer,
-      props: {
-        path,
-        isDiff: true,
-        diffCode: snapshot.before,
-        diffAfter: snapshot.after,
-        diffCodeBase64: snapshot.beforeBase64,
-        diffAfterBase64: snapshot.afterBase64,
-        gutterMode: 'double',
-        lang: guessLanguageFromPath(path),
-        theme: shikiTheme.value,
-      },
-      title: `${path} (${mode})`,
-      ...fileViewerWindowChrome(loaded.pos),
-    });
-  }
-
-  async function openAllGitDiff(mode: WorktreeSnapshotMode = 'all') {
-    const key = `git-diff:${mode}`;
-    const loaded = await openSnapshotDiff(key, 'Loading all changes...', 'Loading...', () =>
-      runOneShotPtyCommand('bash', [
-        '--noprofile',
-        '--norc',
-        '-c',
-        buildWorktreeSnapshotScript(mode),
-      ]),
-    );
-    if (!loaded) return;
-    const snapshot = parseCommitSnapshotOutput(loaded.output);
-    if (snapshot.files.length === 0) {
+    if (!isUsefulDiff(loaded.output)) {
       await fw.close(key);
       return;
     }
-    const first = snapshot.files[0];
-    const title =
-      snapshot.files.length === 1 ? first.file : `${snapshot.files.length} files changed`;
-    const diffTabs =
-      snapshot.files.length > 1
-        ? snapshot.files.map((entry) => ({
-            file: entry.file,
-            before: entry.before,
-            after: entry.after,
-            beforeBase64: entry.beforeBase64,
-            afterBase64: entry.afterBase64,
-          }))
-        : undefined;
     await fw.open(key, {
       component: DiffViewer,
       props: {
-        path: first.file,
+        path: title,
         isDiff: true,
-        diffCode: first.before,
-        diffAfter: first.after,
-        diffCodeBase64: first.beforeBase64,
-        diffAfterBase64: first.afterBase64,
-        diffTabs,
-        gutterMode: 'double',
-        lang: snapshot.files.length === 1 ? guessLanguageFromPath(first.file) : 'text',
+        diffPatch: loaded.output,
+        gutterMode: 'none',
+        lang: 'diff',
         theme: shikiTheme.value,
       },
       title,
       ...fileViewerWindowChrome(loaded.pos),
     });
+  }
+
+  async function openGitDiff(payload: { path: string; staged: boolean }) {
+    const { path, staged } = payload;
+    const key = `git-diff:${staged ? 'staged' : 'changes'}:${path}`;
+    const mode = staged ? 'staged' : 'unstaged';
+    await openPatchDiff(key, `${path} (${mode})`, `Loading ${mode} diff for ${path}...`, async () => {
+      const trackedArgs = staged ? ['diff', '--cached', '--', path] : ['diff', '--', path];
+      const tracked = await runGit(trackedArgs);
+      if (isUsefulDiff(tracked) || staged) return tracked;
+      const empty = gitNullDevice(workingDirectory.value);
+      return runGit(['diff', '--no-index', '--', empty, path]);
+    });
+  }
+
+  async function openAllGitDiff(mode: WorktreeSnapshotMode = 'all') {
+    const key = `git-diff:${mode}`;
+    const title =
+      mode === 'staged'
+        ? 'Staged changes'
+        : mode === 'changes'
+          ? 'Unstaged changes'
+          : 'Working tree (staged + changes)';
+    const args =
+      mode === 'staged' ? ['diff', '--cached'] : mode === 'changes' ? ['diff'] : ['diff', 'HEAD'];
+    await openPatchDiff(key, title, 'Loading all changes...', () => runGit(args));
   }
 
   function handleShowMessageDiff(payload: { messageKey: string; diffs: Array<MessageDiffEntry> }) {
@@ -189,51 +153,37 @@ export function useGitDiffWindows(options: UseGitDiffWindowsOptions) {
     const hash = hashRaw.trim();
     if (!/^[0-9a-f]{7,40}$/i.test(hash)) return;
     const key = `commit-diff:${hash}`;
-    const loaded = await openSnapshotDiff(key, `Loading commit ${hash}...`, `commit ${hash}`, () =>
-      runOneShotPtyCommand('bash', [
-        '--noprofile',
-        '--norc',
-        '-c',
-        COMMIT_SNAPSHOT_SCRIPT,
-        '_',
-        hash,
-      ]),
+    const loaded = await openSnapshotDiff(
+      key,
+      `Loading commit ${hash}...`,
+      `commit ${hash}`,
+      async () => {
+        const [title, patch] = await Promise.all([
+          runGit(['log', '--format=%h %s', '-1', hash]),
+          runGit(['show', '--format=', '--patch', hash]),
+        ]);
+        return `${title.trim().split('\n')[0] ?? ''}\n${patch}`;
+      },
     );
     if (!loaded) return;
-    const snapshot = parseCommitSnapshotOutput(loaded.output);
-    if (snapshot.files.length === 0) {
+    const newline = loaded.output.indexOf('\n');
+    const heading = (newline >= 0 ? loaded.output.slice(0, newline) : loaded.output).trim();
+    const patch = newline >= 0 ? loaded.output.slice(newline + 1) : '';
+    if (!isUsefulDiff(patch)) {
       await fw.close(key);
       return;
     }
-    const first = snapshot.files[0];
-    const title =
-      snapshot.title ||
-      (snapshot.files.length === 1 ? first.file : `${snapshot.files.length} files changed`);
-    const diffTabs =
-      snapshot.files.length > 1
-        ? snapshot.files.map((entry) => ({
-            file: entry.file,
-            before: entry.before,
-            after: entry.after,
-            beforeBase64: entry.beforeBase64,
-            afterBase64: entry.afterBase64,
-          }))
-        : undefined;
     await fw.open(key, {
       component: DiffViewer,
       props: {
-        path: first.file,
+        path: heading || hash,
         isDiff: true,
-        diffCode: first.before,
-        diffAfter: first.after,
-        diffCodeBase64: first.beforeBase64,
-        diffAfterBase64: first.afterBase64,
-        diffTabs,
-        gutterMode: 'double',
-        lang: snapshot.files.length === 1 ? guessLanguageFromPath(first.file) : 'text',
+        diffPatch: patch,
+        gutterMode: 'none',
+        lang: 'diff',
         theme: shikiTheme.value,
       },
-      title,
+      title: heading || `commit ${hash}`,
       ...fileViewerWindowChrome(loaded.pos),
     });
   }

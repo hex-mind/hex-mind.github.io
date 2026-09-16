@@ -33,7 +33,7 @@
             <DropdownItem
               v-for="entry in filteredLocalBranches"
               :key="entry.refname"
-              :value="branchSwitchCommand(entry)"
+              :value="branchSwitchArgs(entry)"
               :disabled="isBranchSwitchDisabled(entry)"
               :title="branchDisabledReason(entry)"
             >
@@ -49,7 +49,7 @@
                   <span v-else class="tree-branch-current-spacer"></span>
                   <span class="tree-branch-menu-name">{{ entry.displayName }}</span>
                 </div>
-                <div class="tree-branch-menu-line2">
+                <div v-if="branchSummary(entry)" class="tree-branch-menu-line2">
                   <span class="tree-branch-current-spacer"></span>
                   <span class="tree-branch-menu-meta" :title="branchSummary(entry)">
                     {{ branchSummary(entry) }}
@@ -106,7 +106,7 @@
               <DropdownItem
                 v-for="entry in group.entries"
                 :key="entry.refname"
-                :value="branchSwitchCommand(entry)"
+                :value="branchSwitchArgs(entry)"
                 :disabled="isBranchSwitchDisabled(entry)"
                 :title="branchDisabledReason(entry)"
               >
@@ -115,7 +115,7 @@
                     <span class="tree-branch-current-spacer"></span>
                     <span class="tree-branch-menu-name">{{ entry.displayName }}</span>
                   </div>
-                  <div class="tree-branch-menu-line2">
+                  <div v-if="branchSummary(entry)" class="tree-branch-menu-line2">
                     <span class="tree-branch-current-spacer"></span>
                     <span class="tree-branch-menu-meta" :title="branchSummary(entry)">
                       {{ branchSummary(entry) }}
@@ -172,7 +172,7 @@
               </span>
             </button>
           </template>
-          <DropdownItem value="git push" class="tree-branch-cmd-danger">git push</DropdownItem>
+          <DropdownItem :value="['push']" class="tree-branch-cmd-danger">git push</DropdownItem>
         </Dropdown>
         <Dropdown
           v-if="branchInfo && branchInfo.behind > 0"
@@ -198,13 +198,13 @@
           </template>
           <DropdownItem
             v-if="branchInfo?.upstream"
-            :value="`git merge --ff-only ${shellQuote(branchInfo.upstream)}`"
+            :value="['merge', '--ff-only', branchInfo.upstream]"
           >
             git merge --ff-only &lt;upstream&gt;
           </DropdownItem>
           <DropdownItem
             v-if="branchInfo?.upstream"
-            :value="`git merge ${shellQuote(branchInfo.upstream)}`"
+            :value="['merge', branchInfo.upstream]"
             class="tree-branch-cmd-merge"
           >
             <Icon icon="lucide:git-merge" :width="12" :height="12" />
@@ -212,12 +212,12 @@
           </DropdownItem>
           <DropdownItem
             v-if="branchInfo?.upstream"
-            :value="`git rebase ${shellQuote(branchInfo.upstream)}`"
+            :value="['rebase', branchInfo.upstream]"
             class="tree-branch-cmd-rebase"
           >
             git rebase &lt;upstream&gt;
           </DropdownItem>
-          <DropdownItem value="git pull" class="tree-branch-cmd-danger">git pull</DropdownItem>
+          <DropdownItem :value="['pull']" class="tree-branch-cmd-danger">git pull</DropdownItem>
         </Dropdown>
         <span
           v-if="activeDiffStats && (activeDiffStats.additions > 0 || activeDiffStats.deletions > 0)"
@@ -276,6 +276,7 @@
           {
             'is-directory': row.node.type === 'directory',
             'is-file': row.node.type !== 'directory',
+            'is-git-file': panelMode === 'git' && row.node.type !== 'directory',
             'is-selected': selectedPath === row.node.path,
             'is-ignored': row.node.ignored,
             'is-deleted':
@@ -310,8 +311,38 @@
           :class="fileTypeClass(row.node.name)"
         />
         <span class="tree-name">{{ row.node.name }}</span>
+        <span v-if="panelMode === 'git'" class="tree-file-path">{{ row.dir }}</span>
+        <span v-if="panelMode === 'git'" class="tree-git-end">
+          <span v-if="row.adds" class="tree-diff-add">+{{ row.adds }}</span>
+          <span v-if="row.dels" class="tree-diff-del">−{{ row.dels }}</span>
+          <button
+            type="button"
+            class="tree-stage-btn"
+            :disabled="stagingPaths.has(row.node.path)"
+            :title="viewMode === 'staged' ? 'Unstage file' : 'Stage file'"
+            :aria-label="viewMode === 'staged' ? 'Unstage file' : 'Stage file'"
+            @click.stop="onStageClick(row.node.path)"
+            @dblclick.stop
+          >
+            <Icon
+              :icon="viewMode === 'staged' ? 'lucide:minus' : 'lucide:plus'"
+              :width="12"
+              :height="12"
+            />
+          </button>
+          <button
+            v-if="displayStatus(row.node.path)"
+            type="button"
+            class="tree-status tree-status-button"
+            :class="statusClass(displayStatus(row.node.path))"
+            @click.stop="onStatusClick(row.node.path)"
+            @dblclick.stop
+          >
+            {{ statusLabel(displayStatus(row.node.path)?.code) }}
+          </button>
+        </span>
         <button
-          v-if="displayStatus(row.node.path) && row.node.type !== 'directory'"
+          v-else-if="displayStatus(row.node.path) && row.node.type !== 'directory'"
           type="button"
           class="tree-status tree-status-button"
           :class="statusClass(displayStatus(row.node.path))"
@@ -353,6 +384,7 @@ import type {
   GitStatusCode,
   TreeNode,
 } from '../composables/useFileTree';
+import { useFileTree } from '../composables/useFileTree';
 import { confirmAction } from '../composables/useConfirm';
 import Dropdown from './Dropdown.vue';
 import DropdownItem from './Dropdown/Item.vue';
@@ -386,7 +418,7 @@ const props = defineProps<{
   directoryName?: string;
   branchEntries?: BranchEntry[];
   branchListLoading?: boolean;
-  runShellCommand?: (command: string) => Promise<void>;
+  runGitCommand?: (args: string[]) => Promise<void>;
 }>();
 
 const emit = defineEmits<{
@@ -399,7 +431,9 @@ const emit = defineEmits<{
   (event: 'load-branches'): void;
 }>();
 
+const { stagePaths, unstagePaths } = useFileTree();
 const viewMode = ref<TreeViewMode>('all');
+const stagingPaths = ref(new Set<string>());
 const branchMenuOpen = ref(false);
 const branchSearchQuery = ref('');
 const pushMenuOpen = ref(false);
@@ -690,8 +724,40 @@ const displayNodes = computed(() => {
   });
 });
 
+function splitGitPath(path: string) {
+  const normalized = path.replace(/\\/g, '/');
+  const slash = normalized.lastIndexOf('/');
+  if (slash < 0) return { name: normalized, dir: '' };
+  return { name: normalized.slice(slash + 1), dir: normalized.slice(0, slash) };
+}
+
+const gitFileRows = computed(() => {
+  const wanted =
+    viewMode.value === 'staged'
+      ? hasStaged
+      : viewMode.value === 'changes'
+        ? hasChanges
+        : (status: GitFileStatus) => hasStaged(status) || hasChanges(status);
+  return Object.values(props.gitStatusByPath ?? {})
+    .filter(wanted)
+    .sort((a, b) => a.path.localeCompare(b.path))
+    .map((status) => {
+      const { name, dir } = splitGitPath(status.path);
+      const stats = viewMode.value === 'staged' ? status.stagedStats : status.unstagedStats;
+      return {
+        node: { name, path: status.path, type: 'file' as const },
+        depth: 0,
+        dir,
+        adds: stats?.additions ?? 0,
+        dels: stats?.deletions ?? 0,
+      };
+    });
+});
+
 const visibleRows = computed(() => {
-  const rows: Array<{ node: TreeNode; depth: number }> = [];
+  if (props.panelMode === 'git') return gitFileRows.value;
+  const rows: Array<{ node: TreeNode; depth: number; dir?: string; adds?: number; dels?: number }> =
+    [];
   const pushRows = (nodes: TreeNode[], depth: number) => {
     nodes.forEach((node) => {
       rows.push({ node, depth });
@@ -795,12 +861,31 @@ function onStatusClick(path: string) {
   emit('open-diff', { path, staged: status.staged });
 }
 
+async function onStageClick(path: string) {
+  if (!path || stagingPaths.value.has(path)) return;
+  const next = new Set(stagingPaths.value);
+  next.add(path);
+  stagingPaths.value = next;
+  try {
+    if (viewMode.value === 'staged') await unstagePaths([path]);
+    else await stagePaths([path]);
+  } finally {
+    const done = new Set(stagingPaths.value);
+    done.delete(path);
+    stagingPaths.value = done;
+  }
+}
+
 function onDiffStatsClick() {
   emit('open-diff-all', { mode: viewMode.value });
 }
 
-function shellQuote(value: string) {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
+function isGitArgs(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length > 0 && value.every((part) => typeof part === 'string');
+}
+
+function gitCommandLabel(args: string[]) {
+  return ['git', ...args].join(' ');
 }
 
 function branchSearchText(entry: BranchEntry) {
@@ -811,12 +896,10 @@ function branchSummary(entry: BranchEntry) {
   return entry.subject ? `${entry.hash} ${entry.subject}` : entry.hash;
 }
 
-function branchSwitchCommand(entry: BranchEntry) {
-  if (entry.isCurrent) return '';
-  if (!entry.isLocal) {
-    return `git switch --track ${shellQuote(entry.refnameShort)}`;
-  }
-  return `git switch ${shellQuote(entry.displayName)}`;
+function branchSwitchArgs(entry: BranchEntry) {
+  if (entry.isCurrent) return [];
+  if (!entry.isLocal) return ['switch', '--track', entry.refnameShort];
+  return ['switch', entry.displayName];
 }
 
 function isBranchSwitchDisabled(entry: BranchEntry) {
@@ -854,9 +937,8 @@ function onBranchPickerToggle() {
 }
 
 function onBranchSelect(value: unknown) {
-  if (typeof value !== 'string') return;
-  if (!value.trim()) return;
-  void props.runShellCommand?.(value);
+  if (!isGitArgs(value)) return;
+  void props.runGitCommand?.(value);
 }
 
 function onBranchFork(entry: BranchEntry) {
@@ -865,9 +947,7 @@ function onBranchFork(entry: BranchEntry) {
   const nextName = promptValue?.trim() ?? '';
   if (!nextName) return;
   branchMenuOpen.value = false;
-  void props.runShellCommand?.(
-    `git switch -c ${shellQuote(nextName)} ${shellQuote(entry.refnameShort)}`,
-  );
+  void props.runGitCommand?.(['switch', '-c', nextName, entry.refnameShort]);
 }
 
 async function onBranchMerge(entry: BranchEntry) {
@@ -880,7 +960,7 @@ async function onBranchMerge(entry: BranchEntry) {
   });
   if (!confirmed) return;
   branchMenuOpen.value = false;
-  void props.runShellCommand?.(`git merge ${shellQuote(target)}`);
+  void props.runGitCommand?.(['merge', target]);
 }
 
 async function onBranchDelete(entry: BranchEntry) {
@@ -893,23 +973,23 @@ async function onBranchDelete(entry: BranchEntry) {
   });
   if (!confirmed) return;
   branchMenuOpen.value = false;
-  void props.runShellCommand?.(`git branch -d ${shellQuote(entry.displayName)}`);
+  void props.runGitCommand?.(['branch', '-d', entry.displayName]);
 }
 
 function onRemoteFetch(remote: string) {
   branchMenuOpen.value = false;
-  void props.runShellCommand?.(`git fetch ${shellQuote(remote)}`);
+  void props.runGitCommand?.(['fetch', remote]);
 }
 
 async function onBranchCommandSelect(value: unknown) {
-  if (typeof value !== 'string') return;
+  if (!isGitArgs(value)) return;
   const confirmed = await confirmAction({
     title: 'Run this command?',
-    message: value,
+    message: gitCommandLabel(value),
     confirmLabel: 'Run',
   });
   if (!confirmed) return;
-  void props.runShellCommand?.(value);
+  void props.runGitCommand?.(value);
 }
 
 function onTreeScrollClick(event: MouseEvent) {
@@ -1361,142 +1441,137 @@ function onRowDoubleClick(row: { node: TreeNode }) {
   text-overflow: ellipsis;
 }
 
-/* --- Git status badge (base) --- */
+.tree-row.is-git-file .tree-name {
+  flex: 0 1 auto;
+}
+
+.tree-file-path {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 8px;
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-row.is-git-file .tree-git-end {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tree-stage-btn {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #94a3b8;
+  opacity: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree-row:hover .tree-stage-btn,
+.tree-row:focus-within .tree-stage-btn,
+.tree-stage-btn:focus-visible {
+  opacity: 1;
+}
+
+.tree-stage-btn:hover {
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.tree-stage-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tree-diff-add,
+.tree-diff-del {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+}
+
+.tree-diff-add {
+  color: #73c991;
+}
+
+.tree-diff-del {
+  color: #c74e39;
+}
+
+.tree-row.is-git-file .tree-status {
+  flex: 0 0 12px;
+}
+
+/* --- Git status letter (no badge/circle) --- */
 .tree-status {
-  min-width: 16px;
+  appearance: none;
+  min-width: 12px;
+  padding: 0;
   text-align: center;
   font-size: 10px;
   font-weight: 700;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.45);
   line-height: 16px;
   height: 16px;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .tree-status-button {
-  padding: 0;
-  background: transparent;
   cursor: pointer;
 }
 
-/* --- VSCode-style per-status-code colors --- */
+.tree-status-button:hover {
+  filter: brightness(1.2);
+}
 
-/* Modified (yellow/amber) */
 .tree-status.is-modified {
   color: #e2c08d;
-  border-color: rgba(226, 192, 141, 0.55);
 }
 
-/* Added (green) */
-.tree-status.is-added {
-  color: #73c991;
-  border-color: rgba(115, 201, 145, 0.55);
-}
-
-/* Deleted (red) */
-.tree-status.is-deleted-status {
-  color: #c74e39;
-  border-color: rgba(199, 78, 57, 0.55);
-}
-
-/* Renamed (cyan) */
-.tree-status.is-renamed {
-  color: #4ec9b0;
-  border-color: rgba(78, 201, 176, 0.55);
-}
-
-/* Untracked (green, same as added) */
+.tree-status.is-added,
 .tree-status.is-untracked {
   color: #73c991;
-  border-color: rgba(115, 201, 145, 0.55);
 }
 
-/* Copied (cyan, same as renamed) */
+.tree-status.is-deleted-status {
+  color: #c74e39;
+}
+
+.tree-status.is-renamed,
 .tree-status.is-copied {
   color: #4ec9b0;
-  border-color: rgba(78, 201, 176, 0.55);
 }
 
-/* Staged: slightly brighter/higher saturation */
 .tree-status.is-staged.is-modified {
   color: #f0d6a0;
-  border-color: rgba(240, 214, 160, 0.65);
 }
 
 .tree-status.is-staged.is-added {
   color: #86efac;
-  border-color: rgba(134, 239, 172, 0.65);
 }
 
 .tree-status.is-staged.is-deleted-status {
   color: #e06050;
-  border-color: rgba(224, 96, 80, 0.65);
 }
 
-.tree-status.is-staged.is-renamed {
-  color: #5ee0c8;
-  border-color: rgba(94, 224, 200, 0.65);
-}
-
+.tree-status.is-staged.is-renamed,
 .tree-status.is-staged.is-copied {
   color: #5ee0c8;
-  border-color: rgba(94, 224, 200, 0.65);
-}
-
-/* --- Hover: fill background, invert text (knockout effect) --- */
-.tree-status-button.is-modified:hover {
-  background: #e2c08d;
-  color: #1e1e1e;
-  border-color: #e2c08d;
-}
-
-.tree-status-button.is-added:hover,
-.tree-status-button.is-untracked:hover {
-  background: #73c991;
-  color: #1e1e1e;
-  border-color: #73c991;
-}
-
-.tree-status-button.is-deleted-status:hover {
-  background: #c74e39;
-  color: #fff;
-  border-color: #c74e39;
-}
-
-.tree-status-button.is-renamed:hover,
-.tree-status-button.is-copied:hover {
-  background: #4ec9b0;
-  color: #1e1e1e;
-  border-color: #4ec9b0;
-}
-
-.tree-status-button.is-staged.is-modified:hover {
-  background: #f0d6a0;
-  color: #1e1e1e;
-  border-color: #f0d6a0;
-}
-
-.tree-status-button.is-staged.is-added:hover {
-  background: #86efac;
-  color: #1e1e1e;
-  border-color: #86efac;
-}
-
-.tree-status-button.is-staged.is-deleted-status:hover {
-  background: #e06050;
-  color: #fff;
-  border-color: #e06050;
-}
-
-.tree-status-button.is-staged.is-renamed:hover,
-.tree-status-button.is-staged.is-copied:hover {
-  background: #5ee0c8;
-  color: #1e1e1e;
-  border-color: #5ee0c8;
 }
 
 /* --- File name color by status (row-level classes) --- */

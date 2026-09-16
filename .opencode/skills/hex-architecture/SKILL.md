@@ -16,7 +16,7 @@ HEX is a Vue 3 browser client. OpenCode owns sessions, tools, PTY, and the files
 | `app/utils/stateBuilder.ts` | Session-graph mutations |
 | `app/types/worker-state.ts` | Graph types |
 | `app/utils/opencode.ts` | REST client — no scattered `fetch` to OpenCode |
-| `app/utils/gitSnapshots.ts` | Git/commit snapshot scripts + parsers |
+| `app/utils/gitStatus.ts` | Git porcelain parsers + PTY git argv helpers |
 | `app/composables/useFileTree.ts` | Files tree + git status |
 | `app/composables/useServerState.ts` | Tab copy of worker graph |
 | `docs/architecture.md` | Runtime |
@@ -27,7 +27,7 @@ HEX is a Vue 3 browser client. OpenCode owns sessions, tools, PTY, and the files
 - Protocol HTTP → `opencode.ts`
 - Session graph → worker / `stateBuilder`
 - Files / git listing → `useFileTree`
-- Git snapshot bash/parsers → `gitSnapshots.ts`
+- Git status/diff parsers → `gitStatus.ts`
 - Isolated UI state → `use*.ts` composable or a child component
 
 ## App.vue
