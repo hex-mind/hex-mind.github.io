@@ -909,7 +909,7 @@ const {
   todosBySessionId,
   todoLoadingBySessionId,
   todoErrorBySessionId,
-  normalizeTodoItems,
+  applyTodoUpdated,
   reloadTodosForAllowedSessions,
 } = useTodos({ selectedSessionId, allowedSessionIds, activeDirectory });
 
@@ -3861,15 +3861,7 @@ onMounted(() => {
   );
   globalEventUnsubscribers.push(
     sessionScope.on('todo.updated', ({ sessionID, todos }) => {
-      todosBySessionId.value = {
-        ...todosBySessionId.value,
-        [sessionID]: normalizeTodoItems(todos),
-      };
-      if (todoErrorBySessionId.value[sessionID]) {
-        const nextErrors = { ...todoErrorBySessionId.value };
-        delete nextErrors[sessionID];
-        todoErrorBySessionId.value = nextErrors;
-      }
+      applyTodoUpdated(sessionID, todos);
     }),
   );
   globalEventUnsubscribers.push(

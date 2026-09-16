@@ -49,7 +49,7 @@
           </label>
         </div>
         <div class="setting-row">
-          <div class="setting-label">Show message details</div>
+          <div class="setting-label">Show token usage</div>
           <label class="toggle-switch">
             <input v-model="showThreadDetails" type="checkbox" class="toggle-input" />
             <span class="toggle-track" />
