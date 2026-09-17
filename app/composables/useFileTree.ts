@@ -4,6 +4,7 @@ import type { FileWatcherUpdatedPacket } from '../types/sse';
 import * as opencodeApi from '../utils/opencode';
 import {
   GIT_COMMON_ARGS,
+  decodeUtf8Mojibake,
   parseGitBranchList,
   parseGitStatusOutput,
   type GitBranchInfo,
@@ -127,10 +128,10 @@ function toRelativePath(path: string, directory: string) {
   const normalizedPath = withForwardSlashes(normalizeDirectory(path));
   if (normalizedPath === normalizedDirectory) return '.';
   const prefix = `${normalizedDirectory}/`;
-  if (normalizedPath.startsWith(prefix)) {
-    return normalizeRelativePath(normalizedPath.slice(prefix.length));
-  }
-  return normalizeRelativePath(normalizedPath);
+  const relative = normalizedPath.startsWith(prefix)
+    ? normalizeRelativePath(normalizedPath.slice(prefix.length))
+    : normalizeRelativePath(normalizedPath);
+  return decodeUtf8Mojibake(relative);
 }
 
 function normalizeFileNode(item: unknown, directory: string): FileNode | null {
@@ -142,10 +143,11 @@ function normalizeFileNode(item: unknown, directory: string): FileNode | null {
     undefined;
   if (!rawPath) return null;
   const path = toRelativePath(rawPath, directory);
-  const name =
+  const name = decodeUtf8Mojibake(
     (typeof record.name === 'string' && record.name) ||
-    (path === '.' ? '.' : path.split('/').at(-1)) ||
-    path;
+      (path === '.' ? '.' : path.split('/').at(-1)) ||
+      path,
+  );
   const rawType = typeof record.type === 'string' ? record.type.toLowerCase() : '';
   const type = rawType.includes('dir') ? 'directory' : 'file';
   const ignored = Boolean(record.ignored);

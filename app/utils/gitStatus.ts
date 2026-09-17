@@ -33,15 +33,22 @@ export const GIT_PAGER_ENV = {
   COLUMNS: '240',
 };
 
+const GIT_UTF8_LOCALE = {
+  LANG: 'C.UTF-8',
+  LC_ALL: 'C.UTF-8',
+  LC_CTYPE: 'C.UTF-8',
+};
+
 /** `cat` is not on Windows PATH; `--no-pager` is enough for oneshot git. */
 export function gitOneshotEnv(directory?: string) {
   if (directory && looksLikeWindowsPath(directory)) {
     return {
       GIT_TERMINAL_PROMPT: '0',
       COLUMNS: '240',
+      ...GIT_UTF8_LOCALE,
     };
   }
-  return GIT_PAGER_ENV;
+  return { ...GIT_PAGER_ENV, ...GIT_UTF8_LOCALE };
 }
 
 export const GIT_COMMON_ARGS = [
@@ -173,18 +180,45 @@ function gitCodeFromPorcelain(char: string): GitStatusCode {
   return '';
 }
 
+/**
+ * Re-decode a string that is actually UTF-8 bytes stored as Latin-1 code units.
+ * Already-correct Unicode (CJK, emoji) is left alone.
+ *
+ * ponytail: O(n) scan; a Latin-1 name whose bytes happen to be valid UTF-8
+ * (e.g. U+00C3 U+00A9 meaning "Ã©") would be rewritten as "é". Real filenames
+ * that need that distinction should skip this helper.
+ */
+export function decodeUtf8Mojibake(value: string) {
+  let hasHigh = false;
+  const bytes = new Uint8Array(value.length);
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code > 255) return value;
+    if (code > 127) hasHigh = true;
+    bytes[i] = code;
+  }
+  if (!hasHigh) return value;
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return value;
+  }
+}
+
 function unquoteGitPath(value: string): string {
   const trimmed = value.trim();
+  let raw = trimmed;
   if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
     try {
-      return JSON.parse(
+      raw = JSON.parse(
         trimmed.replace(/\\([0-7]{3})/g, (_, oct) => String.fromCharCode(Number.parseInt(oct, 8))),
-      );
+      ) as string;
     } catch {
-      return trimmed.slice(1, -1);
+      raw = trimmed.slice(1, -1);
     }
   }
-  return trimmed;
+  // Octal `\346\226\207` is UTF-8 bytes. fromCharCode makes Latin-1; undo that.
+  return decodeUtf8Mojibake(raw);
 }
 
 function normalizeGitRelPath(value: string): string {
