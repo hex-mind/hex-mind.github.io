@@ -1,5 +1,6 @@
 import {
   parseGitStatusOutput,
+  parseNumstatByPath,
   parsePorcelainLine,
   parseStatusBranchHeader,
   parseGitBranchList,
@@ -44,6 +45,28 @@ assert(crlf.files.find((f) => f.path === 'changes.ts')?.unstagedStats?.additions
 assert(crlf.files.find((f) => f.path === 'changes.ts')?.unstagedStats?.deletions === 2, 'per-file unstaged del');
 assert(crlf.files.find((f) => f.path === 'staged.ts')?.stagedStats?.additions === 3, 'per-file staged add');
 assert(!crlf.files.find((f) => f.path === 'untracked.ts')?.unstagedStats, 'untracked has no numstat');
+
+// Windows ConPTY expands numstat tabs to spaces; file names can contain spaces.
+const conpty = parseGitStatusOutput(
+  '## feature\r\nM  staged.ts\r\n M src/my file.ts\r\n M src/also.ts\r\n?? untracked.ts\r\n',
+  [
+    'C:\\Users\\me>',
+    '10      5       src/my file.ts',
+    '1       1       src\\also.ts',
+    'Pinging 127.0.0.1 with 32 bytes of data:',
+    '__OPENCODE_PTY_EXIT_CODE__:0',
+  ].join('\r\n'),
+  '3       4       staged.ts\n',
+);
+assert(conpty.diffStats.unstaged.additions === 11 && conpty.diffStats.unstaged.deletions === 6, 'conpty unstaged');
+assert(conpty.diffStats.staged.additions === 3 && conpty.diffStats.staged.deletions === 4, 'conpty staged');
+assert(conpty.files.find((f) => f.path === 'src/my file.ts')?.unstagedStats?.additions === 10, 'conpty spaced path');
+assert(conpty.files.find((f) => f.path === 'src/also.ts')?.unstagedStats?.deletions === 1, 'conpty backslash path');
+assert(conpty.files.find((f) => f.path === 'staged.ts')?.stagedStats?.deletions === 4, 'conpty staged del');
+
+const expanded = parseNumstatByPath('-\t-\tbinary.png\n1000\t2\twide.ts\n');
+assert(expanded['binary.png']?.additions === 0 && expanded['binary.png']?.deletions === 0, 'binary numstat');
+assert(expanded['wide.ts']?.additions === 1000 && expanded['wide.ts']?.deletions === 2, 'tab numstat still works');
 
 const missing = parseGitStatusOutput('fatal: not a git repository (or any of the parent directories): .git\n');
 assert(!missing.inside && missing.files.length === 0, 'missing repo');

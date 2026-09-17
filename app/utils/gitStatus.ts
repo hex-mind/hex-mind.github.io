@@ -128,6 +128,13 @@ function unquoteGitPath(value: string): string {
   return trimmed;
 }
 
+function normalizeGitRelPath(value: string): string {
+  return unquoteGitPath(value).replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+// ponytail: ConPTY expands numstat tabs to spaces. \s matches both; wrapped paths at a tiny COLUMNS would still miss.
+const NUMSTAT_LINE = /^(-|\d+)\s+(-|\d+)\s+(.*\S)\s*$/;
+
 export function parsePorcelainLine(line: string): GitFileStatus | null {
   if (line.length < 4) return null;
   if (line.startsWith('!!') || line.startsWith('##')) return null;
@@ -149,13 +156,12 @@ export function parsePorcelainLine(line: string): GitFileStatus | null {
 export function parseNumstatByPath(text: string): Record<string, GitDiffStatsEntry> {
   const byPath: Record<string, GitDiffStatsEntry> = {};
   for (const line of stripPtyNoise(text).split('\n')) {
-    if (!line.trim()) continue;
-    const parts = line.split('\t');
-    if (parts.length < 3) continue;
-    const added = parts[0] === '-' ? 0 : Number.parseInt(parts[0] ?? '', 10);
-    const removed = parts[1] === '-' ? 0 : Number.parseInt(parts[1] ?? '', 10);
+    const match = NUMSTAT_LINE.exec(line.trim());
+    if (!match) continue;
+    const added = match[1] === '-' ? 0 : Number.parseInt(match[1] ?? '', 10);
+    const removed = match[2] === '-' ? 0 : Number.parseInt(match[2] ?? '', 10);
     if (!Number.isFinite(added) || !Number.isFinite(removed)) continue;
-    const path = unquoteGitPath(parts[parts.length - 1] ?? '').replace(/\/+$/, '');
+    const path = normalizeGitRelPath(match[3] ?? '');
     if (!path) continue;
     const prev = byPath[path];
     byPath[path] = {
@@ -180,7 +186,9 @@ function lookupFileNumstat(
   byPath: Record<string, GitDiffStatsEntry>,
   file: GitFileStatus,
 ): GitDiffStatsEntry | undefined {
-  return byPath[file.path] ?? (file.origPath ? byPath[file.origPath] : undefined);
+  const path = normalizeGitRelPath(file.path);
+  const origPath = file.origPath ? normalizeGitRelPath(file.origPath) : undefined;
+  return byPath[path] ?? (origPath ? byPath[origPath] : undefined);
 }
 
 function withFileNumstat(
