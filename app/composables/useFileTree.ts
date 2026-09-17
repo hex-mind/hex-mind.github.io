@@ -361,8 +361,8 @@ async function refreshGitStatusOnly() {
     }
 
     const [unstagedNumstat, stagedNumstat] = await Promise.all([
-      runGit(['diff', '--numstat']),
-      runGit(['diff', '--cached', '--numstat']),
+      runGit(['diff', '--numstat', '--shortstat']),
+      runGit(['diff', '--cached', '--numstat', '--shortstat']),
     ]);
     if (generation !== gitStatusGeneration) return;
     if (getOptions().activeDirectory.value.trim() !== directory) return;

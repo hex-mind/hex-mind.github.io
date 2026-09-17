@@ -4,6 +4,9 @@ import {
   parsePorcelainLine,
   parseStatusBranchHeader,
   parseGitBranchList,
+  parseShortstat,
+  stripPtyNoise,
+  gitOneshotEnv,
   buildOneShotPtySpawn,
 } from './gitStatus.ts';
 
@@ -67,6 +70,24 @@ assert(conpty.files.find((f) => f.path === 'staged.ts')?.stagedStats?.deletions 
 const expanded = parseNumstatByPath('-\t-\tbinary.png\n1000\t2\twide.ts\n');
 assert(expanded['binary.png']?.additions === 0 && expanded['binary.png']?.deletions === 0, 'binary numstat');
 assert(expanded['wide.ts']?.additions === 1000 && expanded['wide.ts']?.deletions === 2, 'tab numstat still works');
+
+const esc = String.fromCharCode(27);
+const csiNumstat = parseNumstatByPath(`10${esc}[9G5${esc}[17Gsrc/my file.ts\n`);
+assert(csiNumstat['src/my file.ts']?.additions === 10, 'csi cha additions');
+assert(csiNumstat['src/my file.ts']?.deletions === 5, 'csi cha deletions');
+assert(!stripPtyNoise(`10${esc}[9G5${esc}[17Gsrc/my file.ts`).includes(esc), 'csi stripped after expand');
+
+const shortOnly = parseGitStatusOutput(
+  '## feature\r\n M changes.ts\r\n',
+  `105changes.ts\r\n 1 file changed, 10 insertions(+), 5 deletions(-)\r\n`,
+  ' 1 file changed, 3 insertions(+)\n',
+);
+assert(shortOnly.diffStats.unstaged.additions === 10 && shortOnly.diffStats.unstaged.deletions === 5, 'shortstat totals');
+assert(shortOnly.diffStats.staged.additions === 3 && shortOnly.diffStats.staged.deletions === 0, 'shortstat add only');
+assert(parseShortstat('oops') === null, 'shortstat missing');
+
+assert(gitOneshotEnv('C:/proj').GIT_PAGER === undefined, 'windows oneshot has no cat pager');
+assert(gitOneshotEnv('/tmp/proj').GIT_PAGER === 'cat', 'unix oneshot keeps cat pager');
 
 const missing = parseGitStatusOutput('fatal: not a git repository (or any of the parent directories): .git\n');
 assert(!missing.inside && missing.files.length === 0, 'missing repo');

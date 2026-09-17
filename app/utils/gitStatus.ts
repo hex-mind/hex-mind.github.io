@@ -33,6 +33,17 @@ export const GIT_PAGER_ENV = {
   COLUMNS: '240',
 };
 
+/** `cat` is not on Windows PATH; `--no-pager` is enough for oneshot git. */
+export function gitOneshotEnv(directory?: string) {
+  if (directory && looksLikeWindowsPath(directory)) {
+    return {
+      GIT_TERMINAL_PROMPT: '0',
+      COLUMNS: '240',
+    };
+  }
+  return GIT_PAGER_ENV;
+}
+
 export const GIT_COMMON_ARGS = [
   '--no-pager',
   '-c',
@@ -46,14 +57,62 @@ const EMPTY_STATS: GitDiffStats = {
   unstaged: { additions: 0, deletions: 0 },
 };
 
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+
+/** ConPTY turns tabs into CSI CHA/CUF. Expand those to spaces before dropping CSI. */
+function expandPtyCursor(text: string) {
+  let out = '';
+  let col = 0;
+  for (let i = 0; i < text.length; ) {
+    const ch = text[i] ?? '';
+    if (ch === '\n') {
+      out += '\n';
+      col = 0;
+      i += 1;
+      continue;
+    }
+    if (ch === '\t') {
+      const next = (Math.floor(col / 8) + 1) * 8;
+      out += ' '.repeat(next - col);
+      col = next;
+      i += 1;
+      continue;
+    }
+    if (ch === ESC && text[i + 1] === '[') {
+      const rest = text.slice(i);
+      const match = rest.match(new RegExp(`^${ESC}\\[([0-9;]*)([@-~])`));
+      if (!match) {
+        i += 1;
+        continue;
+      }
+      const params = match[1] ?? '';
+      const final = match[2] ?? '';
+      if (final === 'G') {
+        const n = Number.parseInt(params || '1', 10);
+        const target = Math.max(0, (Number.isFinite(n) ? n : 1) - 1);
+        if (target > col) out += ' '.repeat(target - col);
+        col = target;
+      } else if (final === 'C') {
+        const n = Number.parseInt(params || '1', 10);
+        const count = Number.isFinite(n) && n > 0 ? n : 1;
+        out += ' '.repeat(count);
+        col += count;
+      }
+      i += match[0].length;
+      continue;
+    }
+    out += ch;
+    col += 1;
+    i += 1;
+  }
+  return out;
+}
+
 export function stripPtyNoise(output: string) {
-  const esc = String.fromCharCode(27);
-  const bel = String.fromCharCode(7);
-  return output
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(new RegExp(`${esc}\\[[0-9;?]*[ -/]*[@-~]`, 'g'), '')
-    .replace(new RegExp(`${esc}\\][^${bel}]*(?:${bel}|${esc}\\\\)`, 'g'), '');
+  return expandPtyCursor(output.replace(/\r\n/g, '\n').replace(/\r/g, '\n'))
+    .replace(new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, 'g'), '')
+    .replace(new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, 'g'), '');
 }
 
 export const PTY_ONESHOT_EXIT_PREFIX = '__OPENCODE_PTY_EXIT_CODE__:';
@@ -132,7 +191,7 @@ function normalizeGitRelPath(value: string): string {
   return unquoteGitPath(value).replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
-// ponytail: ConPTY expands numstat tabs to spaces. \s matches both; wrapped paths at a tiny COLUMNS would still miss.
+// ponytail: ConPTY may emit tabs, spaces, or CSI CHA. stripPtyNoise expands cursor moves first.
 const NUMSTAT_LINE = /^(-|\d+)\s+(-|\d+)\s+(.*\S)\s*$/;
 
 export function parsePorcelainLine(line: string): GitFileStatus | null {
@@ -180,6 +239,23 @@ export function parseNumstatSection(text: string): GitDiffStatsEntry {
     deletions += entry.deletions;
   }
   return { additions, deletions };
+}
+
+export function parseShortstat(text: string): GitDiffStatsEntry | null {
+  const normalized = stripPtyNoise(text);
+  if (!/\d+ files? changed/i.test(normalized)) return null;
+  const add = normalized.match(/(\d+) insertions?\(\+\)/);
+  const del = normalized.match(/(\d+) deletions?\(-\)/);
+  const additions = add ? Number.parseInt(add[1] ?? '', 10) : 0;
+  const deletions = del ? Number.parseInt(del[1] ?? '', 10) : 0;
+  return {
+    additions: Number.isFinite(additions) ? additions : 0,
+    deletions: Number.isFinite(deletions) ? deletions : 0,
+  };
+}
+
+function diffSectionStats(text: string): GitDiffStatsEntry {
+  return parseShortstat(text) ?? parseNumstatSection(text);
 }
 
 function lookupFileNumstat(
@@ -292,8 +368,8 @@ export function parseGitStatusOutput(
     branch,
     files: withFileNumstat(files, unstagedNumstat, stagedNumstat),
     diffStats: {
-      staged: parseNumstatSection(stagedNumstat),
-      unstaged: parseNumstatSection(unstagedNumstat),
+      staged: diffSectionStats(stagedNumstat),
+      unstaged: diffSectionStats(unstagedNumstat),
     },
   };
 }

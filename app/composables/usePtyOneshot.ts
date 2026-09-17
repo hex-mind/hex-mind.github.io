@@ -1,6 +1,6 @@
 import type { Ref } from 'vue';
 import * as opencodeApi from '../utils/opencode';
-import { GIT_PAGER_ENV, buildOneShotPtySpawn, PTY_ONESHOT_EXIT_PREFIX, stripPtyNoise } from '../utils/gitStatus';
+import { gitOneshotEnv, buildOneShotPtySpawn, PTY_ONESHOT_EXIT_PREFIX, stripPtyNoise } from '../utils/gitStatus';
 
 type UsePtyOneshotOptions = {
   activeDirectory: Ref<string>;
@@ -104,7 +104,7 @@ async function runOneShotPtyCommand(command: string, args: string[]): Promise<st
     args: spawn.args,
     cwd: directory,
     title: 'One-shot PTY',
-    env: GIT_PAGER_ENV,
+    env: gitOneshotEnv(directory),
   });
   const pty = parsePtyInfo(data);
   if (!pty) {
