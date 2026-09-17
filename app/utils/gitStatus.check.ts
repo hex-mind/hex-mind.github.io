@@ -8,6 +8,7 @@ import {
   stripPtyNoise,
   gitOneshotEnv,
   buildOneShotPtySpawn,
+  decodeUtf8Mojibake,
 } from './gitStatus.ts';
 
 function assert(cond: unknown, message: string) {
@@ -33,6 +34,25 @@ assert(staged?.index === 'M' && staged?.worktree === '', 'staged only');
 const untracked = parsePorcelainLine('?? new file.ts');
 assert(untracked?.path === 'new file.ts', 'untracked space in name');
 assert(untracked?.index === '?' && untracked?.worktree === '?', 'untracked marks');
+
+function utf8AsLatin1(value: string) {
+  return Array.from(new TextEncoder().encode(value), (b) => String.fromCharCode(b)).join('');
+}
+
+assert(parsePorcelainLine('?? 文件.md')?.path === '文件.md', 'unicode chinese path');
+assert(
+  parsePorcelainLine(' M "\\346\\226\\207\\344\\273\\266.md"')?.path === '文件.md',
+  'git octal-quoted utf-8 path',
+);
+assert(parsePorcelainLine(`?? ${utf8AsLatin1('文件.md')}`)?.path === '文件.md', 'latin1 mojibake path');
+assert(
+  parseNumstatByPath(`1\t2\t"${'\\346\\226\\207.md'}"\n`)['文.md']?.additions === 1,
+  'octal numstat path',
+);
+assert(decodeUtf8Mojibake('cafe') === 'cafe', 'ascii unchanged');
+assert(decodeUtf8Mojibake('文件') === '文件', 'unicode unchanged');
+assert(decodeUtf8Mojibake(utf8AsLatin1('文件')) === '文件', 'mojibake repaired');
+assert(decodeUtf8Mojibake('café') === 'café', 'latin1 e-acute stays');
 
 const crlf = parseGitStatusOutput(
   '## feature\r\nM  staged.ts\r\n M changes.ts\r\n?? untracked.ts\r\n',
@@ -88,6 +108,8 @@ assert(parseShortstat('oops') === null, 'shortstat missing');
 
 assert(gitOneshotEnv('C:/proj').GIT_PAGER === undefined, 'windows oneshot has no cat pager');
 assert(gitOneshotEnv('/tmp/proj').GIT_PAGER === 'cat', 'unix oneshot keeps cat pager');
+assert(gitOneshotEnv('/tmp/proj').LANG === 'C.UTF-8', 'unix oneshot utf-8 locale');
+assert(gitOneshotEnv('C:/proj').LC_ALL === 'C.UTF-8', 'windows oneshot utf-8 locale');
 
 const missing = parseGitStatusOutput('fatal: not a git repository (or any of the parent directories): .git\n');
 assert(!missing.inside && missing.files.length === 0, 'missing repo');
